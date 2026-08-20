@@ -1,0 +1,38 @@
+[
+  {
+    "target": "eflaw",
+    "id": null,
+    "mst": "284085",
+    "title": "산업집적활성화 및 공장설립에 관한 법률",
+    "promulgationDate": "20260305",
+    "proclamationNumber": "21447",
+    "effectiveDate": "20260701",
+    "contentHash": "metadata-only:industrial-cluster-act-20260701",
+    "publicUrl": "https://www.law.go.kr/법령/산업집적활성화및공장설립에관한법률",
+    "sourceId": "src-industrial-cluster-act-20260701"
+  },
+  {
+    "target": "eflaw",
+    "id": null,
+    "mst": "273437",
+    "title": "건축법",
+    "promulgationDate": "20250826",
+    "proclamationNumber": "21035",
+    "effectiveDate": "20260227",
+    "contentHash": "metadata-only:building-act-20260227",
+    "publicUrl": "https://www.law.go.kr/법령/건축법",
+    "sourceId": "src-building-act-20260227"
+  },
+  {
+    "target": "eflaw",
+    "id": null,
+    "mst": "283449",
+    "title": "산업안전보건법",
+    "promulgationDate": "20260219",
+    "proclamationNumber": "21374",
+    "effectiveDate": "20260601",
+    "contentHash": "metadata-only:osh-act-20260601",
+    "publicUrl": "https://www.law.go.kr/법령/산업안전보건법",
+    "sourceId": "src-osh-act-20260601"
+  }
+]

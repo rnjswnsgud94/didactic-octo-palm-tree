@@ -1,0 +1,58 @@
+{
+  "name": "factory-permit-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "install:ci": "bash scripts/install-ci.sh",
+    "dev": "CLOUDFLARE_CF_FETCH_ENABLED=false WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
+    "build": "bash scripts/build-verified.sh",
+    "build:pages": "vite build --config vite.pages.config.ts",
+    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:starter": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "build:next": "node scripts/validate-production-data.mjs && next build",
+    "vercel-build": "node scripts/validate-production-data.mjs && next build",
+    "verify:client-secret": "node scripts/check-client-bundle.mjs",
+    "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern pages-dist --ignore-pattern .next",
+    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "fast-xml-parser": "5.3.6",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@tailwindcss/postcss": "4.2.1",
+    "@playwright/test": "1.55.0",
+    "@testing-library/jest-dom": "6.8.0",
+    "@testing-library/react": "16.3.0",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4",
+    "jsdom": "26.1.0",
+    "vinext": "0.0.50",
+    "vite": "8.0.13",
+    "wrangler": "4.92.0"
+  },
+  "type": "module",
+  "displayName": "\uad6d\ub0b4 \uacf5\uc7a5 \uc778\ud5c8\uac00 \ub300\uc2dc\ubcf4\ub4dc"
+}
