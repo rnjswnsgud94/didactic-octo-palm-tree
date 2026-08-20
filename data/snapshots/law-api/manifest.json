@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "1.0.0",
+  "mode": "SNAPSHOT_ONLY",
+  "collectedAt": null,
+  "verifiedAt": "2026-08-20T00:00:00+09:00",
+  "nextReviewDueAt": "2026-09-11T00:00:00+09:00",
+  "collector": "AI-assisted draft",
+  "note": "LAW_API_OC가 없어 실 API 본문을 저장한 스냅숏이 아니라 공식 공개페이지로 검증한 최소 메타데이터입니다."
+}
