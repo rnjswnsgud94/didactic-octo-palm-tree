@@ -16,7 +16,7 @@ Given explicit project facts and an assessment date, the dashboard returns:
 
 The output is a review aid, not a filing, administrative disposition or legal opinion.
 
-## MVP users
+## Intended users
 
 - central and local government investment-support officers;
 - industrial-complex management agencies;
@@ -52,4 +52,4 @@ Status is conveyed through label, symbol, border and pattern—not color alone. 
 
 ## Non-goals
 
-The MVP does not file applications, make final legal determinations, forecast construction, optimize staffing, cover the capital region, or automatically resolve every local ordinance, parcel restriction and subordinate-table threshold. The expanded procedures are decision-support candidates until the competent agency confirms the project-specific facts.
+The dashboard does not file applications, make final legal determinations, optimize staffing, cover the capital region, or automatically resolve every local ordinance, parcel restriction and subordinate-table threshold. Expanded procedures remain decision-support candidates until the competent agency confirms the project-specific facts.

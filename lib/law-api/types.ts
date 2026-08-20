@@ -21,6 +21,7 @@ export const normalizedLawDocumentSchema = z.object({
   promulgationDate: z.string().nullable(),
   proclamationNumber: z.string().nullable(),
   effectiveDate: z.string().nullable(),
+  jurisdictionName: z.string().nullable().optional(),
   contentHash: z.string().optional(),
   publicUrl: z.string().url(),
   sourceId: z.string().optional(),

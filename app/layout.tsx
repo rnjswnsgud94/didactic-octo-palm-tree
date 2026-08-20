@@ -6,19 +6,19 @@ const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin),
-  title: "국내 공장 인허가 대시보드",
-  description: "투자조건에 따라 공장 인허가 절차, 담당기관, 법적 근거와 부분 일정을 탐색하는 의사결정 지원 도구",
+  title: "지방투자기업 인허가 로드맵",
+  description: "비수도권 공장 투자조건에 따른 인허가 절차, 진행 순서, 소요기간과 법령 근거를 확인하는 도구",
   openGraph: {
-    title: "국내 공장 인허가 대시보드",
-    description: "공장 투자조건을 기관별 인허가 경로와 공식 근거, 부분 일정으로 연결합니다.",
+    title: "지방투자기업 인허가 로드맵",
+    description: "사업 조건별 인허가 절차, 선후행 순서, 소요기간과 법령 근거를 확인합니다.",
     locale: "ko_KR",
     type: "website",
     images: [{ url: "/og.png", width: 1731, height: 909, alt: "공장과 인허가 절차 흐름을 표현한 대시보드 이미지" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "국내 공장 인허가 대시보드",
-    description: "투자조건별 공장 인허가 경로와 공식 근거를 한눈에 확인합니다.",
+    title: "지방투자기업 인허가 로드맵",
+    description: "비수도권 공장 투자에 필요한 절차, 진행 순서와 소요기간을 확인합니다.",
     images: ["/og.png"],
   },
   icons: {

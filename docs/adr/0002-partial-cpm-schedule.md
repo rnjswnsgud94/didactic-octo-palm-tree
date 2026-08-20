@@ -1,15 +1,15 @@
-# ADR 0002: Partial dependency-based schedule
+# ADR 0002: Official-duration dependency schedule
 
-Status: accepted
+Status: accepted (revised 2026-08-20)
 
 ## Decision
 
-Use an acyclic procedure graph and CPM-style earliest/latest/slack calculation for minimum, base and maximum duration scenarios. Include legal-hard edges by default and let users include practical edges.
+Use an acyclic procedure graph and date-level critical-path calculation for two automatic scenarios: `MIN` and `TYPICAL`. Preserve each official duration unit, resolve input-dependent statutory branches, and calculate Korean business days with a reviewed 2026–2040 public-holiday calendar. Construction is a calendar-month interval that may absorb parallel procedures. User-entered permit-duration assumptions are not accepted.
 
 ## Rationale
 
-Adding every permit duration overstates serial work. CPM represents parallel branches, but a permit catalog lacks construction, resource and holiday information.
+Adding every permit duration would overstate work that can run in parallel. Asking users to invent phase durations would merely move the calculation problem into the input form. Official processing periods and explicit dependencies provide an auditable lower-bound schedule while preserving unknowns.
 
 ## Consequences
 
-The UI calls the result a partial schedule, never total project duration. Unknown duration remains `null` and causes an incomplete warning. Business-day/calendar-day conversion is prohibited without a reviewed calendar.
+The UI shows `총 소요기간` only when every operation-ready path has a usable official duration. Otherwise it shows `확인된 일정 하한`, leaves `totalCalendarDays=null`, and identifies the procedures with no nationwide common period. Applicant preparation, supplements, temporary holidays, election days, resource constraints and construction procurement remain outside the automatic authority-processing calculation and are disclosed. Post-operation work is reported separately.

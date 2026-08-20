@@ -19,6 +19,7 @@ import {
 import {
   applicabilityRuleSchema,
   durationEstimateSchema,
+  isoDateSchema,
   legalCitationSchema,
   legalSourceSchema,
   procedureEdgeSchema,
@@ -44,13 +45,16 @@ const coverageSchema = z.object({
 });
 
 export const scenarioAnswerSchema = z.object({
-  assessmentDate: z.string(),
+  assessmentDate: isoDateSchema,
+  plannedConstructionStartDate: isoDateSchema.nullable().default(null),
+  plannedConstructionEndDate: isoDateSchema.nullable().default(null),
   investmentType: z.string(),
   province: z.string(),
   city: z.string(),
   insideIndustrialComplex: z.boolean().nullable(),
   industryCategory: z.string(),
   buildingAction: z.string(),
+  mechanicalEquipmentActTarget: z.boolean().nullable().default(null),
   existingAreaM2: z.number().nullable(),
   increaseAreaM2: z.number().nullable(),
   totalAreaM2: z.number().nullable(),
@@ -69,11 +73,44 @@ export const scenarioAnswerSchema = z.object({
   hazardousMaterials: z.boolean().nullable(),
   highPressureGas: z.boolean().nullable(),
   specificHighPressureGasUse: z.boolean().nullable(),
+  lpgSpecificUseFacility: z.boolean().nullable().default(null),
+  cityGasSpecificUseFacility: z.boolean().nullable().default(null),
   psmCovered: z.boolean().nullable(),
   fireFacilityWork: z.boolean().nullable(),
   privateElectricalFacilityWork: z.boolean().nullable(),
   energyUsePlanRequired: z.boolean().nullable(),
   groundwaterDevelopment: z.boolean().nullable(),
+  disasterImpactAssessmentType: z
+    .enum(["NONE", "DISASTER_IMPACT", "DISASTER_IMPACT_REVIEW"])
+    .nullable()
+    .default(null),
+  undergroundSafetyAssessmentType: z
+    .enum(["NONE", "UNDERGROUND_SAFETY", "SMALL_UNDERGROUND_SAFETY"])
+    .nullable()
+    .default(null),
+  nationalHeritageAssessmentType: z
+    .enum(["NONE", "PRELIMINARY_CONSULTATION", "IMPACT_DIAGNOSIS", "SIMPLIFIED_DIAGNOSIS"])
+    .nullable()
+    .default(null),
+  militaryProtectionConsultationRequired: z.boolean().nullable().default(null),
+  riverOccupationRequired: z.boolean().nullable().default(null),
+  publicWaterOccupationRequired: z.boolean().nullable().default(null),
+  waterSourceProtectionZone: z.boolean().nullable().default(null),
+  safetyManagementPlanRequired: z.boolean().nullable().default(null),
+  specificWorkReportRequired: z.boolean().nullable().default(null),
+  asbestosPresent: z.boolean().nullable().default(null),
+  publicSewerConnection: z.boolean().nullable().default(null),
+  privateSewageTreatmentFacility: z.boolean().nullable().default(null),
+  wasteFacility: z.boolean().nullable().default(null),
+  chemicalRegistrationRequired: z.boolean().nullable().default(null),
+  restrictedOrToxicChemicalImport: z.boolean().nullable().default(null),
+  fireSafetyManagerRequired: z.boolean().nullable().default(null),
+  hazardousMaterialsTank: z.boolean().nullable().default(null),
+  hazardousMaterialsPreventionRulesRequired: z.boolean().nullable().default(null),
+  heatUseEquipment: z.boolean().nullable().default(null),
+  hazardousMachineryInspectionRequired: z.boolean().nullable().default(null),
+  safetyManagerRequired: z.boolean().nullable().default(null),
+  healthManagerRequired: z.boolean().nullable().default(null),
   powerIncreaseMw: z.number().nullable(),
   waterDemandM3Day: z.number().nullable(),
   wastewaterM3Day: z.number().nullable(),
@@ -91,8 +128,31 @@ const additionalRuleIdsByProcedure: Record<string, string[]> = {
   "water-discharge-installation-permit": ["rule-exp-water-integrated-exclusion"],
 };
 
+const excludedNonPermitProcedureIds = new Set([
+  "utility-supply-consultation",
+  "asbestos-survey",
+  "air-environmental-technician-appointment",
+  "water-environmental-technician-appointment",
+  "local-investment-agreement",
+  "local-investment-subsidy-application-review",
+  "local-investment-subsidy-grant-payment",
+  "local-investment-subsidy-settlement",
+]);
+const excludedNonPermitSourceIds = new Set([
+  "src-local-investment-subsidy-notice-20260720",
+  "src-exp-duration-local-investment-subsidy-application-review",
+]);
+const isExcludedCitation = (citationId: string) =>
+  [...excludedNonPermitProcedureIds].some(
+    (procedureId) =>
+      citationId === `cit-exp-${procedureId}` ||
+      citationId.startsWith(`cit-exp-${procedureId}-`),
+  );
+
 const procedures = z.array(procedureSchema).parse(
-  [...proceduresJson, ...expandedProcedures].map((procedure) => ({
+  [...proceduresJson, ...expandedProcedures]
+  .filter((procedure) => !excludedNonPermitProcedureIds.has(procedure.id))
+  .map((procedure) => ({
     ...procedure,
     ruleIds: [
       ...procedure.ruleIds,
@@ -100,11 +160,33 @@ const procedures = z.array(procedureSchema).parse(
     ],
   })),
 );
-const edges = z.array(procedureEdgeSchema).parse([...edgesJson, ...expandedEdges]);
-const rules = z.array(applicabilityRuleSchema).parse([...rulesJson, ...expandedRules]);
-const legalSources = z.array(legalSourceSchema).parse([...legalSourcesJson, ...expandedLegalSources]);
-const citations = z.array(legalCitationSchema).parse([...citationsJson, ...expandedCitations]);
-const durations = z.array(durationEstimateSchema).parse([...durationsJson, ...expandedDurations]);
+const edges = z.array(procedureEdgeSchema).parse(
+  [...edgesJson, ...expandedEdges].filter(
+    (edge) =>
+      !excludedNonPermitProcedureIds.has(edge.from) &&
+      !excludedNonPermitProcedureIds.has(edge.to),
+  ),
+);
+const rules = z.array(applicabilityRuleSchema).parse(
+  [...rulesJson, ...expandedRules].filter(
+    (rule) => !excludedNonPermitProcedureIds.has(rule.procedureId),
+  ),
+);
+const legalSources = z.array(legalSourceSchema).parse(
+  [...legalSourcesJson, ...expandedLegalSources].filter(
+    (source) => !excludedNonPermitSourceIds.has(source.id),
+  ),
+);
+const citations = z.array(legalCitationSchema).parse(
+  [...citationsJson, ...expandedCitations].filter(
+    (citation) => !isExcludedCitation(citation.id),
+  ),
+);
+const durations = z.array(durationEstimateSchema).parse(
+  [...durationsJson, ...expandedDurations].filter(
+    (duration) => !excludedNonPermitProcedureIds.has(duration.procedureId),
+  ),
+);
 const coverage = coverageSchema.parse(coverageJson);
 const scenarios = z.array(scenarioSchema).parse(scenariosJson);
 

@@ -1,34 +1,36 @@
 # Coverage and gaps
 
-Catalog version: `2026.08.20-noncapital.3`
-Legal public-page review: `2026-08-20`
+Catalog version: `2026.08.21-permits.2`
+Legal and ELIS public-page review: `2026-08-21`
 Snapshot mode: `SNAPSHOT_ONLY`
 
 ## Covered common layer
 
-- 50 nationwide common-layer procedures across site, building, environment, chemicals, industrial safety, fire, electricity, gas and energy;
+- more than 90 nationwide common-layer permits, reports and inspections across site, building, environment, chemicals, industrial safety, fire, electricity, gas and energy;
 - industrial-complex occupancy and off-site factory-establishment branches, including reviewed deeming relationships;
-- development, farmland, forest, demolition, road, traffic, groundwater and building routes;
+- development, farmland, forest, demolition, road, traffic, groundwater and building routes, including applicable start/completion reports and completion inspections;
 - impact assessment, integrated environmental permitting and individual air/water/noise/waste routes with duplicate suppression;
 - chemical-accident plan → facility inspection → hazardous-chemical business-permit sequencing;
-- PSM, hazard-prevention plan, hazardous materials, fire, electrical, high-pressure-gas and energy procedures;
-- practical early utility consultation with no invented duration.
+- PSM, hazard-prevention plan, hazardous materials, fire, electrical, high-pressure-gas, LPG, city-gas and energy procedures;
+- factory registration outside the factory-establishment-approval threshold, mechanical-equipment checks and public-water implementation/completion procedures.
+- reclaimed-water installation reporting, high-pressure-gas start reporting, fire-work-supervisor reporting and forest-restoration approval/completion inspection.
 
 ## Geographic and industry scope
 
 - Nationwide common rules are active for 14 non-capital provinces and metropolitan cities; Seoul, Gyeonggi and Incheon are excluded.
-- Users may enter any city/county/district in the supported provinces. Local ordinances, delegated duties and detailed civil-service standards are not yet collected.
+- Users may enter any listed city/county/district in the supported provinces. The server reads each selected jurisdiction's current ELIS ordinance list and links matched titles to the exact ELIS detail record.
 - Generic manufacturing, semiconductor/electronics and secondary-battery/chemical scenarios are covered only to choose questions and examples. Industry labels do not prove environmental or safety coverage.
 
 ## Material gaps
 
-1. Non-capital local ordinances, delegated-authority tables and local processing guidance.
+1. Ordinance annex thresholds, delegated-authority tables, annual notices and local processing guidance that cannot be concluded from title matching alone.
 2. Named industrial-complex management/development plans and allowable-industry codes.
 3. Exact subordinate-table thresholds for environmental assessment, chemicals, waste, hazardous materials and high-pressure gas.
 4. Parcel-specific heritage, military, water-source and other site restrictions.
 5. Exact building permit/report classification and local architectural ordinance.
 6. Provider-specific power, water and wastewater capacity, contracts and lead times.
 7. New industrial-complex designation, urban-management-plan change and major grid construction.
+8. Product-specific manufacturing/business permits for food, pharmaceuticals, medical devices, cosmetics, livestock products, feed, fertilizer and pesticides require a separate product-level input before deterministic inclusion.
 
 ## Version warnings
 

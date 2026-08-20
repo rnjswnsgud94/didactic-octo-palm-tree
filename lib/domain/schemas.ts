@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const isoDateSchema = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, "YYYY-MM-DD 형식이어야 합니다.")
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, "실제 달력에 존재하는 날짜여야 합니다.");
+
 export const factStatusSchema = z.enum([
   "KNOWN",
   "UNKNOWN",
@@ -23,7 +31,7 @@ export const factSchema = z.object({
 });
 
 export const projectInputSchema = z.object({
-  assessmentDate: z.string(),
+  assessmentDate: isoDateSchema,
   plannedConstructionStart: z.string().optional(),
   plannedCompletion: z.string().optional(),
   investmentType: factSchema,
@@ -56,9 +64,17 @@ export const projectInputSchema = z.object({
     roadConnectionRequired: factSchema,
     trafficImpactAssessmentRequired: factSchema,
     groundwaterDevelopment: factSchema,
+    disasterImpactAssessmentType: factSchema,
+    undergroundSafetyAssessmentType: factSchema,
+    nationalHeritageAssessmentType: factSchema,
+    militaryProtectionConsultationRequired: factSchema,
+    riverOccupationRequired: factSchema,
+    publicWaterOccupationRequired: factSchema,
+    waterSourceProtectionZone: factSchema,
   }),
   building: z.object({
     action: factSchema,
+    mechanicalEquipmentActTarget: factSchema,
     existingAreaM2: factSchema,
     increaseAreaM2: factSchema,
     totalAreaM2: factSchema,
@@ -73,12 +89,26 @@ export const projectInputSchema = z.object({
     integratedPermitTarget: factSchema,
     chemicalManufactureOrImport: factSchema,
     hazardousChemicalBusiness: factSchema,
+    chemicalRegistrationRequired: factSchema,
+    restrictedOrToxicChemicalImport: factSchema,
   }),
   safety: z.object({
     hazardousMaterials: factSchema,
     highPressureGas: factSchema,
     specificHighPressureGasUse: factSchema,
+    lpgSpecificUseFacility: factSchema,
+    cityGasSpecificUseFacility: factSchema,
     psmCovered: factSchema,
+    fireSafetyManagerRequired: factSchema,
+    hazardousMaterialsTank: factSchema,
+    hazardousMaterialsPreventionRulesRequired: factSchema,
+    heatUseEquipment: factSchema,
+    hazardousMachineryInspectionRequired: factSchema,
+  }),
+  construction: z.object({
+    safetyManagementPlanRequired: factSchema,
+    specificWorkReportRequired: factSchema,
+    asbestosPresent: factSchema,
   }),
   utilities: z.object({
     powerIncreaseMw: factSchema,
@@ -86,6 +116,12 @@ export const projectInputSchema = z.object({
     wastewaterM3Day: factSchema,
     privateElectricalFacilityWork: factSchema,
     energyUsePlanRequired: factSchema,
+    publicSewerConnection: factSchema,
+    privateSewageTreatmentFacility: factSchema,
+  }),
+  organization: z.object({
+    safetyManagerRequired: factSchema,
+    healthManagerRequired: factSchema,
   }),
   permitCoordination: factSchema,
   strategicIndustrySpecialCase: factSchema,

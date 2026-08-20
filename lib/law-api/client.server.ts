@@ -85,7 +85,9 @@ function firstString(record: Record<string, unknown>, keys: string[]) {
 
 function publicLawUrl(target: LawTarget, title: string) {
   const category = target === "admrul" ? "행정규칙" : target === "ordin" ? "자치법규" : "법령";
-  return `${API_ORIGIN}/${encodeURIComponent(category)}/${encodeURIComponent(title)}`;
+  // The official Korean-address service documents titles without whitespace
+  // in the path and resolves them to the current text.
+  return `${API_ORIGIN}/${encodeURIComponent(category)}/${encodeURIComponent(title.replace(/\s+/g, ""))}`;
 }
 
 function rootForTarget(target: LawTarget) {
@@ -96,7 +98,9 @@ function rootForTarget(target: LawTarget) {
 
 function itemCandidates(target: LawTarget) {
   if (target === "admrul") return ["admrul", "AdmRul", "행정규칙"];
-  if (target === "ordin") return ["ordin", "자치법규"];
+  // The current local-ordinance JSON response uses `OrdinSearch.law`.
+  // Keep the historical aliases as fallbacks for XML/legacy responses.
+  if (target === "ordin") return ["law", "ordin", "자치법규"];
   return ["law", "법령"];
 }
 
@@ -134,6 +138,7 @@ export function normalizeSearchPayload(
       promulgationDate: firstString(item, ["공포일자", "발령일자"]),
       proclamationNumber: firstString(item, ["공포번호", "발령번호"]),
       effectiveDate: firstString(item, ["시행일자"]),
+      jurisdictionName: firstString(item, ["지자체기관명", "자치단체명", "기관명"]),
       publicUrl: publicLawUrl(target, title),
     } satisfies NormalizedLawDocument;
   });

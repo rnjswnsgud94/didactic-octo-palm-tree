@@ -1,0 +1,224 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
+import type { ScenarioAnswers } from "@/lib/data/catalog";
+import {
+  matchOrdinancesToCategories,
+  type LocalOrdinanceCategoryLookup,
+} from "@/lib/regions/ordinance-resolution";
+import {
+  getReviewedElisOrdinanceRecords,
+  reviewedElisSnapshotCheckedAt,
+} from "@/lib/regions/elis-reviewed-snapshot";
+import {
+  getOfficialLocalOrdinanceLinks,
+  isElisOrdinanceDetailUrl,
+  localOrdinanceCoverageCaveat,
+  localOrdinanceReviewCategories,
+} from "@/lib/regions/local-ordinances";
+
+interface LocalOrdinanceLookupPayload {
+  checkedAt: string;
+  source: string;
+  mode: "LIVE" | "PARTIAL" | "SNAPSHOT";
+  categories: LocalOrdinanceCategoryLookup[];
+}
+
+interface LocalOrdinanceLookupState {
+  key: string;
+  status: "READY" | "ERROR";
+  payload: LocalOrdinanceLookupPayload | null;
+}
+
+function priorityReason(categoryId: string, answers: ScenarioAnswers): string | null {
+  const hasBuildingWork = !["UNKNOWN", "NONE"].includes(answers.buildingAction);
+  const hasArea = (answers.totalAreaM2 ?? 0) > 0;
+  if (categoryId === "urban-planning-development") return "입지와 공장 건축 가능 여부 확인";
+  if (categoryId === "building-review-design" && hasBuildingWork) return "선택한 건축행위의 지역 심의·설계기준 확인";
+  if (categoryId === "parking-installation" && hasBuildingWork && hasArea) return "공장 면적에 따른 부설주차장 기준 확인";
+  if (categoryId === "traffic-impact" && answers.trafficImpactAssessmentRequired !== false) return "교통영향평가 지역 추가기준 확인";
+  if (categoryId === "landscape-review" && hasBuildingWork) return "건축·개발사업의 경관심의 기준 확인";
+  if (
+    categoryId === "air-water-standards" &&
+    (answers.airEmissionFacility !== false || answers.waterDischargeFacility !== false)
+  ) return "대기·폐수 시설의 지역 강화기준 확인";
+  if (
+    categoryId === "sewerage-wastewater-cost" &&
+    (answers.publicSewerConnection !== false || (answers.wastewaterM3Day ?? 0) > 0)
+  ) return "하수 연결·원인자부담금·유입조건 확인";
+  if (categoryId === "water-supply" && (answers.waterDemandM3Day ?? 0) > 0) return "용수 수요에 따른 급수공사·부담금 확인";
+  if (
+    categoryId === "heritage-local-assets" &&
+    answers.nationalHeritageAssessmentType !== null &&
+    answers.nationalHeritageAssessmentType !== "NONE"
+  ) return "지역유산 보호구역·현상변경 기준 확인";
+  return null;
+}
+
+export function LocalJurisdictionLinks({ answers }: { answers: ScenarioAnswers }) {
+  const links = getOfficialLocalOrdinanceLinks(answers.province, answers.city);
+  if (!links.province) return <span>지역 미입력</span>;
+  return (
+    <span className="jurisdiction-links">
+      <a href={links.province.url} target="_blank" rel="noreferrer" title="광역 자치법규 현행 목록">
+        {links.province.name}
+      </a>
+      {links.municipality ? (
+        <a href={links.municipality.url} target="_blank" rel="noreferrer" title="기초 자치법규 현행 목록">
+          {links.municipality.name}
+        </a>
+      ) : answers.city ? <span>{answers.city}</span> : <span>시·군·구 미선택</span>}
+    </span>
+  );
+}
+
+export function LocalOrdinancePanel({ answers }: { answers: ScenarioAnswers }) {
+  const lookupKey = `${answers.province}|${answers.city}`;
+  const [lookupResult, setLookupResult] = useState<LocalOrdinanceLookupState | null>(null);
+
+  useEffect(() => {
+    if (!answers.province) return;
+    const controller = new AbortController();
+    const requestKey = `${answers.province}|${answers.city}`;
+    const params = new URLSearchParams({ province: answers.province });
+    if (answers.city) params.set("city", answers.city);
+    fetch(`/api/local-ordinances?${params.toString()}`, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("local ordinance lookup failed");
+        return response.json() as Promise<LocalOrdinanceLookupPayload>;
+      })
+      .then((payload) => {
+        setLookupResult({ key: requestKey, status: "READY", payload });
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setLookupResult({ key: requestKey, status: "ERROR", payload: null });
+      });
+    return () => controller.abort();
+  }, [answers.province, answers.city]);
+
+  const lookup = lookupResult?.key === lookupKey ? lookupResult.payload : null;
+  const lookupState: "LOADING" | "READY" | "ERROR" =
+    lookupResult?.key === lookupKey ? lookupResult.status : "LOADING";
+
+  const actualByCategory = useMemo(
+    () =>
+      new Map(
+        lookup?.categories.map((item) => [
+          item.categoryId,
+          item.ordinances.filter((ordinance) =>
+            isElisOrdinanceDetailUrl(ordinance.url),
+          ),
+        ]) ?? [],
+      ),
+    [lookup],
+  );
+  const reviewedByCategory = useMemo(() => {
+    if (!answers.province || !answers.city) {
+      return new Map<string, LocalOrdinanceCategoryLookup["ordinances"]>();
+    }
+    const records = getReviewedElisOrdinanceRecords(
+      answers.province,
+      answers.city,
+      "MUNICIPALITY",
+    );
+    return new Map(
+      matchOrdinancesToCategories(records).map((item) => [
+        item.categoryId,
+        item.ordinances,
+      ]),
+    );
+  }, [answers.province, answers.city]);
+  const useReviewedFallback = lookupState === "ERROR";
+  const hasReviewedFallback = [...reviewedByCategory.values()].some(
+    (ordinances) => ordinances.length > 0,
+  );
+  if (!answers.province) return null;
+  const links = getOfficialLocalOrdinanceLinks(answers.province, answers.city);
+  const prioritized = localOrdinanceReviewCategories
+    .map((category) => ({ category, reason: priorityReason(category.id, answers) }))
+    .filter((item): item is typeof item & { reason: string } => item.reason !== null);
+  const remaining = localOrdinanceReviewCategories.filter(
+    (category) => !prioritized.some((item) => item.category.id === category.id),
+  );
+
+  const renderCategory = (
+    category: (typeof localOrdinanceReviewCategories)[number],
+    reason?: string,
+  ) => {
+    const liveOrdinances = actualByCategory.get(category.id) ?? [];
+    const reviewedOrdinances = reviewedByCategory.get(category.id) ?? [];
+    const actualOrdinances = liveOrdinances.length
+      ? liveOrdinances
+      : useReviewedFallback
+        ? reviewedOrdinances
+        : [];
+    const fallbackMessage = lookupState === "LOADING"
+      ? "선택 지역의 현행 조례 원문을 확인 중입니다."
+      : lookupState === "READY" && lookup?.mode === "LIVE"
+        ? "이 범주에 해당하는 현행 조례 원문을 자동 확인하지 못했습니다."
+        : "ELIS 조회가 지연되어 상세 원문을 표시하지 못했습니다. 상단 지역명에서 현행 목록을 확인해 주세요.";
+    return (
+      <article className="local-ordinance-card" key={category.id}>
+        <span>{reason ?? "추가 지역기준 검토"}</span>
+        <h3>{category.title}</h3>
+        <p>{category.affects}</p>
+        <small>확인 항목 · {category.searchTerms.join(" · ")}</small>
+        <div className="local-ordinance-links">
+          {actualOrdinances.map((ordinance) => (
+            <a
+              key={`${ordinance.level}-${ordinance.name}`}
+              href={ordinance.url}
+              target="_blank"
+              rel="noreferrer"
+              title={`${ordinance.jurisdictionName} 현행 자치법규 상세 원문`}
+            >
+              {ordinance.name} ↗
+              <small>{ordinance.level === "PROVINCE" ? "광역" : "기초"}{ordinance.amendmentDate ? ` · ${ordinance.amendmentDate}` : ""}</small>
+            </a>
+          ))}
+          {!actualOrdinances.length ? <em>{fallbackMessage}</em> : null}
+        </div>
+      </article>
+    );
+  };
+
+  return (
+    <section className="local-ordinance-panel" aria-labelledby="local-ordinance-title">
+      <header>
+        <div><span className="eyebrow">선택 지역 반영</span><h2 id="local-ordinance-title">광역·기초 자치법규 확인</h2></div>
+        <p>선택 지역의 현행 조례를 확인해 해당 조례의 ELIS 상세 원문으로 바로 연결합니다.</p>
+      </header>
+      <div className="local-ordinance-grid">{prioritized.map(({ category, reason }) => renderCategory(category, reason))}</div>
+      {remaining.length ? (
+        <details className="local-ordinance-more">
+          <summary>그 밖의 지역 조례 검토 범주 {remaining.length}개</summary>
+          <div className="local-ordinance-grid">{remaining.map((category) => renderCategory(category))}</div>
+        </details>
+      ) : null}
+      {links.notice ? <p className="local-ordinance-notice">{links.notice}</p> : null}
+      {lookupState === "READY" && lookup ? (
+        <p className="local-ordinance-checked">
+          {lookup.mode === "LIVE"
+            ? "행정안전부 ELIS 현행 상세 원문 조회"
+            : lookup.mode === "PARTIAL"
+              ? "ELIS 상세 원문 일부 확인"
+              : "검증된 ELIS 상세 원문 저장본"}
+          {" · "}{new Date(lookup.checkedAt).toLocaleDateString("ko-KR")}
+        </p>
+      ) : null}
+      {lookupState === "ERROR" ? (
+        <p className="local-ordinance-checked">
+          {hasReviewedFallback
+            ? `검증된 ELIS 상세 원문 저장본 · ${new Date(reviewedElisSnapshotCheckedAt).toLocaleDateString("ko-KR")}`
+            : "ELIS 상세 원문 조회 지연 · 상단 지역명에서 현행 목록 확인"}
+        </p>
+      ) : null}
+      <p className="local-ordinance-caveat">{localOrdinanceCoverageCaveat}</p>
+    </section>
+  );
+}

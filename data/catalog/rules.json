@@ -1,23 +1,5 @@
 [
   {
-    "id": "rule-occupancy-inside-complex",
-    "version": "1.0.0",
-    "procedureId": "industrial-complex-occupancy-contract",
-    "effect": "INCLUDE",
-    "effectiveFrom": "2026-07-01",
-    "effectiveTo": null,
-    "jurisdiction": { "nationwide": true, "provinces": [], "cities": [], "industrialComplexIds": [] },
-    "condition": { "eq": { "path": "industrialComplex.inside", "value": true } },
-    "requiredInputs": ["industrialComplex.inside"],
-    "missingPolicy": "INDETERMINATE",
-    "citationIds": ["cit-indcluster-38-1"],
-    "explanationTemplate": "산업단지 안에서 제조업을 영위하려는 사업으로 입력되어 입주계약 경로를 포함합니다.",
-    "priority": 0,
-    "status": "DRAFT",
-    "reviewActor": "AI-assisted draft",
-    "note": "개별 산단 관리기본계획상 입주대상 업종 적합성은 별도 확인."
-  },
-  {
     "id": "rule-factory-approval-over-500",
     "version": "1.0.0",
     "procedureId": "factory-establishment-approval",
@@ -156,30 +138,6 @@
     "note": "대상 여부 자체를 엔진이 추론하지 않으며 별도 전문검토 결과를 입력받음."
   },
   {
-    "id": "rule-utility-increase",
-    "version": "1.0.0",
-    "procedureId": "utility-supply-consultation",
-    "effect": "INCLUDE",
-    "effectiveFrom": "2026-08-20",
-    "effectiveTo": null,
-    "jurisdiction": { "nationwide": true, "provinces": [], "cities": [], "industrialComplexIds": [] },
-    "condition": {
-      "any": [
-        { "gt": { "path": "utilities.powerIncreaseMw", "value": 0 } },
-        { "gt": { "path": "utilities.waterDemandM3Day", "value": 0 } },
-        { "gt": { "path": "utilities.wastewaterM3Day", "value": 0 } }
-      ]
-    },
-    "requiredInputs": ["utilities.powerIncreaseMw", "utilities.waterDemandM3Day", "utilities.wastewaterM3Day"],
-    "missingPolicy": "INDETERMINATE",
-    "citationIds": [],
-    "explanationTemplate": "전력·용수·폐수처리 수요 증가가 입력되어 공급기관과의 사전협의를 권고합니다.",
-    "priority": 0,
-    "status": "DRAFT",
-    "reviewActor": "AI-assisted draft",
-    "note": "실무 권고규칙이며 공급기관별 공식 기준은 미반영."
-  },
-  {
     "id": "rule-construction-start",
     "version": "1.0.0",
     "procedureId": "construction-start-report",
@@ -213,7 +171,7 @@
     "priority": 0,
     "status": "DRAFT",
     "reviewActor": "AI-assisted draft",
-    "note": "임시사용승인 등 대체경로는 MVP 미지원."
+    "note": "임시사용승인 등 대체경로는 현재 카탈로그 범위에 포함하지 않음."
   },
   {
     "id": "rule-completion-inside-complex",
@@ -254,6 +212,6 @@
     "priority": 0,
     "status": "DRAFT",
     "reviewActor": "AI-assisted draft",
-    "note": "500㎡ 미만 공장등록 경로는 MVP 미지원."
+    "note": "500㎡ 미만 공장등록의 별도 경로는 현재 카탈로그 범위에 포함하지 않음."
   }
 ]

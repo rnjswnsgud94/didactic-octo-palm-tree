@@ -1,18 +1,5 @@
 [
   {
-    "id": "edge-occupancy-to-building",
-    "from": "industrial-complex-occupancy-contract",
-    "to": "building-permit",
-    "relation": "FINISH_TO_START",
-    "lag": 0,
-    "lagUnit": "BUSINESS_DAY",
-    "strength": "PRACTICAL",
-    "conditionRuleId": "rule-occupancy-inside-complex",
-    "citationIds": ["cit-indcluster-13-2-deeming", "cit-building-11-5"],
-    "branchId": "industrial-complex-route",
-    "note": "입주가능 업종과 사업계획 확정 후 건축 인허가를 진행하는 권장 순서. 건축허가 의제 활용 여부는 제출서류와 관계기관 협의에 따라 달라짐."
-  },
-  {
     "id": "edge-factory-approval-to-building",
     "from": "factory-establishment-approval",
     "to": "building-permit",
@@ -89,19 +76,6 @@
     "citationIds": ["cit-building-22-1"],
     "branchId": null,
     "note": "건축공사 완료 후 사용 전 사용승인. 실제 공사기간은 이 인허가 일정 엔진의 범위 밖이므로 별도 입력이 필요."
-  },
-  {
-    "id": "edge-utility-to-use",
-    "from": "utility-supply-consultation",
-    "to": "building-use-approval",
-    "relation": "FINISH_TO_FINISH",
-    "lag": 0,
-    "lagUnit": "BUSINESS_DAY",
-    "strength": "ADVISORY",
-    "conditionRuleId": "rule-utility-increase",
-    "citationIds": [],
-    "branchId": null,
-    "note": "사용 전 검사·인입 완료와 사용승인 일정을 맞추기 위한 권고 관계."
   },
   {
     "id": "edge-use-to-completion-complex",
