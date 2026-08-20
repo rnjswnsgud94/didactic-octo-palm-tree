@@ -122,24 +122,24 @@
   },
   {
     "id": "cit-air-23-1-scheduled",
-    "sourceId": "src-air-act-scheduled-20270108",
+    "sourceId": "src-air-act-current-20260326",
     "article": "제23조",
     "paragraph": "제1항",
     "subparagraph": null,
     "item": null,
     "role": "APPLICABILITY",
-    "sourceVersion": "시행예정 2027.1.8., 법률 제21843호 — 현재시점 조문 재확인 필요",
+    "sourceVersion": "시행 2026.3.26., 법률 제21065호",
     "summary": "대기오염물질 배출시설을 설치하려는 자는 법령상 구분에 따라 설치허가 또는 신고 대상이 될 수 있다."
   },
   {
     "id": "cit-water-33-1-scheduled",
-    "sourceId": "src-water-act-scheduled-20270220",
+    "sourceId": "src-water-act-current-20260219",
     "article": "제33조",
     "paragraph": "제1항",
     "subparagraph": null,
     "item": null,
     "role": "APPLICABILITY",
-    "sourceVersion": "시행예정 2027.2.20., 법률 제21368호 — 현재시점 조문 재확인 필요",
+    "sourceVersion": "시행 2026.2.19., 법률 제21368호",
     "summary": "폐수배출시설을 설치하려는 자는 법령상 구분에 따라 설치허가 또는 신고 대상이 될 수 있다."
   },
   {

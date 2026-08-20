@@ -25,10 +25,10 @@ The output is a review aid, not a filing, administrative disposition or legal op
 
 ## Input flow
 
-1. Project: investment type, assessment date, province/city, industrial-complex status, industry family.
-2. Facility: building action; existing, incremental and post-project factory-building area; deemed-permit coordination class.
-3. Environment and safety: user-confirmed air/water facility status, chemical handling and PSM coverage.
-4. Infrastructure: incremental power, water and wastewater demand.
+1. Project: investment type, assessment date, one of 14 non-capital provinces/metropolitan cities, city/county/district, industrial-complex status and industry family.
+2. Facility: land category, development/demolition/road/traffic facts, building action and existing/incremental/post-project factory-building area.
+3. Environment and safety: assessment class, integrated-permit target, air/water facilities, chemicals, PSM, hazardous materials, high-pressure gas and fire-work facts.
+4. Infrastructure: incremental power, water and wastewater demand plus energy-plan and groundwater facts.
 
 Unknown facts remain unknown. “No” and “not applicable” are not substitutes for missing information.
 
@@ -52,4 +52,4 @@ Status is conveyed through label, symbol, border and pattern—not color alone. 
 
 ## Non-goals
 
-The MVP does not file applications, make final legal determinations, forecast construction, optimize staffing, or automatically cover all local ordinances, site restrictions, chemical thresholds, hazardous-material, gas, fire and electrical inspections.
+The MVP does not file applications, make final legal determinations, forecast construction, optimize staffing, cover the capital region, or automatically resolve every local ordinance, parcel restriction and subordinate-table threshold. The expanded procedures are decision-support candidates until the competent agency confirms the project-specific facts.

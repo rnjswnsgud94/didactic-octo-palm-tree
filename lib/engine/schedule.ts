@@ -92,8 +92,16 @@ export function calculateSchedule({
   });
   const ids = selectedDecisions.map((decision) => decision.procedure.id).sort();
   const selected = new Set(ids);
+  const matchedRuleIds = new Set(
+    selectedDecisions.flatMap((decision) => decision.matchedRuleIds),
+  );
   const activeEdges = edges
     .filter((edge) => selected.has(edge.from) && selected.has(edge.to))
+    .filter(
+      (edge) =>
+        edge.conditionRuleId === null ||
+        matchedRuleIds.has(edge.conditionRuleId),
+    )
     .filter((edge) => edge.strength === "LEGAL_HARD" || (includePractical && edge.strength === "PRACTICAL"))
     .filter((edge) => edge.lagUnit === "BUSINESS_DAY")
     .sort((a, b) => a.id.localeCompare(b.id));

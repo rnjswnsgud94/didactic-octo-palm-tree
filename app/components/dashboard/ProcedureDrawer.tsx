@@ -1,4 +1,5 @@
-import { actionLabels, laneLabels, stageLabels } from "@/app/components/dashboard/constants";
+import { actionLabels, inputLabel, laneLabels, stageLabels } from "@/app/components/dashboard/constants";
+import { LawApiVerifier } from "@/app/components/dashboard/LawApiVerifier";
 import { StatusBadge } from "@/app/components/dashboard/StatusBadge";
 import { catalog } from "@/lib/data/catalog";
 import type { ProcedureDecision } from "@/lib/engine/rule-engine";
@@ -30,6 +31,17 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
   const node = schedule.nodes.find((item) => item.procedureId === procedure.id);
   const duration = catalog.durations.find((item) => item.id === procedure.durationId);
   const relatedEdges = catalog.edges.filter((edge) => edge.from === procedure.id || edge.to === procedure.id);
+  const apiSources = procedure.citationIds.flatMap((citationId) => {
+    const item = citationTitle(citationId);
+    if (!item || !["ACT", "ENFORCEMENT_DECREE", "ENFORCEMENT_RULE"].includes(item.source.documentType)) return [];
+    return [{
+      id: item.source.id,
+      title: item.source.title,
+      mst: item.source.mst,
+      article: item.citation.article,
+      officialUrl: item.source.officialUrl,
+    }];
+  });
 
   return (
     <aside className="procedure-drawer" aria-label={`${procedure.name} 상세정보`}>
@@ -44,7 +56,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
       <div className="drawer-body">
         <section className="reason-box">
           <span>판정 이유</span><p>{decision.reason}</p>
-          {decision.missingInputs.length ? <p className="missing-inputs"><strong>추가 확인:</strong> {decision.missingInputs.join(", ")}</p> : null}
+          {decision.missingInputs.length ? <p className="missing-inputs"><strong>추가 확인:</strong> {decision.missingInputs.map(inputLabel).join(", ")}</p> : null}
         </section>
         <dl className="detail-grid">
           <div><dt>수행 단계</dt><dd>{stageLabels[procedure.stage]}</dd></div>
@@ -107,6 +119,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
             })}
             {!procedure.citationIds.length ? <div className="citation-empty">공식 공급기관 기준을 아직 수집하지 않아 확정 근거로 표시하지 않습니다.</div> : null}
           </div>
+          <LawApiVerifier sources={apiSources} />
         </section>
         <section className="review-note">
           <strong>검증 상태 · {procedure.verificationStatus.replaceAll("_", " ")}</strong><p>{procedure.reviewNote}</p>

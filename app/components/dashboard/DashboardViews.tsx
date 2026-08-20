@@ -1,4 +1,4 @@
-import { stageLabels } from "@/app/components/dashboard/constants";
+import { inputLabel, stageLabels } from "@/app/components/dashboard/constants";
 import { StatusBadge } from "@/app/components/dashboard/StatusBadge";
 import { catalog } from "@/lib/data/catalog";
 import type { ProcedureDecision } from "@/lib/engine/rule-engine";
@@ -89,7 +89,7 @@ export function GapsView({ decisions }: { decisions: ProcedureDecision[] }) {
   const missing = [...new Set(decisions.flatMap((decision) => decision.missingInputs))].sort();
   return (
     <div className="gaps-layout">
-      <section className="gap-section priority-gap"><span className="eyebrow">ACTION REQUIRED</span><h3>현재 시나리오의 추가 확인사항</h3>{missing.length ? <ul>{missing.map((item) => <li key={item}>{item}</li>)}</ul> : <p>자동판정 규칙에 필요한 입력값은 모두 채워졌습니다. 다만 범위 밖 세부법령 검토는 별도입니다.</p>}</section>
+      <section className="gap-section priority-gap"><span className="eyebrow">ACTION REQUIRED</span><h3>현재 시나리오의 추가 확인사항</h3>{missing.length ? <ul>{missing.map((item) => <li key={item}>{inputLabel(item)}</li>)}</ul> : <p>자동판정 규칙에 필요한 입력값은 모두 채워졌습니다. 다만 범위 밖 세부법령 검토는 별도입니다.</p>}</section>
       <section className="gap-section"><span className="eyebrow">COVERAGE</span><h3>MVP 자동판정 범위 밖</h3><ul>{catalog.coverage.gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul></section>
       <section className="gap-section future-gap"><span className="eyebrow">REVIEW WATCH</span><h3>시행예정·재검증 알림</h3><ul>{catalog.coverage.futureLawWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></section>
     </div>

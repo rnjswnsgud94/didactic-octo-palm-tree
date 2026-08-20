@@ -17,14 +17,16 @@ The assessment date selects rules whose `effectiveFrom <= date <= effectiveTo`. 
 
 ## Jurisdiction method
 
-Nationwide rules are evaluated first. Province, city and industrial-complex rules require an exact named source. “청주시 지원” and “천안시 지원” currently mean the nationwide common layer for those scenarios; they do not claim local ordinance completeness.
+Nationwide rules are evaluated first for the 14 supported non-capital provinces and metropolitan cities. Province, city and industrial-complex rules require an exact named source. A selectable region means the nationwide common layer can be evaluated there; it does not claim local-ordinance completeness.
 
 ## Thresholds and facts
 
 - The factory-establishment 500㎡ boundary uses post-project factory-building area in the current MVP.
 - Existing, increment and total area remain separate facts.
-- Environmental and PSM procedures require a user/professional determination of facility coverage; industry name alone is insufficient.
+- Environmental, chemical and safety procedures require facility, material, quantity and location facts or a user/professional coverage determination; industry name alone is insufficient.
 - Unknown facts create `NEEDS_MORE_INFO`, not a false negative.
+
+Integrated environmental permitting suppresses overlapping individual air, water and noise procedures only when the user has confirmed the integrated-permit target fact. Chemical procedures preserve the accident-plan → facility-inspection → business-permit sequence while leaving substance and quantity thresholds for final competent-agency review.
 
 ## Deeming
 

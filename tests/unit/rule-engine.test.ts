@@ -12,6 +12,10 @@ function status(decisions: ReturnType<typeof decide>, id: string) {
   return decisions.find((decision) => decision.procedure.id === id)?.status;
 }
 
+function decision(decisions: ReturnType<typeof decide>, id: string) {
+  return decisions.find((item) => item.procedure.id === id);
+}
+
 describe("deterministic four-state rules", () => {
   it("removes the separate factory approval on the industrial-complex path", () => {
     const decisions = decide(catalog.scenarios[0].answers);
@@ -39,11 +43,74 @@ describe("deterministic four-state rules", () => {
     expect(decisions.find((item) => item.procedure.id === "air-emission-installation-permit")?.missingInputs).toContain("environment.airEmissionFacility");
   });
 
-  it("keeps unverified environmental law as POSSIBLY_APPLIES", () => {
+  it("replaces individual air and water permits with the integrated permit path", () => {
     const decisions = decide(catalog.scenarios[2].answers);
-    expect(status(decisions, "air-emission-installation-permit")).toBe("POSSIBLY_APPLIES");
-    expect(status(decisions, "water-discharge-installation-permit")).toBe("POSSIBLY_APPLIES");
+    expect(status(decisions, "integrated-environmental-permit")).toBe("APPLIES");
+    expect(status(decisions, "integrated-environmental-operation-start-report")).toBe("APPLIES");
+    expect(status(decisions, "air-emission-installation-permit")).toBe("DOES_NOT_APPLY");
+    expect(status(decisions, "water-discharge-installation-permit")).toBe("DOES_NOT_APPLY");
+    expect(status(decisions, "air-facility-operation-start-report")).toBe("DOES_NOT_APPLY");
+    expect(status(decisions, "water-facility-operation-start-report")).toBe("DOES_NOT_APPLY");
+    expect(status(decisions, "noise-vibration-facility-report")).toBe("DOES_NOT_APPLY");
+    expect(decision(decisions, "air-emission-installation-permit")?.isDeemed).toBe(true);
+    expect(decision(decisions, "water-discharge-installation-permit")?.isDeemed).toBe(true);
+    expect(decision(decisions, "air-facility-operation-start-report")?.isDeemed).toBe(true);
+    expect(decision(decisions, "water-facility-operation-start-report")?.isDeemed).toBe(true);
     expect(status(decisions, "process-safety-report")).toBe("APPLIES");
+    expect(status(decisions, "hazard-prevention-plan")).toBe("DOES_NOT_APPLY");
+    expect(decision(decisions, "hazard-prevention-plan")?.isDeemed).toBe(true);
+  });
+
+  it("does not label an unrelated exclusion as deemed", () => {
+    const decisions = decide(catalog.scenarios[0].answers);
+    expect(status(decisions, "noise-vibration-facility-report")).toBe("DOES_NOT_APPLY");
+    expect(decision(decisions, "noise-vibration-facility-report")?.isDeemed).toBe(false);
+  });
+
+  it("uses explicit facility facts instead of industry or demand proxies", () => {
+    const base = catalog.scenarios[1].answers;
+    const excluded = decide({
+      ...base,
+      chemicalManufactureOrImport: false,
+      privateElectricalFacilityWork: false,
+      specificHighPressureGasUse: false,
+    });
+    expect(status(excluded, "chemical-substance-confirmation")).toBe("DOES_NOT_APPLY");
+    expect(status(excluded, "private-electrical-facility-construction-plan")).toBe("DOES_NOT_APPLY");
+    expect(status(excluded, "electrical-pre-use-inspection")).toBe("DOES_NOT_APPLY");
+    expect(status(excluded, "specific-high-pressure-gas-use-report")).toBe("DOES_NOT_APPLY");
+
+    const included = decide({
+      ...base,
+      chemicalManufactureOrImport: true,
+      powerIncreaseMw: 0,
+      privateElectricalFacilityWork: true,
+      specificHighPressureGasUse: true,
+    });
+    expect(status(included, "chemical-substance-confirmation")).toBe("POSSIBLY_APPLIES");
+    expect(status(included, "private-electrical-facility-construction-plan")).toBe("POSSIBLY_APPLIES");
+    expect(status(included, "electrical-pre-use-inspection")).toBe("APPLIES");
+    expect(status(included, "specific-high-pressure-gas-use-report")).toBe("POSSIBLY_APPLIES");
+  });
+
+  it("registers expanded exclusion rules on their procedures", () => {
+    expect(decision(decide(), "air-facility-operation-start-report")?.procedure.ruleIds).toContain("rule-exp-air-operation-integrated-exclusion");
+    expect(decision(decide(), "water-facility-operation-start-report")?.procedure.ruleIds).toContain("rule-exp-water-operation-integrated-exclusion");
+    expect(decision(decide(), "hazard-prevention-plan")?.procedure.ruleIds).toContain("rule-exp-hazard-prevention-psm-exclusion");
+  });
+
+  it("uses factual land and safety inputs for the expanded permit paths", () => {
+    const answers = {
+      ...catalog.scenarios[2].answers,
+      landCategory: "FARMLAND" as const,
+      integratedEnvironmentalPermitTarget: false,
+    };
+    const decisions = decide(answers);
+    expect(status(decisions, "farmland-conversion-permit")).toBe("APPLIES");
+    expect(status(decisions, "small-environmental-impact-assessment")).toBe("APPLIES");
+    expect(status(decisions, "hazardous-chemical-business-permit")).toBe("APPLIES");
+    expect(status(decisions, "hazardous-materials-facility-installation-permit")).toBe("APPLIES");
+    expect(status(decisions, "high-pressure-gas-manufacture-storage-permit-report")).toBe("APPLIES");
   });
 
   it("returns byte-for-byte stable decisions for identical inputs", () => {

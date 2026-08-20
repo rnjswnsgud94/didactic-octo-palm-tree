@@ -4,8 +4,15 @@ import type { DurationEstimate, ProcedureEdge } from "@/lib/domain/schemas";
 import type { ProcedureDecision } from "@/lib/engine/rule-engine";
 import { calculateSchedule } from "@/lib/engine/schedule";
 
-function decisions(ids: string[]): ProcedureDecision[] {
-  return ids.map((id) => ({ status: "APPLIES", procedure: { id } })) as ProcedureDecision[];
+function decisions(
+  ids: string[],
+  matchedRuleIdsByProcedure: Record<string, string[]> = {},
+): ProcedureDecision[] {
+  return ids.map((id) => ({
+    status: "APPLIES",
+    procedure: { id },
+    matchedRuleIds: matchedRuleIdsByProcedure[id] ?? [],
+  })) as ProcedureDecision[];
 }
 
 function durations(values: Record<string, number | null>): DurationEstimate[] {
@@ -47,6 +54,34 @@ describe("DAG and critical path", () => {
     const legalOnly = calculateSchedule({ decisions: decisions(["a", "b"]), edges: [practical], durations: durations({ a: 5, b: 3 }), scenario: "BASE", includeConditional: true, includePractical: false });
     expect(withPractical.total).toBe(8);
     expect(legalOnly.total).toBe(5);
+  });
+
+  it("activates a conditioned edge only when its rule actually matched", () => {
+    const conditioned = {
+      ...edge("a-b", "a", "b"),
+      conditionRuleId: "rule-a",
+    };
+    const withoutMatch = calculateSchedule({
+      decisions: decisions(["a", "b"]),
+      edges: [conditioned],
+      durations: durations({ a: 5, b: 3 }),
+      scenario: "BASE",
+      includeConditional: true,
+      includePractical: true,
+    });
+    const withMatch = calculateSchedule({
+      decisions: decisions(["a", "b"], { a: ["rule-a"] }),
+      edges: [conditioned],
+      durations: durations({ a: 5, b: 3 }),
+      scenario: "BASE",
+      includeConditional: true,
+      includePractical: true,
+    });
+    expect(withoutMatch.total).toBe(5);
+    expect(withMatch.total).toBe(8);
+    expect(withMatch.topologicalOrder.indexOf("a")).toBeLessThan(
+      withMatch.topologicalOrder.indexOf("b"),
+    );
   });
 
   it("rejects cycles", () => {

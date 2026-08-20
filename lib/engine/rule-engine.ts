@@ -301,7 +301,7 @@ export function resolveProcedure(
       traces,
       matchedRuleIds: [winner.id],
       conflictRuleIds: [],
-      isDeemed: procedure.deemedByProcedureIds.length > 0,
+      isDeemed: false,
       dataVersion,
     };
   }
@@ -357,7 +357,40 @@ export function resolveAllProcedures(
   input: ProjectInput,
   dataVersion: string,
 ) {
-  return procedures
-    .map((procedure) => resolveProcedure(procedure, rules, input, dataVersion))
+  const decisions = procedures.map((procedure) =>
+    resolveProcedure(procedure, rules, input, dataVersion),
+  );
+  const decisionsByProcedureId = new Map(
+    decisions.map((decision) => [decision.procedure.id, decision]),
+  );
+  const deemedStatuses: ProcedureDecision["status"][] = [
+    "APPLIES",
+    "POSSIBLY_APPLIES",
+  ];
+
+  return decisions
+    .map((decision) => {
+      const deemedByProcedureIds = stableUnique([
+        ...decision.procedure.deemedByProcedureIds,
+        ...decisions
+          .filter((candidate) =>
+            candidate.procedure.deemedProcedureIds.includes(
+              decision.procedure.id,
+            ),
+          )
+          .map((candidate) => candidate.procedure.id),
+      ]);
+      const isDeemed =
+        decision.status === "DOES_NOT_APPLY" &&
+        deemedByProcedureIds.some((procedureId) => {
+          const deemedByDecision = decisionsByProcedureId.get(procedureId);
+          return deemedByDecision
+            ? deemedStatuses.includes(deemedByDecision.status)
+            : false;
+        });
+      return isDeemed === decision.isDeemed
+        ? decision
+        : { ...decision, isDeemed };
+    })
     .sort((a, b) => a.procedure.id.localeCompare(b.procedure.id));
 }

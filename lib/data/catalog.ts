@@ -9,6 +9,14 @@ import proceduresJson from "@/data/catalog/procedures.json";
 import rulesJson from "@/data/catalog/rules.json";
 import scenariosJson from "@/data/scenarios/golden.json";
 import {
+  expandedCitations,
+  expandedDurations,
+  expandedEdges,
+  expandedLegalSources,
+  expandedProcedures,
+  expandedRules,
+} from "@/lib/data/expanded-catalog";
+import {
   applicabilityRuleSchema,
   durationEstimateSchema,
   legalCitationSchema,
@@ -46,11 +54,26 @@ export const scenarioAnswerSchema = z.object({
   existingAreaM2: z.number().nullable(),
   increaseAreaM2: z.number().nullable(),
   totalAreaM2: z.number().nullable(),
+  landCategory: z.enum(["OTHER", "FARMLAND", "FOREST"]).nullable(),
+  demolitionRequired: z.boolean().nullable(),
+  roadConnectionRequired: z.boolean().nullable(),
+  trafficImpactAssessmentRequired: z.boolean().nullable(),
   permitCoordination: z.string().nullable(),
   airEmissionFacility: z.boolean().nullable(),
   waterDischargeFacility: z.boolean().nullable(),
+  environmentalAssessmentType: z.enum(["NONE", "ENVIRONMENTAL", "SMALL"]).nullable(),
+  integratedEnvironmentalPermitTarget: z.boolean().nullable(),
   chemicalsHandled: z.boolean().nullable(),
+  chemicalManufactureOrImport: z.boolean().nullable(),
+  hazardousChemicalBusiness: z.boolean().nullable(),
+  hazardousMaterials: z.boolean().nullable(),
+  highPressureGas: z.boolean().nullable(),
+  specificHighPressureGasUse: z.boolean().nullable(),
   psmCovered: z.boolean().nullable(),
+  fireFacilityWork: z.boolean().nullable(),
+  privateElectricalFacilityWork: z.boolean().nullable(),
+  energyUsePlanRequired: z.boolean().nullable(),
+  groundwaterDevelopment: z.boolean().nullable(),
   powerIncreaseMw: z.number().nullable(),
   waterDemandM3Day: z.number().nullable(),
   wastewaterM3Day: z.number().nullable(),
@@ -63,12 +86,25 @@ const scenarioSchema = z.object({
   answers: scenarioAnswerSchema,
 });
 
-const procedures = z.array(procedureSchema).parse(proceduresJson);
-const edges = z.array(procedureEdgeSchema).parse(edgesJson);
-const rules = z.array(applicabilityRuleSchema).parse(rulesJson);
-const legalSources = z.array(legalSourceSchema).parse(legalSourcesJson);
-const citations = z.array(legalCitationSchema).parse(citationsJson);
-const durations = z.array(durationEstimateSchema).parse(durationsJson);
+const additionalRuleIdsByProcedure: Record<string, string[]> = {
+  "air-emission-installation-permit": ["rule-exp-air-integrated-exclusion"],
+  "water-discharge-installation-permit": ["rule-exp-water-integrated-exclusion"],
+};
+
+const procedures = z.array(procedureSchema).parse(
+  [...proceduresJson, ...expandedProcedures].map((procedure) => ({
+    ...procedure,
+    ruleIds: [
+      ...procedure.ruleIds,
+      ...(additionalRuleIdsByProcedure[procedure.id] ?? []),
+    ],
+  })),
+);
+const edges = z.array(procedureEdgeSchema).parse([...edgesJson, ...expandedEdges]);
+const rules = z.array(applicabilityRuleSchema).parse([...rulesJson, ...expandedRules]);
+const legalSources = z.array(legalSourceSchema).parse([...legalSourcesJson, ...expandedLegalSources]);
+const citations = z.array(legalCitationSchema).parse([...citationsJson, ...expandedCitations]);
+const durations = z.array(durationEstimateSchema).parse([...durationsJson, ...expandedDurations]);
 const coverage = coverageSchema.parse(coverageJson);
 const scenarios = z.array(scenarioSchema).parse(scenariosJson);
 

@@ -6,6 +6,7 @@ import { tabLabels, type DashboardTab } from "@/app/components/dashboard/constan
 import { DashboardTabIcon } from "@/app/components/dashboard/DashboardTabIcon";
 import { GapsView, LegalView, ProcedureList, ScheduleView } from "@/app/components/dashboard/DashboardViews";
 import { ProcedureDrawer } from "@/app/components/dashboard/ProcedureDrawer";
+import { findExactScenarioId, ScenarioPicker } from "@/app/components/dashboard/ScenarioPicker";
 import { Swimlane } from "@/app/components/dashboard/Swimlane";
 import { Wizard } from "@/app/components/dashboard/Wizard";
 import { catalog, type ScenarioAnswers } from "@/lib/data/catalog";
@@ -26,6 +27,7 @@ const summaryLabels: Record<ApplicabilityStatus, string> = {
 
 export function DashboardClient() {
   const [answers, setAnswers] = useState<ScenarioAnswers>(defaultScenario.answers);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(defaultScenario.id);
   const [activeStep, setActiveStep] = useState(0);
   const [activeTab, setActiveTab] = useState<DashboardTab>("SWIMLANE");
   const [durationScenario, setDurationScenario] = useState<DurationScenario>("BASE");
@@ -42,6 +44,10 @@ export function DashboardClient() {
     const timeout = window.setTimeout(() => {
       const restored = decodeShareState(window.location.search, defaultScenario.answers);
       setAnswers(restored.answers);
+      const restoredScenarioId = catalog.scenarios.some((scenario) => scenario.id === restored.scenarioId)
+        ? restored.scenarioId!
+        : findExactScenarioId(catalog.scenarios, restored.answers) ?? null;
+      setSelectedScenarioId(restoredScenarioId);
       if (restored.tab && validTabs.has(restored.tab)) setActiveTab(restored.tab as DashboardTab);
       if (restored.warning) setShareMessage(restored.warning);
     }, 0);
@@ -50,11 +56,11 @@ export function DashboardClient() {
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      const query = encodeShareState(answers, activeTab);
+      const query = encodeShareState(answers, activeTab, selectedScenarioId);
       window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
     }, 180);
     return () => window.clearTimeout(timeout);
-  }, [answers, activeTab]);
+  }, [answers, activeTab, selectedScenarioId]);
 
   const evaluation = useMemo(() => evaluateProject(answers, { includeConditional, includePractical }), [answers, includeConditional, includePractical]);
   const schedule = evaluation.schedules[durationScenario];
@@ -77,8 +83,15 @@ export function DashboardClient() {
     setAnswers((current) => ({ ...current, [key]: value }));
   }
 
+  function selectScenario(scenarioId: string) {
+    const scenario = catalog.scenarios.find((item) => item.id === scenarioId);
+    if (!scenario) return;
+    setSelectedScenarioId(scenario.id);
+    setAnswers(scenario.answers);
+  }
+
   async function copyShareLink() {
-    const link = `${window.location.origin}${window.location.pathname}?${encodeShareState(answers, activeTab)}`;
+    const link = `${window.location.origin}${window.location.pathname}?${encodeShareState(answers, activeTab, selectedScenarioId)}`;
     try {
       await navigator.clipboard.writeText(link);
       setShareMessage("현재 조건의 공유 링크를 복사했습니다.");
@@ -90,6 +103,7 @@ export function DashboardClient() {
 
   function resetDashboard() {
     setAnswers(defaultScenario.answers);
+    setSelectedScenarioId(defaultScenario.id);
     setActiveStep(0);
     setActiveTab("SWIMLANE");
     setDurationScenario("BASE");
@@ -116,20 +130,16 @@ export function DashboardClient() {
       </header>
 
       <section className="hero-band" aria-labelledby="dashboard-title">
-        <div><span className="eyebrow">FACTORY PERMIT NAVIGATOR · MVP</span><h1 id="dashboard-title">투자조건에서 인허가 경로까지,<br />근거와 일정으로 연결합니다.</h1><p>전국 공통 법령을 기준으로 청주·천안 제조업 투자 시나리오를 우선 지원합니다.</p></div>
-        <div className="scope-card"><span>현재 적용 범위</span><strong>전국 공통층 + 청주·천안</strong><small>지역 조례·개별 산단 계획은 추가 확인</small></div>
+        <div><span className="eyebrow">FACTORY PERMIT NAVIGATOR · MVP</span><h1 id="dashboard-title">투자조건에서 인허가 경로까지,<br />근거와 일정으로 연결합니다.</h1><p>전국 공통 법령을 기준으로 비수도권 제조업 투자 시나리오를 지원합니다.</p></div>
+        <div className="scope-card"><span>현재 적용 범위</span><strong>전국 비수도권 14개 시·도</strong><small>서울·경기·인천 제외 · 지역 조례·개별 산단 계획은 추가 확인</small></div>
       </section>
 
       <div id="main-dashboard" className="dashboard-grid">
         <Wizard answers={answers} activeStep={activeStep} onStepChange={setActiveStep} onChange={changeAnswer} />
         <section className="workspace" aria-label="판정 결과">
           <div className="workspace-toolbar">
-            <label className="scenario-picker"><span>검증 시나리오</span><select
-              value={catalog.scenarios.find((scenario) => JSON.stringify(scenario.answers) === JSON.stringify(answers))?.id ?? "custom"}
-              onChange={(event) => { const scenario = catalog.scenarios.find((item) => item.id === event.target.value); if (scenario) setAnswers(scenario.answers); }}>
-              <option value="custom">사용자 입력</option>{catalog.scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
-            </select></label>
-            <div className="scenario-caption"><strong>{answers.city} · {answers.insideIndustrialComplex === null ? "입지 미확인" : answers.insideIndustrialComplex ? "산업단지" : "개별입지"}</strong><span>{answers.totalAreaM2 === null ? "면적 미확인" : `${answers.totalAreaM2.toLocaleString("ko-KR")}㎡`} · 기준일 {answers.assessmentDate}</span><em>{["청주시", "천안시"].includes(answers.city) ? "전국 공통층 적용" : "지역자료 미확인"}</em></div>
+            <ScenarioPicker scenarios={catalog.scenarios} answers={answers} selectedScenarioId={selectedScenarioId} onSelect={selectScenario} />
+            <div className="scenario-caption"><strong>{answers.city || `${answers.province} 내 시·군·구 미확인`} · {answers.insideIndustrialComplex === null ? "입지 미확인" : answers.insideIndustrialComplex ? "산업단지" : "개별입지"}</strong><span>{answers.totalAreaM2 === null ? "면적 미확인" : `${answers.totalAreaM2.toLocaleString("ko-KR")}㎡`} · 기준일 {answers.assessmentDate}</span><em>전국 공통 법령층 · 지역기준 추가 확인</em></div>
             <div className="utility-actions"><button type="button" onClick={resetDashboard}>초기화</button><button type="button" onClick={() => window.print()}>인쇄</button></div>
           </div>
 

@@ -38,26 +38,26 @@
     "status": "AUTHORITATIVE"
   },
   {
-    "id": "src-air-act-scheduled-20270108",
+    "id": "src-air-act-current-20260326",
     "title": "대기환경보전법",
     "documentType": "ACT",
     "issuingAuthority": "기후에너지환경부",
     "jurisdictionCode": null,
     "industrialComplexId": null,
     "lawId": null,
-    "mst": "287811",
-    "proclamationDate": "2026-07-07",
-    "proclamationNumber": "21843",
-    "effectiveDate": "2027-01-08",
+    "mst": null,
+    "proclamationDate": "2025-10-01",
+    "proclamationNumber": "21065",
+    "effectiveDate": "2026-03-26",
     "repealDate": null,
     "apiRetrievedAt": null,
     "internallyVerifiedAt": "2026-08-20",
     "contentHash": "metadata-only:not-retrieved",
     "officialUrl": "https://www.law.go.kr/법령/대기환경보전법/제23조",
-    "status": "UNVERIFIED"
+    "status": "AUTHORITATIVE"
   },
   {
-    "id": "src-water-act-scheduled-20270220",
+    "id": "src-water-act-current-20260219",
     "title": "물환경보전법",
     "documentType": "ACT",
     "issuingAuthority": "기후에너지환경부",
@@ -67,13 +67,13 @@
     "mst": "283441",
     "proclamationDate": "2026-02-19",
     "proclamationNumber": "21368",
-    "effectiveDate": "2027-02-20",
+    "effectiveDate": "2026-02-19",
     "repealDate": null,
     "apiRetrievedAt": null,
     "internallyVerifiedAt": "2026-08-20",
     "contentHash": "metadata-only:not-retrieved",
     "officialUrl": "https://www.law.go.kr/법령/물환경보전법/제33조",
-    "status": "UNVERIFIED"
+    "status": "AUTHORITATIVE"
   },
   {
     "id": "src-osh-act-20260601",
