@@ -1,4 +1,5 @@
 import { catalog, type ScenarioAnswers } from "@/lib/data/catalog";
+import { buildPlanningDurations } from "@/lib/data/planning-durations";
 import { scenarioAnswersToProjectInput } from "@/lib/domain/project-input";
 import { resolveAllProcedures } from "@/lib/engine/rule-engine";
 import { calculateSchedule, type DurationScenario } from "@/lib/engine/schedule";
@@ -22,8 +23,13 @@ export function evaluateProject(
     input,
     catalog.coverage.catalogVersion,
   );
+  const planningDurations = buildPlanningDurations(
+    catalog.procedures,
+    catalog.durations,
+    answers,
+  );
   const schedules = Object.fromEntries(
-    (["MIN", "BASE", "MAX"] as DurationScenario[]).map((scenario) => [
+    (["MIN", "TYPICAL"] as DurationScenario[]).map((scenario) => [
       scenario,
       calculateSchedule({
         decisions,
@@ -32,6 +38,12 @@ export function evaluateProject(
         scenario,
         includeConditional: options.includeConditional,
         includePractical: options.includePractical,
+        constructionPlan: {
+          assessmentDate: answers.assessmentDate,
+          plannedStartDate: answers.plannedConstructionStartDate,
+          plannedEndDate: answers.plannedConstructionEndDate,
+        },
+        planningDurations,
       }),
     ]),
   ) as Record<DurationScenario, ReturnType<typeof calculateSchedule>>;

@@ -4,16 +4,54 @@ import { useState } from "react";
 
 import { laneLabels, stageLabels } from "@/app/components/dashboard/constants";
 import { StatusBadge } from "@/app/components/dashboard/StatusBadge";
+import { catalog } from "@/lib/data/catalog";
 import type { ProcedureDecision } from "@/lib/engine/rule-engine";
-import type { ScheduleResult } from "@/lib/engine/schedule";
+import type { ProjectTimelineNode, ScheduleResult } from "@/lib/engine/schedule";
+import { formatProcessingDuration } from "@/lib/format-duration";
 
-const stages = Object.keys(stageLabels) as Array<keyof typeof stageLabels>;
 const lanes = Object.keys(laneLabels) as Array<keyof typeof laneLabels>;
+export const denseProcedureCellThreshold = 10;
 
-function durationLabel(decision: ProcedureDecision, schedule: ScheduleResult) {
-  const node = schedule.nodes.find((item) => item.procedureId === decision.procedure.id);
-  if (!node || node.duration === null) return "기간 자료 없음";
-  return `${node.duration} 영업일`;
+function planningLabel(node: ProjectTimelineNode | undefined) {
+  if (!node) return "일정 제외";
+  const duration = formatProcessingDuration(node.processingDuration, node.processingUnit);
+  if (node.excludedFromOperationReady) return `가동 후 별도 · ${duration}`;
+  if (node.overlapsConstruction) {
+    return `${duration} · 공사와 ${node.overlapWithConstructionDays}일 병행`;
+  }
+  return duration;
+}
+
+function dateText(value: string | undefined) {
+  if (!value) return "일정 미입력";
+  return value.replaceAll("-", ".");
+}
+
+const stageGroupTitles: Record<keyof typeof stageLabels, string> = {
+  SITE_REVIEW: "입지·사업성 검토",
+  PLAN_AND_OCCUPANCY: "사업계획·입주 승인",
+  PRE_CONSTRUCTION: "착공 전 승인·신고",
+  DURING_CONSTRUCTION: "공사 병행 점검",
+  PRE_OPERATION: "준공·가동 승인",
+  POST_OPERATION: "가동 후 등록·관리",
+};
+
+function flowGroupTitle(decisions: ProcedureDecision[]) {
+  const names = decisions.map((decision) => decision.procedure.name).join(" ");
+  if (/사용승인|완료신고|완성검사|준공/.test(names)) return "준공·완성검사";
+  if (/착공/.test(names)) return "착공 준비 완료";
+  if (/건축허가|개발행위/.test(names)) return "개발·건축 허가";
+  if (/공장설립|입주계약|사업계획/.test(names)) return "입지·공장설립 승인";
+  if (/등록|사업개시|가동/.test(names)) return "등록·가동 준비";
+
+  const stageOrder = Object.keys(stageLabels) as Array<keyof typeof stageLabels>;
+  const stage = stageOrder
+    .map((candidate) => ({
+      candidate,
+      count: decisions.filter((decision) => decision.procedure.stage === candidate).length,
+    }))
+    .sort((left, right) => right.count - left.count || stageOrder.indexOf(left.candidate) - stageOrder.indexOf(right.candidate))[0]?.candidate;
+  return stage ? stageGroupTitles[stage] : "절차 착수";
 }
 
 export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
@@ -23,42 +61,172 @@ export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
   onSelect: (id: string) => void;
 }) {
   const [collapsedLanes, setCollapsedLanes] = useState<string[]>([]);
-  const usedLanes = lanes.filter((lane) => decisions.some((decision) => decision.procedure.lane === lane));
+  const timelineNodes = new Map(
+    (schedule.projectTimeline?.nodes ?? []).map((node) => [node.procedureId, node]),
+  );
+  const useDateOffsets = schedule.projectTimeline !== null;
+  const scheduleNodes = new Map(schedule.nodes.map((node) => [node.procedureId, node]));
+  const scheduledDecisions = decisions.filter((decision) =>
+    scheduleNodes.has(decision.procedure.id),
+  );
+  const unscheduledDecisions = decisions.filter((decision) =>
+    !scheduleNodes.has(decision.procedure.id),
+  );
+  const usedLanes = lanes.filter((lane) =>
+    scheduledDecisions.some((decision) => decision.procedure.lane === lane),
+  );
+  const offsets = useDateOffsets
+    ? [...new Set(
+        scheduledDecisions.map(
+          (decision) => timelineNodes.get(decision.procedure.id)?.startOffsetDays ?? 0,
+        ),
+      )].sort((a, b) => a - b)
+    : [...new Set(
+        scheduledDecisions.map(
+          (decision) => scheduleNodes.get(decision.procedure.id)?.wave ?? 0,
+        ),
+      )].sort((a, b) => a - b);
+  const activeEdges = catalog.edges.filter((edge) =>
+    schedule.activeEdgeIds.includes(edge.id),
+  );
+  const decisionNames = new Map(
+    decisions.map((decision) => [decision.procedure.id, decision.procedure.name]),
+  );
 
   function toggleLane(lane: string) {
-    setCollapsedLanes((current) => current.includes(lane) ? current.filter((item) => item !== lane) : [...current, lane]);
+    setCollapsedLanes((current) => current.includes(lane)
+      ? current.filter((item) => item !== lane)
+      : [...current, lane]);
+  }
+
+  function offsetOf(decision: ProcedureDecision) {
+    return useDateOffsets
+      ? timelineNodes.get(decision.procedure.id)?.startOffsetDays ?? 0
+      : scheduleNodes.get(decision.procedure.id)?.wave ?? 0;
+  }
+
+  const denseOffsets = new Set(
+    offsets.filter((offset) =>
+      usedLanes.some(
+        (lane) =>
+          scheduledDecisions.filter(
+            (decision) =>
+              decision.procedure.lane === lane && offsetOf(decision) === offset,
+          ).length >= denseProcedureCellThreshold,
+      ),
+    ),
+  );
+  const flowColumnTemplate = offsets.length
+    ? offsets
+        .map((offset) =>
+          denseOffsets.has(offset)
+            ? "minmax(440px, 2fr)"
+            : "minmax(220px, 1fr)",
+        )
+        .join(" ")
+    : "minmax(220px, 1fr)";
+
+  function predecessors(id: string) {
+    return activeEdges
+      .filter((edge) => edge.to === id)
+      .map((edge) => ({
+        name: decisionNames.get(edge.from) ?? edge.from,
+        strength: edge.strength,
+      }));
+  }
+
+  function strengthLabel(strength: "LEGAL_HARD" | "PRACTICAL" | "ADVISORY") {
+    if (strength === "LEGAL_HARD") return "법정";
+    if (strength === "PRACTICAL") return "실무";
+    return "참고";
   }
 
   return (
-    <section className="swimlane-shell" aria-label="기관별 인허가 스윔레인">
+    <section className="swimlane-shell" aria-label="선후행 순서와 병렬 진행을 표시한 인허가 흐름">
+      <ol className="phase-route" aria-label="사업 단계">
+        {Object.entries(stageLabels).map(([stage, label], index) => (
+          <li key={stage}><span>{index + 1}</span><strong>{label}</strong></li>
+        ))}
+      </ol>
       <div className="swimlane-legend" aria-label="표시 범례">
-        <span><i className="legend-line hard" /> 법적 선행</span>
-        <span><i className="legend-line practical" /> 실무 선행 반영</span>
-        <span><i className="legend-critical" /> 부분 임계경로</span>
+        <span><i className="legend-line hard" /> 법정 선후행</span>
+        <span><i className="legend-line practical" /> 실무 선후행</span>
+        <span><i className="legend-overlap" /> 공사와 병행</span>
+        <span><i className="legend-critical" /> 총기간 연장</span>
       </div>
-      <div className="swimlane-scroll" tabIndex={0} aria-label="가로로 스크롤할 수 있는 인허가 표">
-        <div className="swimlane-grid" style={{ gridTemplateColumns: `168px repeat(${stages.length}, minmax(176px, 1fr))` }}>
-          <div className="swimlane-corner">담당 기관 / 단계</div>
-          {stages.map((stage, index) => <div className="stage-header" key={stage}><span>{String(index + 1).padStart(2, "0")}</span><strong>{stageLabels[stage]}</strong></div>)}
+      <p className="flow-instruction">왼쪽에서 오른쪽 순서로 진행합니다. 같은 열에 놓인 절차는 선행조건을 충족하면 함께 진행할 수 있습니다.</p>
+      <div className="swimlane-scroll" tabIndex={0} aria-label="가로로 스크롤할 수 있는 인허가 순서표">
+        <div
+          className="swimlane-grid flow-grid"
+          style={{ gridTemplateColumns: `180px ${flowColumnTemplate}` }}
+        >
+          <div className="swimlane-corner">주관 기관 / 착수 시점</div>
+          {offsets.map((offset, index) => {
+            const groupDecisions = scheduledDecisions.filter((decision) => offsetOf(decision) === offset);
+            const sample = groupDecisions[0];
+            const node = sample ? timelineNodes.get(sample.procedure.id) : undefined;
+            const count = groupDecisions.length;
+            return (
+              <div className="stage-header flow-header" key={offset}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <strong>{flowGroupTitle(groupDecisions)}</strong>
+                <small>{useDateOffsets ? `${dateText(node?.startDate)} · 시작 후 ${offset}일` : "선후행 기준"} · {count > 1 ? `${count}개 병렬` : "1개 절차"}</small>
+              </div>
+            );
+          })}
           {usedLanes.map((lane) => (
             <div className={`swimlane-row ${collapsedLanes.includes(lane) ? "is-collapsed" : ""}`} key={lane}>
               <button type="button" className="lane-header" aria-expanded={!collapsedLanes.includes(lane)} onClick={() => toggleLane(lane)}>
-                <span className="lane-marker" aria-hidden="true" /><strong>{laneLabels[lane]}</strong><span className="lane-toggle" aria-hidden="true">{collapsedLanes.includes(lane) ? "+" : "−"}</span>
+                <span className="lane-marker" aria-hidden="true" />
+                <strong>{laneLabels[lane]}</strong>
+                <span className="lane-toggle" aria-hidden="true">{collapsedLanes.includes(lane) ? "+" : "−"}</span>
               </button>
-              {stages.map((stage) => {
-                const cells = decisions.filter((decision) => decision.procedure.lane === lane && decision.procedure.stage === stage);
+              {offsets.map((offset) => {
+                const cells = scheduledDecisions
+                  .filter((decision) => decision.procedure.lane === lane && offsetOf(decision) === offset)
+                  .sort((left, right) => {
+                    const leftNode = timelineNodes.get(left.procedure.id);
+                    const rightNode = timelineNodes.get(right.procedure.id);
+                    return (leftNode?.finishOffsetDays ?? 0) - (rightNode?.finishOffsetDays ?? 0)
+                      || left.procedure.name.localeCompare(right.procedure.name, "ko");
+                  });
+                const parallelCount = scheduledDecisions.filter((decision) => offsetOf(decision) === offset).length;
+                const isDense = cells.length >= denseProcedureCellThreshold;
                 return (
-                  <div className="lane-cell" key={`${lane}-${stage}`} aria-hidden={collapsedLanes.includes(lane)}>
+                  <div
+                    className={`lane-cell flow-cell${isDense ? " is-dense" : ""}`}
+                    key={`${lane}-${offset}`}
+                    data-item-count={cells.length}
+                    aria-hidden={collapsedLanes.includes(lane)}
+                  >
                     {cells.map((decision) => {
-                      const isCritical = schedule.criticalProcedureIds.includes(decision.procedure.id);
+                      const timelineNode = timelineNodes.get(decision.procedure.id);
+                      const incoming = predecessors(decision.procedure.id);
                       return (
-                        <button type="button" key={decision.procedure.id}
-                          className={`procedure-card status-card-${decision.status.toLowerCase()} ${isCritical ? "is-critical" : ""} ${selectedId === decision.procedure.id ? "is-selected" : ""}`}
+                        <button
+                          type="button"
+                          key={decision.procedure.id}
+                          className={`procedure-card status-card-${decision.status.toLowerCase()} ${timelineNode?.extendsOperationReady ? "is-critical" : ""} ${timelineNode?.overlapsConstruction ? "is-overlap" : ""} ${selectedId === decision.procedure.id ? "is-selected" : ""}`}
+                          aria-label={`${decision.procedure.name} 상세 보기`}
                           aria-pressed={selectedId === decision.procedure.id}
-                          onClick={() => onSelect(decision.procedure.id)}>
-                          <span className="procedure-card-topline"><StatusBadge status={decision.status} compact /><span>{decision.procedure.domain}</span></span>
+                          onClick={() => onSelect(decision.procedure.id)}
+                        >
+                          <span className="procedure-card-topline"><StatusBadge status={decision.status} compact /><span>{stageLabels[decision.procedure.stage]}</span></span>
                           <strong>{decision.procedure.name}</strong>
-                          <span className="procedure-meta">{durationLabel(decision, schedule)}{isCritical ? <em>임계</em> : null}</span>
+                          <span className="procedure-meta">{planningLabel(timelineNode)}{parallelCount > 1 ? <em>병렬</em> : null}</span>
+                          {incoming.length ? (
+                            <span className="procedure-route">
+                              <b>← 선행절차</b>
+                              <span className="procedure-route-list">
+                                {incoming.slice(0, 3).map((item) => (
+                                  <span className={`route-chip route-${item.strength.toLowerCase()}`} key={`${item.name}-${item.strength}`}>
+                                    <em>{strengthLabel(item.strength)}</em>{item.name}
+                                  </span>
+                                ))}
+                                {incoming.length > 3 ? <span className="route-more">외 {incoming.length - 3}개</span> : null}
+                              </span>
+                            </span>
+                          ) : <span className="procedure-route route-start"><b>시작 가능</b> 직접 선행절차 없음</span>}
                         </button>
                       );
                     })}
@@ -69,7 +237,14 @@ export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
           ))}
         </div>
       </div>
-      <p className="panel-footnote">선행관계는 일정 탭의 계산에 반영됩니다. 카드를 선택하면 판정 이유와 원문 근거를 확인할 수 있습니다.</p>
+      {unscheduledDecisions.length ? (
+        <section className="unscheduled-procedures">
+          <h3>현재 일정에서 제외된 절차</h3>
+          <p>비적용 조건과 일치했거나 일정 포함 설정에서 빠진 항목입니다. 상세 화면에서 판정 이유를 확인할 수 있습니다.</p>
+          <div>{unscheduledDecisions.map((decision) => <button type="button" key={decision.procedure.id} onClick={() => onSelect(decision.procedure.id)}><StatusBadge status={decision.status} compact />{decision.procedure.name}</button>)}</div>
+        </section>
+      ) : null}
+      <p className="panel-footnote">카드를 선택하면 적용 이유, 제출자료, 선행·후속 절차와 법령 원문을 확인할 수 있습니다.</p>
     </section>
   );
 }

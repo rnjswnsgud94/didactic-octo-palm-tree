@@ -21,7 +21,7 @@ Nationwide rules are evaluated first for the 14 supported non-capital provinces 
 
 ## Thresholds and facts
 
-- The factory-establishment 500㎡ boundary uses post-project factory-building area in the current MVP.
+- The factory-establishment 500㎡ boundary uses post-project factory-building area in the current catalog scope.
 - Existing, increment and total area remain separate facts.
 - Environmental, chemical and safety procedures require facility, material, quantity and location facts or a user/professional coverage determination; industry name alone is insufficient.
 - Unknown facts create `NEEDS_MORE_INFO`, not a false negative.

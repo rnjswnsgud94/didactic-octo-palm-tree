@@ -43,7 +43,7 @@ The law API never rewrites production rules. It provides normalization and evide
 ## Deployment
 
 - Vercel: `next build` through `npm run vercel-build`; `LAW_API_OC` is a server environment secret.
-- The application is stateless. No D1 or R2 binding is required for the MVP.
+- The application is stateless. No D1 or R2 binding is required for the current deployment.
 - Snapshot and catalog changes are Git-reviewed artifacts.
 
 ## Failure modes

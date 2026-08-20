@@ -26,10 +26,15 @@ export type ProcedureDecision = {
   procedure: Procedure;
   status: ApplicabilityStatus;
   reason: string;
+  /** Legal-content maturity is disclosed separately from the deterministic applicability result. */
+  needsLegalReview: boolean;
+  legalReviewReasons: string[];
   missingInputs: string[];
   traces: RuleTrace[];
   matchedRuleIds: string[];
   conflictRuleIds: string[];
+  /** Direction of the strongest matched rule; used to avoid scheduling a draft exclusion as work to perform. */
+  provisionalEffect: "INCLUDE" | "EXCLUDE" | null;
   isDeemed: boolean;
   dataVersion: string;
 };
@@ -239,6 +244,39 @@ function traceRule(rule: ApplicabilityRule, input: ProjectInput): RuleTrace {
   };
 }
 
+function getLegalReviewDisclosure(
+  procedure: Procedure,
+  rules: ApplicabilityRule[],
+) {
+  const draftRuleIds = stableUnique(
+    rules
+      .filter((rule) => rule.status === "DRAFT")
+      .map((rule) => rule.id),
+  );
+  const legalReviewReasons: string[] = [];
+
+  if (draftRuleIds.length) {
+    legalReviewReasons.push(
+      `판정규칙 법률 검토 필요: ${draftRuleIds.join(", ")}`,
+    );
+  }
+  if (procedure.verificationStatus === "AI_ASSISTED_DRAFT") {
+    legalReviewReasons.push(
+      "절차 설명·제출자료·관할 정보가 AI 보조 초안 상태입니다.",
+    );
+  }
+  if (procedure.verificationStatus === "TODO_LEGAL_REVIEW") {
+    legalReviewReasons.push(
+      "절차 설명·제출자료·관할 정보의 법률 검토가 필요합니다.",
+    );
+  }
+
+  return {
+    needsLegalReview: legalReviewReasons.length > 0,
+    legalReviewReasons,
+  };
+}
+
 export function resolveProcedure(
   procedure: Procedure,
   rules: ApplicabilityRule[],
@@ -254,10 +292,12 @@ export function resolveProcedure(
       procedure,
       status: "POSSIBLY_APPLIES",
       reason: "평가일과 관할범위에 유효한 판정규칙이 없어 전문검토가 필요합니다.",
+      ...getLegalReviewDisclosure(procedure, []),
       missingInputs: [],
       traces: [],
       matchedRuleIds: [],
       conflictRuleIds: [],
+      provisionalEffect: null,
       isDeemed: false,
       dataVersion,
     };
@@ -282,10 +322,12 @@ export function resolveProcedure(
       procedure,
       status: "POSSIBLY_APPLIES",
       reason: "포함·제외 규칙의 근거가 충돌하여 양쪽 근거를 함께 검토해야 합니다.",
+      ...getLegalReviewDisclosure(procedure, trueRules),
       missingInputs: stableUnique(unknownTraces.flatMap((trace) => trace.missingInputs)),
       traces: traces.map((trace) => ({ ...trace, conflictWith: conflicts.filter((id) => id !== trace.ruleId) })),
       matchedRuleIds: conflicts,
       conflictRuleIds: conflicts,
+      provisionalEffect: null,
       isDeemed: false,
       dataVersion,
     };
@@ -293,14 +335,19 @@ export function resolveProcedure(
 
   if (excludeRules.length && highestExclude > highestInclude) {
     const winner = excludeRules.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))[0];
+    const disclosure = getLegalReviewDisclosure(procedure, [winner]);
     return {
       procedure,
-      status: "DOES_NOT_APPLY",
-      reason: winner.explanationTemplate,
+      status: disclosure.needsLegalReview ? "POSSIBLY_APPLIES" : "DOES_NOT_APPLY",
+      reason: disclosure.needsLegalReview
+        ? `${winner.explanationTemplate} 제외 근거의 세부 법률검토 상태는 상세에서 확인해야 합니다.`
+        : winner.explanationTemplate,
+      ...disclosure,
       missingInputs: stableUnique(unknownTraces.flatMap((trace) => trace.missingInputs)),
       traces,
       matchedRuleIds: [winner.id],
       conflictRuleIds: [],
+      provisionalEffect: "EXCLUDE",
       isDeemed: false,
       dataVersion,
     };
@@ -308,17 +355,19 @@ export function resolveProcedure(
 
   if (includeRules.length) {
     const winner = includeRules.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))[0];
-    const needsProfessionalReview = procedure.verificationStatus === "TODO_LEGAL_REVIEW";
+    const disclosure = getLegalReviewDisclosure(procedure, [winner]);
     return {
       procedure,
-      status: needsProfessionalReview ? "POSSIBLY_APPLIES" : "APPLIES",
-      reason: needsProfessionalReview
-        ? `${winner.explanationTemplate} 다만 현행 세부기준 검증 전에는 적용 가능성으로 표시합니다.`
+      status: disclosure.needsLegalReview ? "POSSIBLY_APPLIES" : "APPLIES",
+      reason: disclosure.needsLegalReview
+        ? `${winner.explanationTemplate} 계획경로에는 포함하되 근거의 세부 법률검토 상태는 상세에서 확인해야 합니다.`
         : winner.explanationTemplate,
+      ...disclosure,
       missingInputs: stableUnique(unknownTraces.flatMap((trace) => trace.missingInputs)),
       traces,
       matchedRuleIds: includeRules.map((rule) => rule.id).sort(),
       conflictRuleIds: [],
+      provisionalEffect: "INCLUDE",
       isDeemed: false,
       dataVersion,
     };
@@ -329,10 +378,12 @@ export function resolveProcedure(
       procedure,
       status: "NEEDS_MORE_INFO",
       reason: `판정에 필요한 입력이 부족합니다: ${stableUnique(unknownTraces.flatMap((trace) => trace.missingInputs)).join(", ")}`,
+      ...getLegalReviewDisclosure(procedure, activeRules),
       missingInputs: stableUnique(unknownTraces.flatMap((trace) => trace.missingInputs)),
       traces,
       matchedRuleIds: [],
       conflictRuleIds: [],
+      provisionalEffect: null,
       isDeemed: false,
       dataVersion,
     };
@@ -342,10 +393,12 @@ export function resolveProcedure(
     procedure,
     status: "DOES_NOT_APPLY",
     reason: "현재 입력값이 이 절차의 적용조건을 충족하지 않습니다.",
+    ...getLegalReviewDisclosure(procedure, activeRules),
     missingInputs: [],
     traces,
     matchedRuleIds: [],
     conflictRuleIds: [],
+    provisionalEffect: "EXCLUDE",
     isDeemed: false,
     dataVersion,
   };

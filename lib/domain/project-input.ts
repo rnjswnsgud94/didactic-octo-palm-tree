@@ -25,14 +25,24 @@ function nullableFact(
   return value === null ? unknown() : known(value, unit);
 }
 
+function choiceFact(value: string): Fact {
+  const normalized = value.trim();
+  return !normalized || normalized === "UNKNOWN" ? unknown() : known(normalized);
+}
+
 export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): ProjectInput {
   const inside = nullableFact(answers.insideIndustrialComplex);
-  const hasBuildingWork = answers.buildingAction !== "NONE";
   return {
     assessmentDate: answers.assessmentDate,
-    investmentType: known(answers.investmentType),
+    ...(answers.plannedConstructionStartDate
+      ? { plannedConstructionStart: answers.plannedConstructionStartDate }
+      : {}),
+    ...(answers.plannedConstructionEndDate
+      ? { plannedCompletion: answers.plannedConstructionEndDate }
+      : {}),
+    investmentType: choiceFact(answers.investmentType),
     location: {
-      province: known(answers.province),
+      province: choiceFact(answers.province),
       city: answers.city.trim() ? known(answers.city.trim()) : unknown(),
       address: unknown(),
       capitalRegionControlArea: unknown(),
@@ -49,7 +59,7 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
         answers.insideIndustrialComplex === true ? unknown() : notApplicable(),
     },
     industry: {
-      category: known(answers.industryCategory),
+      category: choiceFact(answers.industryCategory),
       ksic: unknown(),
       products: unknown(),
       coreProcesses: unknown(),
@@ -64,9 +74,17 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
       roadConnectionRequired: nullableFact(answers.roadConnectionRequired),
       trafficImpactAssessmentRequired: nullableFact(answers.trafficImpactAssessmentRequired),
       groundwaterDevelopment: nullableFact(answers.groundwaterDevelopment),
+      disasterImpactAssessmentType: nullableFact(answers.disasterImpactAssessmentType),
+      undergroundSafetyAssessmentType: nullableFact(answers.undergroundSafetyAssessmentType),
+      nationalHeritageAssessmentType: nullableFact(answers.nationalHeritageAssessmentType),
+      militaryProtectionConsultationRequired: nullableFact(answers.militaryProtectionConsultationRequired),
+      riverOccupationRequired: nullableFact(answers.riverOccupationRequired),
+      publicWaterOccupationRequired: nullableFact(answers.publicWaterOccupationRequired),
+      waterSourceProtectionZone: nullableFact(answers.waterSourceProtectionZone),
     },
     building: {
-      action: known(answers.buildingAction),
+      action: choiceFact(answers.buildingAction),
+      mechanicalEquipmentActTarget: nullableFact(answers.mechanicalEquipmentActTarget),
       existingAreaM2: nullableFact(answers.existingAreaM2, "m2"),
       increaseAreaM2: nullableFact(answers.increaseAreaM2, "m2"),
       totalAreaM2: nullableFact(answers.totalAreaM2, "m2"),
@@ -75,18 +93,32 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
     environment: {
       airEmissionFacility: nullableFact(answers.airEmissionFacility),
       waterDischargeFacility: nullableFact(answers.waterDischargeFacility),
-      wasteFacility: unknown(),
+      wasteFacility: nullableFact(answers.wasteFacility),
       chemicalsHandled: nullableFact(answers.chemicalsHandled),
       environmentalAssessmentType: nullableFact(answers.environmentalAssessmentType),
       integratedPermitTarget: nullableFact(answers.integratedEnvironmentalPermitTarget),
       chemicalManufactureOrImport: nullableFact(answers.chemicalManufactureOrImport),
       hazardousChemicalBusiness: nullableFact(answers.hazardousChemicalBusiness),
+      chemicalRegistrationRequired: nullableFact(answers.chemicalRegistrationRequired),
+      restrictedOrToxicChemicalImport: nullableFact(answers.restrictedOrToxicChemicalImport),
     },
     safety: {
       hazardousMaterials: nullableFact(answers.hazardousMaterials),
       highPressureGas: nullableFact(answers.highPressureGas),
       specificHighPressureGasUse: nullableFact(answers.specificHighPressureGasUse),
+      lpgSpecificUseFacility: nullableFact(answers.lpgSpecificUseFacility),
+      cityGasSpecificUseFacility: nullableFact(answers.cityGasSpecificUseFacility),
       psmCovered: nullableFact(answers.psmCovered),
+      fireSafetyManagerRequired: nullableFact(answers.fireSafetyManagerRequired),
+      hazardousMaterialsTank: nullableFact(answers.hazardousMaterialsTank),
+      hazardousMaterialsPreventionRulesRequired: nullableFact(answers.hazardousMaterialsPreventionRulesRequired),
+      heatUseEquipment: nullableFact(answers.heatUseEquipment),
+      hazardousMachineryInspectionRequired: nullableFact(answers.hazardousMachineryInspectionRequired),
+    },
+    construction: {
+      safetyManagementPlanRequired: nullableFact(answers.safetyManagementPlanRequired),
+      specificWorkReportRequired: nullableFact(answers.specificWorkReportRequired),
+      asbestosPresent: nullableFact(answers.asbestosPresent),
     },
     utilities: {
       powerIncreaseMw: nullableFact(answers.powerIncreaseMw, "MW"),
@@ -94,9 +126,20 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
       wastewaterM3Day: nullableFact(answers.wastewaterM3Day, "m3/day"),
       privateElectricalFacilityWork: nullableFact(answers.privateElectricalFacilityWork),
       energyUsePlanRequired: nullableFact(answers.energyUsePlanRequired),
+      publicSewerConnection: nullableFact(answers.publicSewerConnection),
+      privateSewageTreatmentFacility: nullableFact(answers.privateSewageTreatmentFacility),
+    },
+    organization: {
+      safetyManagerRequired: nullableFact(answers.safetyManagerRequired),
+      healthManagerRequired: nullableFact(answers.healthManagerRequired),
     },
     permitCoordination: nullableFact(answers.permitCoordination),
     strategicIndustrySpecialCase: unknown(),
-    existingApprovalIds: hasBuildingWork ? known([]) : notApplicable(),
+    existingApprovalIds:
+      answers.buildingAction === "NONE"
+        ? notApplicable()
+        : answers.buildingAction === "UNKNOWN"
+          ? unknown()
+          : known([]),
   };
 }

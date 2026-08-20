@@ -27,6 +27,31 @@ describe("national law API adapter", () => {
     expect(result.documents[0]).toMatchObject({ id: "0009", title: "공장설립업무처리규정", target: "admrul" });
   });
 
+  it("normalizes the current OrdinSearch.law response shape", () => {
+    const result = normalizeSearchPayload("ordin", {
+      OrdinSearch: {
+        totalCnt: "1",
+        page: "1",
+        law: {
+          자치법규ID: "2162613",
+          자치법규일련번호: "2162613",
+          자치법규명: "아산시 도시계획 조례",
+          지자체기관명: "충청남도 아산시",
+          공포일자: "20260818",
+        },
+      },
+    });
+
+    expect(result.documents[0]).toMatchObject({
+      target: "ordin",
+      title: "아산시 도시계획 조례",
+      jurisdictionName: "충청남도 아산시",
+      promulgationDate: "20260818",
+    });
+    expect(result.documents[0].publicUrl).toContain("law.go.kr");
+    expect(result.documents[0].publicUrl).not.toContain("OC=");
+  });
+
   it("rejects a wrong target root and HTTP-200 API error payload", () => {
     expect(() => normalizeSearchPayload("ordin", pageOne)).toThrow(LawApiError);
     expect(() => normalizeSearchPayload("law", errorPayload)).toThrowError(/인증/);

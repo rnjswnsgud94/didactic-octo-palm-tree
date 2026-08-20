@@ -4,6 +4,7 @@ import { StatusBadge } from "@/app/components/dashboard/StatusBadge";
 import { catalog } from "@/lib/data/catalog";
 import type { ProcedureDecision } from "@/lib/engine/rule-engine";
 import type { ScheduleResult } from "@/lib/engine/schedule";
+import { formatProcessingDuration } from "@/lib/format-duration";
 
 function citationTitle(citationId: string) {
   const citation = catalog.citations.find((item) => item.id === citationId);
@@ -15,11 +16,49 @@ function citationTitle(citationId: string) {
 
 function durationRangeLabel(range: (typeof catalog.durations)[number]["elapsed"]) {
   if (!range) return "자료 부족";
-  const unit = range.unit === "BUSINESS_DAY" ? "영업일" : range.unit === "CALENDAR_DAY" ? "달력일" : "개월";
+  const unit = range.unit === "BUSINESS_DAY" ? "업무일" : range.unit === "CALENDAR_DAY" ? "달력일" : "개월";
   const values = [range.min, range.base, range.max];
   if (values.every((value) => value === null)) return "자료 부족";
-  return `최소 ${range.min ?? "?"} · 기준 ${range.base ?? "?"} · 최대 ${range.max ?? "?"} ${unit}`;
+  return `최소 ${range.min ?? "?"} · 통상 ${range.base ?? "?"} · 상한 ${range.max ?? "?"} ${unit}`;
 }
+
+const verificationLabels: Record<string, string> = {
+  AI_ASSISTED_DRAFT: "공식자료 대조 초안",
+  INTERNAL_REVIEWED: "내부 검토 완료",
+  EXPERT_REVIEWED: "전문가 검토 완료",
+  TODO_LEGAL_REVIEW: "법령 세부검토 필요",
+};
+
+const evidenceLabels: Record<string, string> = {
+  STATUTE: "법령",
+  OFFICIAL_SERVICE_STANDARD: "공식 민원처리기준",
+  OFFICIAL_AGENCY_MATERIAL: "공식 기관자료",
+  OBSERVED_CASE: "사례자료",
+  EXPERT_ESTIMATE: "전문가 추정",
+  INSUFFICIENT_DATA: "근거자료 부족",
+};
+
+const confidenceLabels: Record<string, string> = {
+  HIGH: "높음",
+  MEDIUM: "보통",
+  LOW: "낮음",
+  UNVERIFIED: "미검토",
+};
+
+const lagUnitLabels: Record<string, string> = {
+  BUSINESS_DAY: "업무일",
+  CALENDAR_DAY: "달력일",
+  MONTH: "개월",
+};
+
+const citationRoleLabels: Record<string, string> = {
+  APPLICABILITY: "적용조건",
+  AUTHORITY: "관할·권한",
+  SEQUENCE: "선후행",
+  DEEMING: "인허가 의제",
+  DURATION: "처리기간",
+  SUBMISSION: "제출자료",
+};
 
 export function ProcedureDrawer({ decision, schedule, onClose }: {
   decision: ProcedureDecision | null;
@@ -28,7 +67,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
 }) {
   if (!decision) return null;
   const procedure = decision.procedure;
-  const node = schedule.nodes.find((item) => item.procedureId === procedure.id);
+  const timelineNode = schedule.projectTimeline?.nodes.find((item) => item.procedureId === procedure.id);
   const duration = catalog.durations.find((item) => item.id === procedure.durationId);
   const relatedEdges = catalog.edges.filter((edge) => edge.from === procedure.id || edge.to === procedure.id);
   const apiSources = procedure.citationIds.flatMap((citationId) => {
@@ -60,13 +99,13 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
         </section>
         <dl className="detail-grid">
           <div><dt>수행 단계</dt><dd>{stageLabels[procedure.stage]}</dd></div>
-          <div><dt>담당 레인</dt><dd>{laneLabels[procedure.lane]}</dd></div>
+          <div><dt>주관 구분</dt><dd>{laneLabels[procedure.lane]}</dd></div>
           <div><dt>접수 기관</dt><dd>{procedure.receivingAuthority}</dd></div>
           <div><dt>법정 결정권자</dt><dd>{procedure.statutoryDecisionMaker}</dd></div>
           <div><dt>신청·수행 주체</dt><dd>{procedure.applicant}</dd></div>
           <div><dt>협의 주체</dt><dd>{procedure.consultationAuthorities.length ? procedure.consultationAuthorities.join(", ") : "별도 협의 주체 없음"}</dd></div>
           <div><dt>결과물</dt><dd>{procedure.outcome}</dd></div>
-          <div><dt>부분 일정</dt><dd>{node?.duration === null || !node ? "자료 없음" : `${node.duration} 영업일`}{node?.critical ? " · 임계경로" : ""}</dd></div>
+          <div><dt>총 일정상 위치</dt><dd>{timelineNode ? `${timelineNode.startDate} ~ ${timelineNode.finishDate} · ${formatProcessingDuration(timelineNode.processingDuration, timelineNode.processingUnit)}${timelineNode.overlapsConstruction ? ` · 공사와 ${timelineNode.overlapWithConstructionDays}일 병행` : timelineNode.excludedFromOperationReady ? " · 가동 후 별도" : ""}` : "공사 일정 입력 필요"}</dd></div>
         </dl>
         <section className="drawer-section"><h3>절차 설명</h3><p>{procedure.description}</p></section>
         <section className="drawer-section"><h3>주요 제출자료</h3><ul>{procedure.submissions.map((item) => <li key={item}>{item}</li>)}</ul></section>
@@ -78,7 +117,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
             const direction = edge.from === procedure.id ? "후속" : "선행";
             const relation = edge.relation === "FINISH_TO_START" ? "완료 후 시작" : edge.relation === "START_TO_START" ? "병행 시작" : "완료 연계";
             const strength = edge.strength === "LEGAL_HARD" ? "법적" : edge.strength === "PRACTICAL" ? "실무" : "권고";
-            return <li key={edge.id}><strong>{direction} · {strength}</strong> — {other} ({relation}{edge.lag ? ` + ${edge.lag} ${edge.lagUnit}` : ""})</li>;
+            return <li key={edge.id}><strong>{direction} · {strength}</strong> — {other} ({relation}{edge.lag ? ` + ${edge.lag} ${lagUnitLabels[edge.lagUnit]}` : ""})</li>;
           })}</ul> : <p>현재 카탈로그에 직접 연결된 선후행 관계가 없습니다.</p>}
         </section>
         <section className="drawer-section duration-section">
@@ -93,7 +132,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
             <p><strong>법정·공식 처리기준:</strong> {duration.statutoryPeriod ?? "확인된 공통 처리기간 없음"}</p>
             {duration.stopClockRules.length ? <p><strong>정지·보완:</strong> {duration.stopClockRules.join(" · ")}</p> : null}
             {duration.variabilityFactors.length ? <p><strong>변동요인:</strong> {duration.variabilityFactors.join(" · ")}</p> : null}
-            <small>근거 {duration.evidenceType.replaceAll("_", " ")} · 법적 신뢰도 {duration.legalConfidence} · 기간 신뢰도 {duration.estimateConfidence} · 검증일 {duration.verifiedAt}</small>
+            <small>기간 근거 {evidenceLabels[duration.evidenceType] ?? duration.evidenceType} · 법적 근거 수준 {confidenceLabels[duration.legalConfidence]} · 기간자료 수준 {confidenceLabels[duration.estimateConfidence]} · 확인일 {duration.verifiedAt}</small>
           </> : <p>연결된 기간 데이터가 없습니다.</p>}
         </section>
         {procedure.deemedByProcedureIds.length || procedure.deemedProcedureIds.length ? (
@@ -112,7 +151,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
               if (!item) return null;
               return (
                 <a key={citationId} href={item.source.officialUrl} target="_blank" rel="noreferrer" className="citation-card">
-                  <span>{item.source.title}</span><strong>{item.locator || item.citation.role}</strong><p>{item.citation.summary}</p>
+                  <span>{item.source.title}</span><strong>{item.locator || citationRoleLabels[item.citation.role]}</strong><p>{item.citation.summary}</p>
                   <small>{item.citation.sourceVersion} · 시행 {item.source.effectiveDate ?? "추가 확인"} · 검증 {item.source.internallyVerifiedAt} · 원문 열기 ↗</small>
                 </a>
               );
@@ -122,7 +161,8 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
           <LawApiVerifier sources={apiSources} />
         </section>
         <section className="review-note">
-          <strong>검증 상태 · {procedure.verificationStatus.replaceAll("_", " ")}</strong><p>{procedure.reviewNote}</p>
+          <strong>자료 확인 상태 · {verificationLabels[procedure.verificationStatus] ?? procedure.verificationStatus}</strong><p>{procedure.reviewNote}</p>
+          {decision.needsLegalReview ? <p><strong>추가 법률검토:</strong> {decision.legalReviewReasons.join(" · ")}</p> : null}
           <small>검토일 {procedure.reviewedAt} · 데이터 {decision.dataVersion}</small>
         </section>
       </div>
