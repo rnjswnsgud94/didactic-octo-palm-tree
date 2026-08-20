@@ -1,105 +1,39 @@
+import generatedSnapshot from "@/lib/regions/elis-reviewed-snapshot.generated.json";
 import type { OfficialOrdinanceRecord } from "@/lib/regions/ordinance-resolution";
 import {
-  buildElisOrdinanceDetailUrl,
+  isElisOrdinanceDetailUrl,
   type OrdinanceGovernmentLevel,
 } from "@/lib/regions/local-ordinances";
 
-export const reviewedElisSnapshotCheckedAt = "2026-08-21T00:00:00.000Z";
+export const reviewedElisSnapshotCheckedAt = generatedSnapshot.checkedAt;
+export const reviewedElisSnapshotJurisdictionCount =
+  generatedSnapshot.jurisdictionCount;
+export const reviewedElisSnapshotCoveredJurisdictionCount =
+  generatedSnapshot.coveredJurisdictionCount;
 
 type ReviewedElisOrdinanceRecord = OfficialOrdinanceRecord & {
   provinceName: string;
 };
 
+function isReviewedRecord(
+  value: (typeof generatedSnapshot.records)[number],
+): value is (typeof generatedSnapshot.records)[number] & ReviewedElisOrdinanceRecord {
+  return (
+    Boolean(value.provinceName.trim()) &&
+    Boolean(value.jurisdictionName.trim()) &&
+    (value.level === "PROVINCE" || value.level === "MUNICIPALITY") &&
+    Boolean(value.name.trim()) &&
+    isElisOrdinanceDetailUrl(value.url)
+  );
+}
+
 /**
- * Exact ELIS links manually verified for static builds that cannot call the
- * server route. Broad jurisdiction-list links deliberately do not belong here.
+ * Last-known-good exact ELIS links generated from each jurisdiction's official
+ * current-ordinance table. Invalid, broad-list and unscoped records are never
+ * exposed to the UI.
  */
-const reviewedRecords: readonly ReviewedElisOrdinanceRecord[] = [
-  {
-    provinceName: "전북특별자치도",
-    jurisdictionName: "무주군",
-    level: "MUNICIPALITY",
-    name: "무주군 군계획 조례",
-    amendmentDate: "2025-12-10",
-    url: buildElisOrdinanceDetailUrl(
-      "무주군 군계획 조례",
-      "52730112237002",
-      "018",
-    ),
-  },
-  {
-    provinceName: "전북특별자치도",
-    jurisdictionName: "무주군",
-    level: "MUNICIPALITY",
-    name: "무주군 건축 조례",
-    amendmentDate: "2025-11-05",
-    url: buildElisOrdinanceDetailUrl(
-      "무주군 건축 조례",
-      "52730107323003",
-      "016",
-    ),
-  },
-  {
-    provinceName: "전북특별자치도",
-    jurisdictionName: "무주군",
-    level: "MUNICIPALITY",
-    name: "무주군 주차장 설치 및 관리 조례",
-    amendmentDate: "2025-12-10",
-    url: buildElisOrdinanceDetailUrl(
-      "무주군 주차장 설치 및 관리 조례",
-      "52730111299005",
-      "006",
-    ),
-  },
-  {
-    provinceName: "전북특별자치도",
-    jurisdictionName: "무주군",
-    level: "MUNICIPALITY",
-    name: "무주군 폐기물관리 및 수수료 부과ㆍ징수에 관한 조례",
-    amendmentDate: "2024-07-01",
-    url: buildElisOrdinanceDetailUrl(
-      "무주군 폐기물관리 및 수수료 부과ㆍ징수에 관한 조례",
-      "52730124297007",
-      "008",
-    ),
-  },
-  {
-    provinceName: "전북특별자치도",
-    jurisdictionName: "무주군",
-    level: "MUNICIPALITY",
-    name: "무주군 상수도 급수 조례",
-    amendmentDate: "2024-07-01",
-    url: buildElisOrdinanceDetailUrl(
-      "무주군 상수도 급수 조례",
-      "52730129345001",
-      "012",
-    ),
-  },
-  {
-    provinceName: "전북특별자치도",
-    jurisdictionName: "무주군",
-    level: "MUNICIPALITY",
-    name: "무주군 상수도 원인자부담금 산정ㆍ징수 등에 관한 조례",
-    amendmentDate: "2015-07-03",
-    url: buildElisOrdinanceDetailUrl(
-      "무주군 상수도 원인자부담금 산정ㆍ징수 등에 관한 조례",
-      "52730129345008",
-      "001",
-    ),
-  },
-  {
-    provinceName: "전북특별자치도",
-    jurisdictionName: "무주군",
-    level: "MUNICIPALITY",
-    name: "무주군 하수도 사용 조례",
-    amendmentDate: "2025-03-12",
-    url: buildElisOrdinanceDetailUrl(
-      "무주군 하수도 사용 조례",
-      "52730129348001",
-      "006",
-    ),
-  },
-] as const;
+const reviewedRecords: readonly ReviewedElisOrdinanceRecord[] =
+  generatedSnapshot.records.filter(isReviewedRecord);
 
 export function getReviewedElisOrdinanceRecords(
   provinceName: string,

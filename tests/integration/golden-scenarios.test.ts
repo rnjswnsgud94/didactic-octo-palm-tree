@@ -141,7 +141,7 @@ describe("golden manufacturing scenarios", () => {
       },
       {
         name: "광주 자동차 산단 증설 과거 착공",
-        answers: { ...semiconductor, province: "광주광역시", city: "광산구", industryCategory: "AUTOMOTIVE_MOBILITY", totalAreaM2: 24_000, increaseAreaM2: 9_000, integratedEnvironmentalPermitTarget: false, plannedConstructionStartDate: "2025-06-01", plannedConstructionEndDate: "2026-05-31" },
+        answers: { ...semiconductor, province: "전남광주통합특별시", city: "광산구", industryCategory: "AUTOMOTIVE_MOBILITY", totalAreaM2: 24_000, increaseAreaM2: 9_000, integratedEnvironmentalPermitTarget: false, plannedConstructionStartDate: "2025-06-01", plannedConstructionEndDate: "2026-05-31" },
       },
       {
         name: "제주 서귀포 소규모 기계 개별입지",

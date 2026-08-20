@@ -14,7 +14,7 @@ const ELIS_HOST = "www.elis.go.kr";
 const ELIS_LIST_PATH = "/alrpop/locgovAlrPopup";
 const MAX_RESPONSE_BYTES = 2_000_000;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const TIMEOUT_MS = 6_000;
+const TIMEOUT_MS = 15_000;
 
 type FetchLike = typeof fetch;
 

@@ -129,6 +129,20 @@ describe("official local-ordinance directory", () => {
     ).toContain("ctpvCd=52&sggCd=110");
   });
 
+  it("uses the current integrated Jeonnam-Gwangju and Changwon codes", () => {
+    expect(
+      getOfficialLocalOrdinanceLinks("전남광주통합특별시", "광산구")
+        .municipality?.url,
+    ).toContain("ctpvCd=12&sggCd=330");
+    expect(
+      getOfficialLocalOrdinanceLinks("전남광주통합특별시", "무안군")
+        .municipality?.url,
+    ).toContain("ctpvCd=12&sggCd=810");
+    expect(
+      getOfficialLocalOrdinanceLinks("경상남도", "창원시").municipality?.url,
+    ).toContain("ctpvCd=48&sggCd=900");
+  });
+
   it("uses the single-tier Sejong list", () => {
     const links = getOfficialLocalOrdinanceLinks("세종특별자치시");
     expect(links.province?.url).toContain("ctpvCd=36&sggCd=110");

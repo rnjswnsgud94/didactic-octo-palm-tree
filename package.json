@@ -19,6 +19,7 @@
     "build:next": "node scripts/validate-production-data.mjs && next build",
     "vercel-build": "node scripts/validate-production-data.mjs && next build",
     "verify:client-secret": "node scripts/check-client-bundle.mjs",
+    "refresh:elis-snapshot": "node --experimental-strip-types scripts/refresh-elis-snapshot.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern pages-dist --ignore-pattern .next",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
   },

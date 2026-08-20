@@ -135,6 +135,42 @@ describe("local ordinance API route", () => {
     expect(JSON.stringify(payload)).toContain("무주군 하수도 사용 조례");
   });
 
+  it("returns a reviewed Daejeon snapshot instead of 502 when both live lookups fail", async () => {
+    fetchElisOrdinanceRecords
+      .mockResolvedValueOnce(
+        reviewedResult([
+          ordinance(
+            "대전광역시 도시계획 조례",
+            "대전광역시",
+            "PROVINCE",
+            "30000011001051",
+          ),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        reviewedResult([
+          ordinance(
+            "대전광역시 중구 도시계획 조례",
+            "중구",
+            "MUNICIPALITY",
+            "30140113255015",
+          ),
+        ]),
+      );
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/local-ordinances?province=%EB%8C%80%EC%A0%84%EA%B4%91%EC%97%AD%EC%8B%9C&city=%EC%A4%91%EA%B5%AC",
+      ),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.mode).toBe("SNAPSHOT");
+    expect(JSON.stringify(payload)).toContain("대전광역시 중구 도시계획 조례");
+    expect(JSON.stringify(payload)).toContain("/alrpop/alrDtlsPop?");
+  });
+
   it("returns an upstream error when no jurisdiction has live or reviewed records", async () => {
     fetchElisOrdinanceRecords.mockResolvedValue(liveResult([]));
 

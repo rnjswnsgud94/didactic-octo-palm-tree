@@ -71,7 +71,7 @@ describe("catalog integrity", () => {
       "construction-quality-management-plan-approval",
       "construction-quality-test-plan",
     ]) expect(ids.has(id), id).toBe(false);
-    expect(catalog.coverage.supported.regions.join(" ")).toContain("전국 비수도권 14개 시·도");
+    expect(catalog.coverage.supported.regions.join(" ")).toContain("전국 비수도권 13개 광역자치단체");
   });
 
   it("registers integrated-permit exclusions on base air and water procedures", () => {

@@ -260,7 +260,7 @@ describe("dashboard UI", () => {
   it("offers all non-capital provinces and updates the editable locality", () => {
     render(<DashboardClient />);
     const province = screen.getByLabelText("시·도") as HTMLSelectElement;
-    expect(province.options).toHaveLength(15);
+    expect(province.options).toHaveLength(14);
     expect(province.options[0]).toHaveTextContent("시·도 선택");
     expect([...province.options].map((option) => option.value)).not.toContain("경기도");
     fireEvent.change(province, { target: { value: "부산광역시" } });
@@ -320,10 +320,10 @@ describe("dashboard UI", () => {
             categoryId: "urban-planning-development",
             ordinances: [
               {
-                name: "아산시 자치법규 전체 목록",
-                level: "MUNICIPALITY",
-                jurisdictionName: "아산시",
-                url: "https://www.elis.go.kr/alrpop/locgovAlrPopup?ctpvCd=44&sggCd=200",
+                name: "전남광주통합특별시 자치법규 전체 목록",
+                level: "PROVINCE",
+                jurisdictionName: "전남광주통합특별시",
+                url: "https://www.elis.go.kr/alrpop/locgovAlrPopup?ctpvCd=12&sggCd=000",
               },
             ],
           },
@@ -332,8 +332,7 @@ describe("dashboard UI", () => {
     } as Response);
 
     render(<DashboardClient />);
-    fireEvent.change(screen.getByLabelText("시·도"), { target: { value: "충청남도" } });
-    fireEvent.change(screen.getByLabelText("시·군·구"), { target: { value: "아산시" } });
+    fireEvent.change(screen.getByLabelText("시·도"), { target: { value: "전남광주통합특별시" } });
 
     const urbanCard = screen
       .getByRole("heading", { name: "도시계획·개발행위 기준" })
@@ -342,12 +341,12 @@ describe("dashboard UI", () => {
     await waitFor(() => {
       expect(within(urbanCard!).queryByRole("link")).not.toBeInTheDocument();
       expect(
-        within(urbanCard!).getByText(/현행 조례 원문을 자동 확인하지 못했습니다/),
+        within(urbanCard!).getByText(/현행 조례 원문을 확인하지 못했습니다/),
       ).toBeInTheDocument();
     });
   });
 
-  it("does not present a broad ELIS list as if it were a matched ordinance", async () => {
+  it("falls back to exact reviewed links without presenting a broad list as a match", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(
       new Error("live ordinance lookup unavailable"),
     );
@@ -365,12 +364,13 @@ describe("dashboard UI", () => {
       .getByRole("heading", { name: "도시계획·개발행위 기준" })
       .closest("article");
     expect(urbanCard).not.toBeNull();
-    await waitFor(() => {
-      expect(within(urbanCard!).queryByRole("link")).not.toBeInTheDocument();
-      expect(
-        within(urbanCard!).getByText(/상단 지역명에서 현행 목록을 확인/),
-      ).toBeInTheDocument();
+    const exactUrbanLink = await within(urbanCard!).findByRole("link", {
+      name: /아산시 도시계획 조례/,
     });
+    expect(exactUrbanLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("/alrpop/alrDtlsPop?"),
+    );
 
     expect(screen.getAllByRole("link", { name: "충청남도" })[0]).toHaveAttribute(
       "href",
@@ -385,11 +385,16 @@ describe("dashboard UI", () => {
       .getByRole("heading", { name: "교통영향평가 지역기준" })
       .closest("article");
     expect(trafficCard).not.toBeNull();
-    expect(within(trafficCard!).queryByRole("link")).not.toBeInTheDocument();
+    for (const link of within(trafficCard!).queryAllByRole("link")) {
+      expect(link).toHaveAttribute(
+        "href",
+        expect.stringContaining("/alrpop/alrDtlsPop?"),
+      );
+    }
 
     await waitFor(() =>
       expect(
-        screen.getByText("ELIS 상세 원문 조회 지연 · 상단 지역명에서 현행 목록 확인"),
+        screen.getByText(/ELIS 실시간 조회 실패 .* 검증 저장본 표시/),
       ).toBeInTheDocument(),
     );
   });
@@ -413,7 +418,7 @@ describe("dashboard UI", () => {
       .closest("article");
     expect(sewerCard).not.toBeNull();
     const detailLink = await within(sewerCard!).findByRole("link", {
-      name: /무주군 하수도 사용 조례/,
+      name: /^무주군 하수도 사용 조례 ↗/,
     });
     expect(detailLink).toHaveAttribute(
       "href",
@@ -425,9 +430,32 @@ describe("dashboard UI", () => {
     );
     await waitFor(() =>
       expect(
-        screen.getByText(/검증된 ELIS 상세 원문 저장본/),
+        screen.getByText(/ELIS 실시간 조회 실패 .* 검증 저장본 표시/),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("shows Daejeon province and Jung-gu exact links immediately from the reviewed snapshot", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => new Promise<Response>(() => undefined),
+    );
+
+    render(<DashboardClient />);
+    await waitFor(() => expect(window.location.search).toContain("v=7"));
+    fireEvent.change(screen.getByLabelText("시·도"), {
+      target: { value: "대전광역시" },
+    });
+    fireEvent.change(screen.getByLabelText("시·군·구"), {
+      target: { value: "중구" },
+    });
+
+    expect(
+      await screen.findByRole("link", { name: /대전광역시 중구 도시계획 조례/ }),
+    ).toHaveAttribute(
+      "href",
+      "https://www.elis.go.kr/alrpop/alrDtlsPop?alrNo=30140113255015&histNo=008",
+    );
+    expect(screen.getByText(/검증 저장본 먼저 표시/)).toBeInTheDocument();
   });
 
   it("applies an editable industry profile without treating the industry as a final permit ruling", () => {

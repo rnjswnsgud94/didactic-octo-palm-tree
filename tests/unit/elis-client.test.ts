@@ -98,6 +98,29 @@ describe("ELIS current-ordinance client", () => {
     );
   });
 
+  it("uses the reviewed Daejeon detail records when the deployed worker cannot reach ELIS", async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error("worker subrequest blocked"));
+    const result = await fetchElisOrdinanceRecords(
+      {
+        name: "중구",
+        level: "MUNICIPALITY",
+        listUrl:
+          "https://www.elis.go.kr/alrpop/locgovAlrPopup?ctpvCd=30&sggCd=140",
+      },
+      "대전광역시",
+      { fetchImpl, timeoutMs: 10 },
+    );
+
+    expect(result.mode).toBe("REVIEWED");
+    expect(result.records).toContainEqual(
+      expect.objectContaining({
+        name: "대전광역시 중구 도시계획 조례",
+        url:
+          "https://www.elis.go.kr/alrpop/alrDtlsPop?alrNo=30140113255015&histNo=008",
+      }),
+    );
+  });
+
   it("rejects non-canonical ELIS list URLs before issuing a request", async () => {
     const fetchImpl = vi.fn();
 

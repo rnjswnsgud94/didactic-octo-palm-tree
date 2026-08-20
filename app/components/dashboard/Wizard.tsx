@@ -242,7 +242,7 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                 </p>
               ) : null}
             </Question>
-            <Question label="투자 지역" hint="비수도권 14개 시·도와 시·군·구를 선택하면 해당 관할의 현행 자치법규 목록을 결과에 연결합니다.">
+            <Question label="투자 지역" hint="비수도권 13개 광역자치단체와 시·군·구를 선택하면 해당 관할의 현행 자치법규 상세 원문을 결과에 연결합니다.">
               <div className="two-column-fields">
                 <label>
                   <span>시·도</span>

@@ -12,6 +12,7 @@ import {
   reviewedElisSnapshotCheckedAt,
 } from "@/lib/regions/elis-reviewed-snapshot";
 import {
+  getElisJurisdictionTargets,
   getOfficialLocalOrdinanceLinks,
   isElisOrdinanceDetailUrl,
   localOrdinanceCoverageCaveat,
@@ -118,13 +119,18 @@ export function LocalOrdinancePanel({ answers }: { answers: ScenarioAnswers }) {
     [lookup],
   );
   const reviewedByCategory = useMemo(() => {
-    if (!answers.province || !answers.city) {
+    if (!answers.province) {
       return new Map<string, LocalOrdinanceCategoryLookup["ordinances"]>();
     }
-    const records = getReviewedElisOrdinanceRecords(
+    const records = getElisJurisdictionTargets(
       answers.province,
       answers.city,
-      "MUNICIPALITY",
+    ).flatMap((target) =>
+      getReviewedElisOrdinanceRecords(
+        answers.province,
+        target.name,
+        target.level,
+      ),
     );
     return new Map(
       matchOrdinancesToCategories(records).map((item) => [
@@ -133,7 +139,6 @@ export function LocalOrdinancePanel({ answers }: { answers: ScenarioAnswers }) {
       ]),
     );
   }, [answers.province, answers.city]);
-  const useReviewedFallback = lookupState === "ERROR";
   const hasReviewedFallback = [...reviewedByCategory.values()].some(
     (ordinances) => ordinances.length > 0,
   );
@@ -152,16 +157,21 @@ export function LocalOrdinancePanel({ answers }: { answers: ScenarioAnswers }) {
   ) => {
     const liveOrdinances = actualByCategory.get(category.id) ?? [];
     const reviewedOrdinances = reviewedByCategory.get(category.id) ?? [];
-    const actualOrdinances = liveOrdinances.length
-      ? liveOrdinances
-      : useReviewedFallback
-        ? reviewedOrdinances
-        : [];
-    const fallbackMessage = lookupState === "LOADING"
+    const actualOrdinances = [...liveOrdinances, ...reviewedOrdinances].filter(
+      (ordinance, index, list) =>
+        list.findIndex(
+          (candidate) =>
+            candidate.level === ordinance.level &&
+            candidate.name === ordinance.name,
+        ) === index,
+    );
+    const fallbackMessage = lookupState === "LOADING" && !hasReviewedFallback
       ? "선택 지역의 현행 조례 원문을 확인 중입니다."
       : lookupState === "READY" && lookup?.mode === "LIVE"
-        ? "이 범주에 해당하는 현행 조례 원문을 자동 확인하지 못했습니다."
-        : "ELIS 조회가 지연되어 상세 원문을 표시하지 못했습니다. 상단 지역명에서 현행 목록을 확인해 주세요.";
+        ? "이 범주에 해당하는 현행 조례 원문을 확인하지 못했습니다."
+        : hasReviewedFallback
+          ? "검증 저장본에서 이 범주의 관련 조례를 찾지 못했습니다. 상단 관할 목록에서 다시 확인해 주세요."
+          : "이 지역의 검증된 상세 링크를 준비 중입니다. 상단 관할 목록에서 확인해 주세요.";
     return (
       <article className="local-ordinance-card" key={category.id}>
         <span>{reason ?? "추가 지역기준 검토"}</span>
@@ -201,21 +211,26 @@ export function LocalOrdinancePanel({ answers }: { answers: ScenarioAnswers }) {
         </details>
       ) : null}
       {links.notice ? <p className="local-ordinance-notice">{links.notice}</p> : null}
+      {lookupState === "LOADING" && hasReviewedFallback ? (
+        <p className="local-ordinance-checked">
+          ELIS 실시간 확인 중 · {new Date(reviewedElisSnapshotCheckedAt).toLocaleDateString("ko-KR")} 검증 저장본 먼저 표시
+        </p>
+      ) : null}
       {lookupState === "READY" && lookup ? (
         <p className="local-ordinance-checked">
           {lookup.mode === "LIVE"
             ? "행정안전부 ELIS 현행 상세 원문 조회"
             : lookup.mode === "PARTIAL"
-              ? "ELIS 상세 원문 일부 확인"
-              : "검증된 ELIS 상세 원문 저장본"}
+              ? "ELIS 실시간·검증 저장본 병합"
+              : "ELIS 실시간 조회 실패 · 검증 저장본 표시"}
           {" · "}{new Date(lookup.checkedAt).toLocaleDateString("ko-KR")}
         </p>
       ) : null}
       {lookupState === "ERROR" ? (
         <p className="local-ordinance-checked">
           {hasReviewedFallback
-            ? `검증된 ELIS 상세 원문 저장본 · ${new Date(reviewedElisSnapshotCheckedAt).toLocaleDateString("ko-KR")}`
-            : "ELIS 상세 원문 조회 지연 · 상단 지역명에서 현행 목록 확인"}
+            ? `ELIS 실시간 조회 실패 · ${new Date(reviewedElisSnapshotCheckedAt).toLocaleDateString("ko-KR")} 검증 저장본 표시`
+            : "이 지역의 검증된 상세 링크 준비 중 · 상단 관할 목록 확인"}
         </p>
       ) : null}
       <p className="local-ordinance-caveat">{localOrdinanceCoverageCaveat}</p>

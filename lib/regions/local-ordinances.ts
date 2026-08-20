@@ -66,6 +66,7 @@ interface MunicipalityDirectoryEntry {
 
 interface ProvinceDirectoryEntry {
   name: string;
+  aliases?: readonly string[];
   elisProvinceCode: string;
   /** `000` for an ordinary province; Sejong is a single-tier exception. */
   elisProvinceListCode: string;
@@ -109,13 +110,25 @@ const provinceDirectory: readonly ProvinceDirectoryEntry[] = [
     ],
   },
   {
-    name: "광주광역시",
-    elisProvinceCode: "29",
+    name: "전남광주통합특별시",
+    aliases: ["광주광역시", "전라남도"],
+    elisProvinceCode: "12",
     elisProvinceListCode: "000",
     municipalities: [
-      municipality("동구", "110"), municipality("서구", "140"),
-      municipality("남구", "155"), municipality("북구", "170"),
-      municipality("광산구", "200"),
+      municipality("목포시", "110"), municipality("여수시", "130"),
+      municipality("순천시", "150"), municipality("나주시", "170"),
+      municipality("광양시", "190"), municipality("동구", "210"),
+      municipality("서구", "240"), municipality("남구", "270"),
+      municipality("북구", "300"), municipality("광산구", "330"),
+      municipality("담양군", "710"), municipality("곡성군", "720"),
+      municipality("구례군", "730"), municipality("고흥군", "740"),
+      municipality("보성군", "750"), municipality("화순군", "760"),
+      municipality("장흥군", "770"), municipality("강진군", "780"),
+      municipality("해남군", "790"), municipality("영암군", "800"),
+      municipality("무안군", "810"), municipality("함평군", "820"),
+      municipality("영광군", "830"), municipality("장성군", "840"),
+      municipality("완도군", "850"), municipality("진도군", "860"),
+      municipality("신안군", "870"),
     ],
   },
   {
@@ -204,24 +217,6 @@ const provinceDirectory: readonly ProvinceDirectoryEntry[] = [
     ],
   },
   {
-    name: "전라남도",
-    elisProvinceCode: "46",
-    elisProvinceListCode: "000",
-    municipalities: [
-      municipality("목포시", "110"), municipality("여수시", "130"),
-      municipality("순천시", "150"), municipality("나주시", "170"),
-      municipality("광양시", "230"), municipality("담양군", "710"),
-      municipality("곡성군", "720"), municipality("구례군", "730"),
-      municipality("고흥군", "770"), municipality("보성군", "780"),
-      municipality("화순군", "790"), municipality("장흥군", "800"),
-      municipality("강진군", "810"), municipality("해남군", "820"),
-      municipality("영암군", "830"), municipality("무안군", "840"),
-      municipality("함평군", "860"), municipality("영광군", "870"),
-      municipality("장성군", "880"), municipality("완도군", "890"),
-      municipality("진도군", "900"), municipality("신안군", "910"),
-    ],
-  },
-  {
     name: "경상북도",
     elisProvinceCode: "47",
     elisProvinceListCode: "000",
@@ -244,7 +239,7 @@ const provinceDirectory: readonly ProvinceDirectoryEntry[] = [
     elisProvinceCode: "48",
     elisProvinceListCode: "000",
     municipalities: [
-      municipality("창원시", "120"), municipality("진주시", "170"),
+      municipality("창원시", "900"), municipality("진주시", "170"),
       municipality("통영시", "220"), municipality("사천시", "240"),
       municipality("김해시", "250"), municipality("밀양시", "270"),
       municipality("거제시", "310"), municipality("양산시", "330"),
@@ -305,7 +300,10 @@ function normalizeJurisdictionName(value: string): string {
 function findProvince(value: string): ProvinceDirectoryEntry | undefined {
   const normalized = normalizeJurisdictionName(value);
   return provinceDirectory.find(
-    (entry) => normalizeJurisdictionName(entry.name) === normalized,
+    (entry) =>
+      [entry.name, ...(entry.aliases ?? [])].some(
+        (candidate) => normalizeJurisdictionName(candidate) === normalized,
+      ),
   );
 }
 
@@ -631,7 +629,16 @@ export const localOrdinanceReviewCategories: readonly LocalOrdinanceReviewCatego
     title: "지역유산·보호구역 기준",
     scope: "PROVINCE_AND_MUNICIPALITY",
     searchTerms: ["국가유산 조례", "문화유산 조례", "보호구역", "역사문화환경"],
-    ordinanceNamePatterns: ["국가유산", "문화유산", "향토유산", "문화재 보호"],
+    ordinanceNamePatterns: [
+      "문화유산 보호 조례",
+      "문화유산의 보존 및 활용에 관한 조례",
+      "문화유산 보존 및 활용 조례",
+      "향토문화유산 보호 조례",
+      "향토유산 보호 조례",
+      "문화재 보호 조례",
+      "자연유산의 보존 및 활용에 관한 조례",
+      "역사문화환경 보존",
+    ],
     affects: "시·도 지정유산과 보호구역, 역사문화환경 보존지역의 지역 심의·허가 경로",
     reviewPoint:
       "필지와 국가·시도 지정유산의 거리, 보호구역 도면, 현상변경 허용기준과 위임사무를 확인합니다.",
