@@ -51,7 +51,9 @@ export function procedureCategoryForDecision(decision: {
   status: ApplicabilityStatus;
   provisionalEffect: "INCLUDE" | "EXCLUDE" | null;
   conflictRuleIds: string[];
+  isDeemed?: boolean;
 }): ProcedureCategory {
+  if (decision.isDeemed) return "REQUIRED";
   if (!decision.conflictRuleIds.length && decision.provisionalEffect === "INCLUDE") return "REQUIRED";
   if (!decision.conflictRuleIds.length && decision.provisionalEffect === "EXCLUDE") return "NOT_REQUIRED";
   if (decision.status === "APPLIES") return "REQUIRED";
@@ -107,6 +109,17 @@ const inputLabels: Record<string, string> = {
   roadConnectionRequired: "도로 직접 연결허가 필요 여부",
   "site.trafficImpactAssessmentRequired": "교통영향평가 대상 여부",
   trafficImpactAssessmentRequired: "교통영향평가 대상 여부",
+  "site.landscapeReviewRequired": "경관심의 대상 여부",
+  landscapeReviewRequired: "경관심의 대상 여부",
+  "building.buildingCommitteeReviewRequired": "건축위원회 심의 대상 여부",
+  buildingCommitteeReviewRequired: "건축위원회 심의 대상 여부",
+  "utilities.gridImpactAssessmentRequired": "전력계통영향평가 대상 여부",
+  gridImpactAssessmentRequired: "전력계통영향평가 대상 여부",
+  "industry.aiDataCenterActFacilityConfirmed": "특별법상 AI 데이터센터 인정요건",
+  aiDataCenterActFacilityConfirmed: "특별법상 AI 데이터센터 인정요건",
+  "industry.aiDataCenterOneStopStatus": "인허가 일괄처리 진행상태",
+  aiDataCenterOneStopStatus: "인허가 일괄처리 진행상태",
+  appliedSpecialLawIds: "적용 확인한 업종별 특례",
   "site.disasterImpactAssessmentType": "재해영향평가등 협의 유형",
   disasterImpactAssessmentType: "재해영향평가등 협의 검토 결과",
   "site.undergroundSafetyAssessmentType": "지하안전평가 유형",
@@ -127,10 +140,10 @@ const inputLabels: Record<string, string> = {
   buildingAction: "건축행위",
   "building.mechanicalEquipmentActTarget": "기계설비법 확인·검사 대상 여부",
   mechanicalEquipmentActTarget: "기계설비법 확인·검사 대상 여부",
-  existingAreaM2: "기존 공장건축면적",
-  increaseAreaM2: "증가 공장건축면적",
-  totalAreaM2: "사업 후 공장건축면적",
-  "building.totalAreaM2": "사업 후 공장건축면적",
+  existingAreaM2: "기존 건축물 연면적",
+  increaseAreaM2: "증가 연면적",
+  totalAreaM2: "사업 후 건축물 연면적",
+  "building.totalAreaM2": "사업 후 건축물 연면적",
   "building.fireFacilityWork": "소방시설공사 대상 여부",
   fireFacilityWork: "소방시설공사 대상 여부",
   "environment.airEmissionFacility": "대기배출시설 해당 여부",

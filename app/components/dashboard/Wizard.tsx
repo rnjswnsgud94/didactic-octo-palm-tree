@@ -11,6 +11,12 @@ import {
   industryProfiles,
   industryReviewFieldLabels,
 } from "@/lib/data/industry-profiles";
+import {
+  AI_DATA_CENTER_INDUSTRY_ID,
+  AI_DATA_CENTER_SPECIAL_ACT_EFFECTIVE_DATE,
+  specialLawDefinitions,
+  type SpecialLawId,
+} from "@/lib/data/special-laws";
 import { nonCapitalRegions } from "@/lib/regions";
 import { listSupportedMunicipalities } from "@/lib/regions/local-ordinances";
 
@@ -172,6 +178,33 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
     for (const key of industryProfilePresetKeys) {
       if (applied[key] !== answers[key]) onChange(key, applied[key]);
     }
+    if (industryCategory !== AI_DATA_CENTER_INDUSTRY_ID) {
+      if (answers.aiDataCenterActFacilityConfirmed !== null) {
+        onChange("aiDataCenterActFacilityConfirmed", null);
+      }
+      if (answers.aiDataCenterOneStopStatus !== "NOT_APPLIED") {
+        onChange("aiDataCenterOneStopStatus", "NOT_APPLIED");
+      }
+      if (answers.appliedSpecialLawIds.length) {
+        onChange("appliedSpecialLawIds", []);
+      }
+    }
+  }
+
+  function toggleSpecialLaw(id: SpecialLawId) {
+    const selected = answers.appliedSpecialLawIds.includes(id);
+    onChange(
+      "appliedSpecialLawIds",
+      selected
+        ? answers.appliedSpecialLawIds.filter((item) => item !== id)
+        : [...answers.appliedSpecialLawIds, id],
+    );
+    if (id === "AIDC_ONE_STOP") {
+      onChange(
+        "aiDataCenterOneStopStatus",
+        selected ? "NOT_APPLIED" : "PLANNED",
+      );
+    }
   }
 
   return (
@@ -284,7 +317,7 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
             </Question>
             <Question
               label="업종·주요 공정"
-              hint="제11차 한국표준산업분류의 제조업(10~34)을 투자 검토용으로 묶었습니다."
+              hint="제조업 분류와 AI 데이터센터를 투자 검토용으로 묶었습니다. 업종 선택은 확인할 항목을 추천할 뿐 개별 인허가를 자동 확정하지 않습니다."
             >
               <select
                 aria-label="업종·주요 공정"
@@ -321,6 +354,68 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                 </div>
               ) : null}
             </Question>
+            {answers.industryCategory === AI_DATA_CENTER_INDUSTRY_ID ? (
+              <>
+                <Question
+                  label="특별법상 AI 데이터센터 인정요건"
+                  hint="대통령령에서 정할 시설·운영 기준을 충족하는지 확인한 결과입니다. 하위법령 공포 전이거나 판단 근거가 없으면 미확인으로 두세요."
+                >
+                  <TriState
+                    value={answers.aiDataCenterActFacilityConfirmed}
+                    yesLabel="요건 확인"
+                    noLabel="미해당"
+                    onChange={(value) => onChange("aiDataCenterActFacilityConfirmed", value)}
+                  />
+                </Question>
+                <Question
+                  label="적용 확인한 AI 데이터센터 특례"
+                  hint="특별법상 시설 인정요건과 개별 특례요건을 관계기관·전문가에게 확인한 경우에만 선택하세요. 결과에는 면제, 일괄처리, 시설 규모 산정 특례 또는 입지 특례를 구분해 표시합니다."
+                >
+                  <div className="special-law-picker">
+                    {specialLawDefinitions.map((law) => {
+                      const selected = answers.appliedSpecialLawIds.includes(law.id);
+                      return (
+                        <label className={selected ? "is-selected" : ""} key={law.id}>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleSpecialLaw(law.id)}
+                          />
+                          <span>
+                            <strong>{law.shortLabel}</strong>
+                            <small>{law.article} · {law.conditionNote}</small>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {answers.appliedSpecialLawIds.includes("AIDC_ONE_STOP") ? (
+                    <label className="special-law-status-field">
+                      <span>일괄처리 진행상태</span>
+                      <select
+                        aria-label="인허가 일괄처리 진행상태"
+                        value={answers.aiDataCenterOneStopStatus}
+                        onChange={(event) => onChange(
+                          "aiDataCenterOneStopStatus",
+                          event.target.value as ScenarioAnswers["aiDataCenterOneStopStatus"],
+                        )}
+                      >
+                        <option value="PLANNED">신청 예정</option>
+                        <option value="IN_PROGRESS">심사 중</option>
+                        <option value="COMPLETED">일괄처리 완료</option>
+                      </select>
+                      <small>신고 의제는 신청 시점이 아니라 일괄처리를 받은 경우에만 반영됩니다.</small>
+                    </label>
+                  ) : null}
+                  <div className={`inline-notice ${answers.assessmentDate < AI_DATA_CENTER_SPECIAL_ACT_EFFECTIVE_DATE || answers.aiDataCenterActFacilityConfirmed !== true ? "warning" : "info"}`}>
+                    <strong>{answers.assessmentDate < AI_DATA_CENTER_SPECIAL_ACT_EFFECTIVE_DATE ? "시행 전" : answers.aiDataCenterActFacilityConfirmed === true ? "시행일 이후·요건 확인" : "시설요건 확인 필요"}</strong>
+                    <span>
+                      특별법 시행일은 {AI_DATA_CENTER_SPECIAL_ACT_EFFECTIVE_DATE}입니다. 현재 하위법령이 없어 AI 데이터센터 인정기준, 전력계통영향평가 면제용량과 시설 규모의 별도 산정기준은 확정되지 않았습니다.
+                    </span>
+                  </div>
+                </Question>
+              </>
+            ) : null}
           </>
         ) : null}
 
@@ -339,6 +434,22 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                 ]}
               />
             </Question>
+            <Question label="건축위원회 심의 대상 여부" hint="건축물 규모·용도와 관할 건축조례상 심의대상을 확인한 결과를 입력합니다.">
+              <TriState
+                value={answers.buildingCommitteeReviewRequired}
+                yesLabel="대상"
+                noLabel="비대상"
+                onChange={(value) => onChange("buildingCommitteeReviewRequired", value)}
+              />
+            </Question>
+            <Question label="경관심의 대상 여부" hint="경관법, 경관계획과 관할 경관조례상 개발사업·건축물 심의대상을 확인한 결과를 입력합니다.">
+              <TriState
+                value={answers.landscapeReviewRequired}
+                yesLabel="대상"
+                noLabel="비대상"
+                onChange={(value) => onChange("landscapeReviewRequired", value)}
+              />
+            </Question>
             <Question
               label="기계설비법 착공 전 확인·사용 전 검사 대상 여부"
               hint="건축물 용도·연면적과 냉난방·환기·급배수 등 기계설비 공사 범위를 검토한 결과를 입력합니다."
@@ -350,7 +461,7 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                 onChange={(value) => onChange("mechanicalEquipmentActTarget", value)}
               />
             </Question>
-            <Question label="공장건축면적" hint="기존·증가분·사업 후 총량을 구분해 입력합니다.">
+            <Question label="건축물 연면적" hint="기존·증가분·사업 후 총량을 구분해 입력합니다.">
               <div className="stacked-fields">
                 <NumberInput label="기존" unit="㎡" value={answers.existingAreaM2} onChange={(value) => onChange("existingAreaM2", value)} />
                 <NumberInput label="증가분" unit="㎡" value={answers.increaseAreaM2} onChange={(value) => onChange("increaseAreaM2", value)} />
@@ -552,6 +663,9 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
             </Question>
             <Question label="에너지사용계획 협의 대상 여부">
               <TriState value={answers.energyUsePlanRequired} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("energyUsePlanRequired", value)} />
+            </Question>
+            <Question label="전력계통영향평가 대상 여부" hint="대상지역, 신규 전력수요와 시행령상 제외사업을 검토한 결과를 입력합니다. AI 데이터센터 특별법의 면제는 위 특례 선택과 시행일을 함께 확인합니다.">
+              <TriState value={answers.gridImpactAssessmentRequired} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("gridImpactAssessmentRequired", value)} />
             </Question>
             <Question label="지하수 개발·이용 여부">
               <TriState value={answers.groundwaterDevelopment} yesLabel="개발" noLabel="없음" onChange={(value) => onChange("groundwaterDevelopment", value)} />

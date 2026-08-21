@@ -53,8 +53,8 @@ describe("dashboard UI", () => {
   it("renders the project-input summary without validation presets", () => {
     render(<DashboardClient />);
 
-    expect(screen.getByRole("heading", { name: "지방투자기업 인허가 로드맵" })).toBeInTheDocument();
-    expect(screen.getByText("사업 조건별 절차 · 순서 · 소요기간")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "지역투자 인허가 로드맵" })).toBeInTheDocument();
+    expect(screen.getByText("사업 조건에 맞는 절차, 적용 특례와 예상 일정을 확인합니다.")).toBeInTheDocument();
     expect(document.querySelector(".scope-card")).toBeNull();
     expect(screen.getByRole("heading", { name: "현재 사업조건" })).toBeInTheDocument();
     expect(screen.queryByText(/검증 시나리오|사용자 설정|조건 조정됨/)).not.toBeInTheDocument();
@@ -133,7 +133,7 @@ describe("dashboard UI", () => {
 
   it("opens the total-duration result as a simplified six-stage graphic and restores focus", async () => {
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=7"));
+    await waitFor(() => expect(window.location.search).toContain("v=8"));
     fireEvent.click(screen.getByRole("button", { name: /공사 일정/ }));
     fireEvent.change(screen.getByLabelText("착공 예정일"), { target: { value: "2027-01-01" } });
     fireEvent.change(screen.getByLabelText("준공 예정일"), { target: { value: "2028-12-31" } });
@@ -148,7 +148,7 @@ describe("dashboard UI", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     const graphic = within(dialog).getByRole("list", { name: "전체 절차 6단계 그래픽" });
     expect(within(graphic).getAllByRole("listitem")).toHaveLength(6);
-    expect(within(dialog).getByText("공장 건설")).toBeInTheDocument();
+    expect(within(dialog).getByText("건설공사")).toBeInTheDocument();
     const procedureIds = [...dialog.querySelectorAll("[data-procedure-id]")].map(
       (element) => element.getAttribute("data-procedure-id"),
     );
@@ -229,12 +229,12 @@ describe("dashboard UI", () => {
 
   it("restores edited inputs from the share URL without a scenario id", async () => {
     const first = render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=7"));
+    await waitFor(() => expect(window.location.search).toContain("v=8"));
     fireEvent.click(screen.getByRole("button", { name: "증설" }));
 
     await waitFor(() => {
       expect(window.location.search).toContain("it=EXPANSION");
-      expect(window.location.search).toContain("v=7");
+      expect(window.location.search).toContain("v=8");
       expect(window.location.search).not.toContain("sc=");
     });
     first.unmount();
@@ -352,7 +352,7 @@ describe("dashboard UI", () => {
     );
 
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=7"));
+    await waitFor(() => expect(window.location.search).toContain("v=8"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "충청남도" },
     });
@@ -405,7 +405,7 @@ describe("dashboard UI", () => {
     );
 
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=7"));
+    await waitFor(() => expect(window.location.search).toContain("v=8"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "전북특별자치도" },
     });
@@ -441,7 +441,7 @@ describe("dashboard UI", () => {
     );
 
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=7"));
+    await waitFor(() => expect(window.location.search).toContain("v=8"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "대전광역시" },
     });
@@ -473,6 +473,66 @@ describe("dashboard UI", () => {
     expect(chemicalQuestion).not.toBeNull();
     fireEvent.click(within(chemicalQuestion!).getByRole("button", { name: "없음" }));
     expect(document.querySelector('[data-input-key="chemicalsHandled"]')).toHaveTextContent("아니오");
+  });
+
+  it("adds AI data centers and carries selected special-law treatment into the result", async () => {
+    render(<DashboardClient />);
+    await waitFor(() => expect(window.location.search).toContain("v=8"));
+    fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
+      target: { value: "AI_DATA_CENTER" },
+    });
+
+    expect(screen.getAllByRole("option", { name: "AI 데이터센터" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "AI 데이터센터 특별법 적용" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "요건 확인" }));
+    const oneStop = screen.getByRole("checkbox", { name: /인허가 일괄처리/ });
+    fireEvent.click(oneStop);
+    fireEvent.change(screen.getByLabelText("평가 기준일"), {
+      target: { value: "2027-04-01" },
+    });
+
+    expect(oneStop).toBeChecked();
+    expect(screen.getByText("선택 반영")).toBeInTheDocument();
+    expect(screen.getByText(/일괄처리는 면제가 아니며/)).toBeInTheDocument();
+    expect(screen.getAllByText(/기한 종료 다음 날/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/시설 규모 산정 특례 또는 입지 특례/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.search).toContain("v=8");
+      expect(window.location.search).toContain("sl=AIDC_ONE_STOP");
+      expect(window.location.search).toContain("aic=1");
+      expect(window.location.search).toContain("aos=PLANNED");
+    });
+  });
+
+  it("clears hidden AI-only special-law values when switching to another industry", async () => {
+    render(<DashboardClient />);
+    await waitFor(() => expect(window.location.search).toContain("v=8"));
+    fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
+      target: { value: "AI_DATA_CENTER" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "요건 확인" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /인허가 일괄처리/ }));
+    fireEvent.change(screen.getByLabelText("인허가 일괄처리 진행상태"), {
+      target: { value: "COMPLETED" },
+    });
+    expect(screen.getByRole("heading", { name: "AI 데이터센터 특별법 적용" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
+      target: { value: "SEMICONDUCTOR_ELECTRONICS" },
+    });
+
+    expect(screen.queryByRole("checkbox", { name: /인허가 일괄처리/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "AI 데이터센터 특별법 적용" })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-input-key="appliedSpecialLawIds"]')).toHaveTextContent("선택 없음");
+    expect(document.querySelector('[data-input-key="aiDataCenterOneStopStatus"]')).toHaveTextContent("선택 없음");
+    await waitFor(() => {
+      expect(window.location.search).toContain("ind=SEMICONDUCTOR_ELECTRONICS");
+      expect(window.location.search).toContain("aic=u");
+      expect(window.location.search).toContain("aos=NOT_APPLIED");
+      expect(window.location.search).toContain("sl=");
+      expect(window.location.search).not.toContain("sl=AIDC_ONE_STOP");
+    });
   });
 
   it("uses named flow phases instead of numbered progress bundles", () => {

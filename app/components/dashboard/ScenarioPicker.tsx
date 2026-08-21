@@ -1,6 +1,7 @@
 import { inputLabel } from "@/app/components/dashboard/constants";
 import type { ScenarioAnswers } from "@/lib/data/catalog";
 import { getIndustryProfile } from "@/lib/data/industry-profiles";
+import { getSpecialLawDefinition } from "@/lib/data/special-laws";
 import { getOfficialLocalOrdinanceLinks } from "@/lib/regions/local-ordinances";
 
 type InputField = {
@@ -31,6 +32,7 @@ export const projectInputSections: readonly InputSection[] = [
       { key: "demolitionRequired" },
       { key: "roadConnectionRequired" },
       { key: "trafficImpactAssessmentRequired" },
+      { key: "landscapeReviewRequired" },
       { key: "disasterImpactAssessmentType" },
       { key: "undergroundSafetyAssessmentType" },
       { key: "nationalHeritageAssessmentType" },
@@ -47,11 +49,15 @@ export const projectInputSections: readonly InputSection[] = [
       { key: "investmentType" },
       { key: "industryCategory" },
       { key: "buildingAction" },
+      { key: "buildingCommitteeReviewRequired" },
       { key: "mechanicalEquipmentActTarget" },
       { key: "existingAreaM2", unit: "㎡" },
       { key: "increaseAreaM2", unit: "㎡" },
       { key: "totalAreaM2", unit: "㎡" },
       { key: "permitCoordination" },
+      { key: "aiDataCenterActFacilityConfirmed" },
+      { key: "aiDataCenterOneStopStatus" },
+      { key: "appliedSpecialLawIds" },
     ],
   },
   {
@@ -71,6 +77,7 @@ export const projectInputSections: readonly InputSection[] = [
       { key: "privateSewageTreatmentFacility" },
       { key: "privateElectricalFacilityWork" },
       { key: "energyUsePlanRequired" },
+      { key: "gridImpactAssessmentRequired" },
     ],
   },
   {
@@ -112,6 +119,12 @@ export const projectInputSections: readonly InputSection[] = [
 ] as const;
 
 const valueLabels: Record<string, Record<string, string>> = {
+  aiDataCenterOneStopStatus: {
+    NOT_APPLIED: "선택 없음",
+    PLANNED: "신청 예정",
+    IN_PROGRESS: "심사 중",
+    COMPLETED: "일괄처리 완료",
+  },
   investmentType: {
     NEW: "신설",
     EXPANSION: "증설",
@@ -195,6 +208,13 @@ export function formatProjectInputValue(
     if (profile) return profile.label;
   }
 
+  if (key === "appliedSpecialLawIds" && Array.isArray(value)) {
+    if (!value.length) return "선택 없음";
+    return value
+      .map((id) => getSpecialLawDefinition(String(id) as Parameters<typeof getSpecialLawDefinition>[0])?.shortLabel ?? String(id))
+      .join(" · ");
+  }
+
   const mapped = valueLabels[key]?.[String(value)];
   if (mapped) return mapped;
 
@@ -212,17 +232,15 @@ export function formatProjectInputValue(
 export function ProjectInputSummary({ answers }: { answers: ScenarioAnswers }) {
   const ordinanceLinks = getOfficialLocalOrdinanceLinks(answers.province, answers.city);
   return (
-    <section
-      className="project-input-summary"
-      aria-labelledby="project-input-summary-title"
-    >
-      <header className="project-input-summary-heading">
+    <section className="project-input-summary" aria-labelledby="project-input-summary-title">
+      <details>
+      <summary className="project-input-summary-heading">
         <div>
-          <span className="eyebrow">입력값 확인</span>
           <h2 id="project-input-summary-title">현재 사업조건</h2>
+          <p>입력값 {Object.keys(answers).length}개 보기</p>
         </div>
-        <p>아래 입력값을 기준으로 적용 절차와 일정을 계산합니다.</p>
-      </header>
+        <span className="details-action" aria-hidden="true" />
+      </summary>
 
       <div className="project-input-summary-sections">
         {projectInputSections.map((section) => (
@@ -263,6 +281,7 @@ export function ProjectInputSummary({ answers }: { answers: ScenarioAnswers }) {
           </section>
         ))}
       </div>
+      </details>
     </section>
   );
 }

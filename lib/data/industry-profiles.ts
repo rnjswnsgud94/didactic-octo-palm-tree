@@ -1,8 +1,8 @@
 import type { ScenarioAnswers } from "@/lib/data/catalog";
 
 /**
- * 제11차 한국표준산업분류의 제조업 중분류(10~34)를 공장 투자자가
- * 고르기 쉬운 묶음으로 재구성한 화면용 분류입니다.
+ * 제11차 한국표준산업분류의 제조업 중분류(10~34)와 대규모 디지털
+ * 인프라 업종을 투자 검토자가 고르기 쉬운 묶음으로 재구성했습니다.
  *
  * 업종만으로 개별 인허가의 법적 적용 여부를 확정할 수 없으므로,
  * `reviewKeys`는 우선 확인할 입력 항목을 뜻합니다. `initialValues`도
@@ -35,6 +35,11 @@ export const industryReviewFieldLabels = {
   hazardousMachineryInspectionRequired: "유해·위험기계 안전검사",
   privateElectricalFacilityWork: "자가용전기설비",
   energyUsePlanRequired: "에너지사용계획",
+  gridImpactAssessmentRequired: "전력계통영향평가",
+  aiDataCenterActFacilityConfirmed: "특별법상 AI 데이터센터 인정요건",
+  landscapeReviewRequired: "경관심의",
+  buildingCommitteeReviewRequired: "건축위원회 심의",
+  fireFacilityWork: "소방시설공사",
   publicSewerConnection: "공공하수도 연결",
   privateSewageTreatmentFacility: "개인하수처리시설",
 } as const satisfies Partial<Record<keyof ScenarioAnswers, string>>;
@@ -51,7 +56,7 @@ type IndustryInitialValueField = Extract<
 export type IndustryProfile = {
   id: string;
   label: string;
-  group: "생활·바이오" | "석유·화학·소재" | "금속·기계" | "전기전자·정밀" | "수송장비";
+  group: "디지털 인프라" | "생활·바이오" | "석유·화학·소재" | "금속·기계" | "전기전자·정밀" | "수송장비";
   ksicDivisions: readonly number[];
   examples: string;
   reviewKeys: readonly IndustryReviewField[];
@@ -59,6 +64,15 @@ export type IndustryProfile = {
 };
 
 export const industryProfiles = [
+  {
+    id: "AI_DATA_CENTER",
+    label: "AI 데이터센터",
+    group: "디지털 인프라",
+    ksicDivisions: [63],
+    examples: "AI 학습·추론용 데이터센터, GPU 클러스터, 기존 데이터센터의 AI 전환",
+    reviewKeys: ["aiDataCenterActFacilityConfirmed", "gridImpactAssessmentRequired", "buildingCommitteeReviewRequired", "landscapeReviewRequired", "privateElectricalFacilityWork", "energyUsePlanRequired", "fireFacilityWork", "hazardousMaterials", "highPressureGas", "publicSewerConnection"],
+    initialValues: {},
+  },
   {
     id: "FOOD_BEVERAGE_TOBACCO",
     label: "식품·음료·담배",
@@ -253,6 +267,7 @@ export const industryProfiles = [
 export type IndustryProfileId = (typeof industryProfiles)[number]["id"];
 
 export const industryProfileGroups = [
+  "디지털 인프라",
   "생활·바이오",
   "석유·화학·소재",
   "금속·기계",

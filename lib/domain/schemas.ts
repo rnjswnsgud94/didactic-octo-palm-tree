@@ -50,6 +50,8 @@ export const projectInputSchema = z.object({
   }),
   industry: z.object({
     category: factSchema,
+    aiDataCenterActFacilityConfirmed: factSchema,
+    aiDataCenterOneStopStatus: factSchema,
     ksic: factSchema,
     products: factSchema,
     coreProcesses: factSchema,
@@ -63,6 +65,7 @@ export const projectInputSchema = z.object({
     demolitionRequired: factSchema,
     roadConnectionRequired: factSchema,
     trafficImpactAssessmentRequired: factSchema,
+    landscapeReviewRequired: factSchema,
     groundwaterDevelopment: factSchema,
     disasterImpactAssessmentType: factSchema,
     undergroundSafetyAssessmentType: factSchema,
@@ -78,6 +81,7 @@ export const projectInputSchema = z.object({
     existingAreaM2: factSchema,
     increaseAreaM2: factSchema,
     totalAreaM2: factSchema,
+    buildingCommitteeReviewRequired: factSchema,
     fireFacilityWork: factSchema,
   }),
   environment: z.object({
@@ -114,6 +118,7 @@ export const projectInputSchema = z.object({
     powerIncreaseMw: factSchema,
     waterDemandM3Day: factSchema,
     wastewaterM3Day: factSchema,
+    gridImpactAssessmentRequired: factSchema,
     privateElectricalFacilityWork: factSchema,
     energyUsePlanRequired: factSchema,
     publicSewerConnection: factSchema,
@@ -249,6 +254,14 @@ export const applicabilityRuleSchema = z.object({
   version: z.string(),
   procedureId: z.string(),
   effect: z.enum(["INCLUDE", "EXCLUDE", "REPLACE", "SPECIAL_CASE"]),
+  /**
+   * Optional catalog-activation scope for industry-profile rules. The rule
+   * condition still repeats the industry fact so a matched decision remains
+   * fully traceable; this scope prevents an unrelated, false exclusion rule
+   * from becoming the only active rule for another industry's historical
+   * assessment date.
+   */
+  industryScope: z.array(z.string()).optional(),
   effectiveFrom: z.string(),
   effectiveTo: z.string().nullable(),
   jurisdiction: z.object({

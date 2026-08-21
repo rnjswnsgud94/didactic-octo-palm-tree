@@ -1,5 +1,9 @@
 import { catalog, type ScenarioAnswers } from "@/lib/data/catalog";
 import { buildPlanningDurations } from "@/lib/data/planning-durations";
+import {
+  evaluateSelectedSpecialLaws,
+  specialLawImpactsForProcedure,
+} from "@/lib/data/special-laws";
 import { scenarioAnswersToProjectInput } from "@/lib/domain/project-input";
 import { resolveAllProcedures } from "@/lib/engine/rule-engine";
 import { calculateSchedule, type DurationScenario } from "@/lib/engine/schedule";
@@ -17,12 +21,20 @@ export function evaluateProject(
   },
 ) {
   const input = scenarioAnswersToProjectInput(answers);
-  const decisions = resolveAllProcedures(
+  const baseDecisions = resolveAllProcedures(
     [...catalog.procedures],
     [...catalog.rules],
     input,
     catalog.coverage.catalogVersion,
   );
+  const decisions = baseDecisions.map((decision) => ({
+    ...decision,
+    specialLawImpacts: specialLawImpactsForProcedure(
+      answers,
+      decision.procedure.id,
+    ),
+  }));
+  const specialLawEvaluations = evaluateSelectedSpecialLaws(answers);
   const planningDurations = buildPlanningDurations(
     catalog.procedures,
     catalog.durations,
@@ -59,5 +71,5 @@ export function evaluateProject(
       NEEDS_MORE_INFO: 0,
     },
   );
-  return { input, decisions, schedules, counts };
+  return { input, decisions, schedules, counts, specialLawEvaluations };
 }

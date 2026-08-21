@@ -8,11 +8,20 @@ const statusSymbols: Record<ApplicabilityStatus, string> = {
   NEEDS_MORE_INFO: "?",
 };
 
-export function StatusBadge({ status, compact = false }: { status: ApplicabilityStatus; compact?: boolean }) {
+export function StatusBadge({
+  status,
+  compact = false,
+  isDeemed = false,
+}: {
+  status: ApplicabilityStatus;
+  compact?: boolean;
+  isDeemed?: boolean;
+}) {
+  const label = isDeemed ? "일괄처리로 충족" : statusLabels[status];
   return (
-    <span className={`status-badge status-${status.toLowerCase()}`}>
-      <span aria-hidden="true">{statusSymbols[status]}</span>
-      {compact ? <span className="sr-only">{statusLabels[status]}</span> : statusLabels[status]}
+    <span className={`status-badge status-${isDeemed ? "deemed" : status.toLowerCase()}`}>
+      <span aria-hidden="true">{isDeemed ? "✓" : statusSymbols[status]}</span>
+      {compact ? <span className="sr-only">{label}</span> : label}
     </span>
   );
 }

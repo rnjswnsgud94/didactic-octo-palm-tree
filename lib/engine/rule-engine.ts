@@ -6,6 +6,7 @@ import type {
   ProjectInput,
   RuleTrace,
 } from "@/lib/domain/schemas";
+import type { SpecialLawImpact } from "@/lib/data/special-laws";
 
 type TruthValue = "TRUE" | "FALSE" | "UNKNOWN";
 
@@ -37,6 +38,7 @@ export type ProcedureDecision = {
   provisionalEffect: "INCLUDE" | "EXCLUDE" | null;
   isDeemed: boolean;
   dataVersion: string;
+  specialLawImpacts?: SpecialLawImpact[];
 };
 
 function stableUnique(values: string[]) {
@@ -203,10 +205,24 @@ export function evaluateCondition(
   return leafResult(path, (actual) => actual !== undefined && actual !== null, `${path} 값 존재`, input);
 }
 
-function isRuleActive(rule: ApplicabilityRule, input: ProjectInput) {
+function isRuleActive(
+  rule: ApplicabilityRule,
+  input: ProjectInput,
+  ignoreIndustryScope = false,
+) {
   if (rule.status === "RETIRED") return false;
   if (input.assessmentDate < rule.effectiveFrom) return false;
   if (rule.effectiveTo && input.assessmentDate > rule.effectiveTo) return false;
+  if (!ignoreIndustryScope && rule.industryScope?.length) {
+    const industry = resolveFact(input, "industry.category");
+    if (
+      industry.state === "NOT_APPLICABLE" ||
+      (industry.state === "KNOWN" &&
+        !rule.industryScope.includes(String(industry.value)))
+    ) {
+      return false;
+    }
+  }
   if (rule.jurisdiction.nationwide) return true;
 
   const province = resolveFact(input, "location.province");
@@ -283,6 +299,52 @@ export function resolveProcedure(
   input: ProjectInput,
   dataVersion: string,
 ): ProcedureDecision {
+  const procedureRules = rules.filter(
+    (rule) =>
+      rule.procedureId === procedure.id && rule.status !== "RETIRED",
+  );
+  const activeBeforeIndustryScope = rules
+    .filter(
+      (rule) =>
+        rule.procedureId === procedure.id &&
+        isRuleActive(rule, input, true),
+    )
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const industry = resolveFact(input, "industry.category");
+  const outsideExclusiveIndustryScope =
+    industry.state === "KNOWN" &&
+    procedureRules.length > 0 &&
+    procedureRules.every((rule) => rule.industryScope?.length) &&
+    procedureRules.every(
+      (rule) =>
+        !rule.industryScope?.includes(String(industry.value)),
+    );
+
+  if (outsideExclusiveIndustryScope) {
+    const traces = activeBeforeIndustryScope.map((rule) => traceRule(rule, input));
+    const disclosure = getLegalReviewDisclosure(
+      procedure,
+      activeBeforeIndustryScope,
+    );
+    return {
+      procedure,
+      status: disclosure.needsLegalReview
+        ? "POSSIBLY_APPLIES"
+        : "DOES_NOT_APPLY",
+      reason: disclosure.needsLegalReview
+        ? `현재 업종(${String(industry.value)})은 이 업종 전용 절차의 적용범위 밖이지만 범위 규칙의 세부 법률검토 상태는 상세에서 확인해야 합니다.`
+        : `현재 업종(${String(industry.value)})은 이 업종 전용 절차의 적용범위에 포함되지 않습니다.`,
+      ...disclosure,
+      missingInputs: [],
+      traces,
+      matchedRuleIds: [],
+      conflictRuleIds: [],
+      provisionalEffect: "EXCLUDE",
+      isDeemed: false,
+      dataVersion,
+    };
+  }
+
   const activeRules = rules
     .filter((rule) => rule.procedureId === procedure.id && isRuleActive(rule, input))
     .sort((a, b) => a.id.localeCompare(b.id));

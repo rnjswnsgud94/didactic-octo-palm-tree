@@ -60,6 +60,10 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
     },
     industry: {
       category: choiceFact(answers.industryCategory),
+      aiDataCenterActFacilityConfirmed: nullableFact(
+        answers.aiDataCenterActFacilityConfirmed,
+      ),
+      aiDataCenterOneStopStatus: known(answers.aiDataCenterOneStopStatus),
       ksic: unknown(),
       products: unknown(),
       coreProcesses: unknown(),
@@ -73,6 +77,7 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
       demolitionRequired: nullableFact(answers.demolitionRequired),
       roadConnectionRequired: nullableFact(answers.roadConnectionRequired),
       trafficImpactAssessmentRequired: nullableFact(answers.trafficImpactAssessmentRequired),
+      landscapeReviewRequired: nullableFact(answers.landscapeReviewRequired),
       groundwaterDevelopment: nullableFact(answers.groundwaterDevelopment),
       disasterImpactAssessmentType: nullableFact(answers.disasterImpactAssessmentType),
       undergroundSafetyAssessmentType: nullableFact(answers.undergroundSafetyAssessmentType),
@@ -88,6 +93,9 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
       existingAreaM2: nullableFact(answers.existingAreaM2, "m2"),
       increaseAreaM2: nullableFact(answers.increaseAreaM2, "m2"),
       totalAreaM2: nullableFact(answers.totalAreaM2, "m2"),
+      buildingCommitteeReviewRequired: nullableFact(
+        answers.buildingCommitteeReviewRequired,
+      ),
       fireFacilityWork: nullableFact(answers.fireFacilityWork),
     },
     environment: {
@@ -124,6 +132,7 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
       powerIncreaseMw: nullableFact(answers.powerIncreaseMw, "MW"),
       waterDemandM3Day: nullableFact(answers.waterDemandM3Day, "m3/day"),
       wastewaterM3Day: nullableFact(answers.wastewaterM3Day, "m3/day"),
+      gridImpactAssessmentRequired: nullableFact(answers.gridImpactAssessmentRequired),
       privateElectricalFacilityWork: nullableFact(answers.privateElectricalFacilityWork),
       energyUsePlanRequired: nullableFact(answers.energyUsePlanRequired),
       publicSewerConnection: nullableFact(answers.publicSewerConnection),
@@ -134,7 +143,7 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
       healthManagerRequired: nullableFact(answers.healthManagerRequired),
     },
     permitCoordination: nullableFact(answers.permitCoordination),
-    strategicIndustrySpecialCase: unknown(),
+    strategicIndustrySpecialCase: known([...answers.appliedSpecialLawIds]),
     existingApprovalIds:
       answers.buildingAction === "NONE"
         ? notApplicable()

@@ -79,6 +79,61 @@ describe("catalog integrity", () => {
     expect(catalog.procedures.find((item) => item.id === "water-discharge-installation-permit")?.ruleIds).toContain("rule-exp-water-integrated-exclusion");
   });
 
+  it("registers every reviewed AI data-center factory-path exclusion with an official citation", () => {
+    const citationIds = new Set(catalog.citations.map((item) => item.id));
+    const profileRuleIds = [
+      "rule-aidc-exclude-factory-establishment-approval",
+      "rule-aidc-exclude-factory-completion-report-complex",
+      "rule-aidc-exclude-factory-completion-report-offsite",
+      "rule-aidc-exclude-small-factory-registration",
+    ];
+
+    for (const ruleId of profileRuleIds) {
+      const rule = catalog.rules.find((item) => item.id === ruleId);
+      expect(rule, ruleId).toBeDefined();
+      expect(rule?.industryScope, ruleId).toEqual(["AI_DATA_CENTER"]);
+      expect(rule?.citationIds, ruleId).toEqual([
+        "cit-indcluster-2-1-factory-definition",
+      ]);
+      expect(rule?.citationIds.every((id) => citationIds.has(id)), ruleId).toBe(true);
+      expect(
+        catalog.procedures.find((item) => item.id === rule?.procedureId)?.ruleIds,
+        ruleId,
+      ).toContain(ruleId);
+    }
+
+    expect(
+      catalog.citations.find(
+        (item) => item.id === "cit-indcluster-2-1-factory-definition",
+      ),
+    ).toMatchObject({
+      sourceId: "src-industrial-cluster-act-20260701",
+      article: "제2조",
+      paragraph: "제1호",
+      role: "APPLICABILITY",
+    });
+  });
+
+  it("requires every confirmed catalog rule to carry at least one registered citation", () => {
+    const citationIds = new Set(catalog.citations.map((item) => item.id));
+    for (const rule of catalog.rules.filter(
+      (item) => item.status === "INTERNAL_REVIEWED" || item.status === "EXPERT_REVIEWED",
+    )) {
+      expect(rule.citationIds.length, rule.id).toBeGreaterThan(0);
+      expect(rule.citationIds.every((id) => citationIds.has(id)), rule.id).toBe(true);
+    }
+  });
+
+  it("activates AI-special-law rules only inside the AI data-center industry scope", () => {
+    const aidcRules = catalog.rules.filter((rule) =>
+      rule.citationIds.some((citationId) => citationId.startsWith("cit-aidc-")),
+    );
+    expect(aidcRules.length).toBeGreaterThan(0);
+    for (const rule of aidcRules) {
+      expect(rule.industryScope, rule.id).toEqual(["AI_DATA_CENTER"]);
+    }
+  });
+
   it("links every procedure to direct citations and a duration record", () => {
     const durationIds = new Set(catalog.durations.map((item) => item.id));
     for (const procedure of catalog.procedures) {

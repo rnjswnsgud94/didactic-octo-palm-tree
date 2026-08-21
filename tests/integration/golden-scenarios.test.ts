@@ -41,6 +41,42 @@ describe("golden manufacturing scenarios", () => {
     );
   });
 
+  it("evaluates a post-effective non-capital AI data-center one-stop roadmap without conflicts or cycles", () => {
+    const result = evaluateProject({
+      ...catalog.scenarios[0].answers,
+      assessmentDate: "2027-04-01",
+      plannedConstructionStartDate: "2028-01-01",
+      plannedConstructionEndDate: "2030-12-31",
+      province: "충청남도",
+      city: "아산시",
+      insideIndustrialComplex: false,
+      investmentType: "NEW",
+      industryCategory: "AI_DATA_CENTER",
+      buildingAction: "NEW_BUILD",
+      totalAreaM2: 40_000,
+      aiDataCenterActFacilityConfirmed: true,
+      aiDataCenterOneStopStatus: "PLANNED",
+      appliedSpecialLawIds: ["AIDC_ONE_STOP"],
+      gridImpactAssessmentRequired: true,
+      energyUsePlanRequired: true,
+      trafficImpactAssessmentRequired: true,
+      landscapeReviewRequired: true,
+      buildingCommitteeReviewRequired: true,
+      fireFacilityWork: true,
+    });
+
+    expect(result.decisions.flatMap((decision) => decision.conflictRuleIds)).toEqual([]);
+    expect(result.specialLawEvaluations[0]).toMatchObject({
+      id: "AIDC_ONE_STOP",
+      status: "ACTIVE",
+    });
+    const order = result.schedules.TYPICAL.topologicalOrder;
+    expect(order.indexOf("ai-data-center-one-stop-application")).toBeLessThan(
+      order.indexOf("building-permit"),
+    );
+    expect(result.schedules.TYPICAL.projectTimeline?.warnings.join(" ")).not.toContain("순환");
+  });
+
   it("includes every selected maximum-coverage procedure in the automatic date schedule", () => {
     const maximumCoverageAnswers: ScenarioAnswers = {
       ...catalog.scenarios[2].answers,

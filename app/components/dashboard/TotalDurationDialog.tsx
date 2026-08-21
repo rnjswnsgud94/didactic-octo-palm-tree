@@ -102,7 +102,7 @@ export function TotalDurationDialog({
               <i aria-hidden="true">→</i>
               <div><span>착공 전 인허가</span><strong>{timeline.permitLeadCalendarDays ?? timeline.plannedPreConstructionCalendarDays}일</strong></div>
               <i aria-hidden="true">→</i>
-              <div><span>공장 건설</span><strong>{formatCalendarPeriod(timeline.plannedConstructionStartDate, timeline.plannedConstructionEndDate)}</strong></div>
+              <div><span>건설공사</span><strong>{formatCalendarPeriod(timeline.plannedConstructionStartDate, timeline.plannedConstructionEndDate)}</strong></div>
               <i aria-hidden="true">→</i>
               <div><span>가동 준비 완료</span><strong>{completionDate}</strong></div>
             </section>

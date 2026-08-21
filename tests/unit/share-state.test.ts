@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { catalog, scenarioAnswerSchema } from "@/lib/data/catalog";
+import { catalog, scenarioAnswerSchema, type ScenarioAnswers } from "@/lib/data/catalog";
 import { decodeShareState, encodeShareState } from "@/lib/share-state";
 
 describe("versioned share state", () => {
@@ -9,7 +9,7 @@ describe("versioned share state", () => {
     const first = encodeShareState(answers, "SCHEDULE");
     const second = encodeShareState(answers, "SCHEDULE");
     expect(first).toBe(second);
-    expect(first).toContain("v=7");
+    expect(first).toContain("v=8");
     expect(decodeShareState(first, catalog.scenarios[0].answers)).toEqual({ answers, tab: "SCHEDULE" });
     expect(first).not.toContain("address");
   });
@@ -24,6 +24,43 @@ describe("versioned share state", () => {
     expect(restored.answers.integratedEnvironmentalPermitTarget).toBeNull();
     expect(restored.answers.privateElectricalFacilityWork).toBeNull();
     expect(restored.warning).toContain("신규 조건은 미확인");
+  });
+
+  it("round-trips AI data-center qualification, one-stop status, and selected special laws only in v8", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const answers: ScenarioAnswers = {
+      ...fallback,
+      industryCategory: "AI_DATA_CENTER",
+      landscapeReviewRequired: true,
+      buildingCommitteeReviewRequired: true,
+      gridImpactAssessmentRequired: true,
+      aiDataCenterActFacilityConfirmed: true,
+      aiDataCenterOneStopStatus: "COMPLETED",
+      appliedSpecialLawIds: ["AIDC_ONE_STOP", "AIDC_GRID_IMPACT_EXEMPTION"],
+    };
+    const encoded = encodeShareState(answers, "LEGAL");
+
+    expect(decodeShareState(encoded, fallback)).toEqual({ answers, tab: "LEGAL" });
+    expect(encoded).toContain("aic=1");
+    expect(encoded).toContain("aos=COMPLETED");
+    expect(encoded).toContain("sl=AIDC_ONE_STOP.AIDC_GRID_IMPACT_EXEMPTION");
+  });
+
+  it("ignores injected v8-only special-law fields in a legacy-version URL", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const params = new URLSearchParams(encodeShareState(fallback, "SWIMLANE"));
+    params.set("v", "7");
+    params.set("aic", "1");
+    params.set("aos", "COMPLETED");
+    params.set("gia", "1");
+    params.set("sl", "AIDC_GRID_IMPACT_EXEMPTION");
+
+    const restored = decodeShareState(params.toString(), fallback);
+    expect(restored.answers.aiDataCenterActFacilityConfirmed).toBeNull();
+    expect(restored.answers.aiDataCenterOneStopStatus).toBe("NOT_APPLIED");
+    expect(restored.answers.gridImpactAssessmentRequired).toBeNull();
+    expect(restored.answers.appliedSpecialLawIds).toEqual([]);
+    expect(restored.warning).toContain("AI 데이터센터 특례 조건");
   });
 
   it("falls back safely when a shared region is outside the non-capital scope", () => {

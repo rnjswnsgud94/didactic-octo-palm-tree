@@ -17,6 +17,17 @@ import {
   expandedRules,
 } from "@/lib/data/expanded-catalog";
 import {
+  aiDataCenterProfileRules,
+  specialLawCitations,
+  specialLawDurations,
+  specialLawEdges,
+  specialLawIds,
+  specialLawLegalSources,
+  specialLawProcedures,
+  specialLawRuleIdsByProcedure,
+  specialLawRules,
+} from "@/lib/data/special-laws";
+import {
   applicabilityRuleSchema,
   durationEstimateSchema,
   isoDateSchema,
@@ -62,6 +73,14 @@ export const scenarioAnswerSchema = z.object({
   demolitionRequired: z.boolean().nullable(),
   roadConnectionRequired: z.boolean().nullable(),
   trafficImpactAssessmentRequired: z.boolean().nullable(),
+  landscapeReviewRequired: z.boolean().nullable().default(null),
+  buildingCommitteeReviewRequired: z.boolean().nullable().default(null),
+  gridImpactAssessmentRequired: z.boolean().nullable().default(null),
+  aiDataCenterActFacilityConfirmed: z.boolean().nullable().default(null),
+  aiDataCenterOneStopStatus: z
+    .enum(["NOT_APPLIED", "PLANNED", "IN_PROGRESS", "COMPLETED"])
+    .default("NOT_APPLIED"),
+  appliedSpecialLawIds: z.array(z.enum(specialLawIds)).default([]),
   permitCoordination: z.string().nullable(),
   airEmissionFacility: z.boolean().nullable(),
   waterDischargeFacility: z.boolean().nullable(),
@@ -126,6 +145,7 @@ const scenarioSchema = z.object({
 const additionalRuleIdsByProcedure: Record<string, string[]> = {
   "air-emission-installation-permit": ["rule-exp-air-integrated-exclusion"],
   "water-discharge-installation-permit": ["rule-exp-water-integrated-exclusion"],
+  ...specialLawRuleIdsByProcedure,
 };
 
 const excludedNonPermitProcedureIds = new Set([
@@ -150,40 +170,45 @@ const isExcludedCitation = (citationId: string) =>
   );
 
 const procedures = z.array(procedureSchema).parse(
-  [...proceduresJson, ...expandedProcedures]
+  [...proceduresJson, ...expandedProcedures, ...specialLawProcedures]
   .filter((procedure) => !excludedNonPermitProcedureIds.has(procedure.id))
   .map((procedure) => ({
     ...procedure,
-    ruleIds: [
+    ruleIds: [...new Set([
       ...procedure.ruleIds,
       ...(additionalRuleIdsByProcedure[procedure.id] ?? []),
-    ],
+    ])],
   })),
 );
 const edges = z.array(procedureEdgeSchema).parse(
-  [...edgesJson, ...expandedEdges].filter(
+  [...edgesJson, ...expandedEdges, ...specialLawEdges].filter(
     (edge) =>
       !excludedNonPermitProcedureIds.has(edge.from) &&
       !excludedNonPermitProcedureIds.has(edge.to),
   ),
 );
 const rules = z.array(applicabilityRuleSchema).parse(
-  [...rulesJson, ...expandedRules].filter(
+  [
+    ...rulesJson,
+    ...expandedRules,
+    ...specialLawRules,
+    ...aiDataCenterProfileRules,
+  ].filter(
     (rule) => !excludedNonPermitProcedureIds.has(rule.procedureId),
   ),
 );
 const legalSources = z.array(legalSourceSchema).parse(
-  [...legalSourcesJson, ...expandedLegalSources].filter(
+  [...legalSourcesJson, ...expandedLegalSources, ...specialLawLegalSources].filter(
     (source) => !excludedNonPermitSourceIds.has(source.id),
   ),
 );
 const citations = z.array(legalCitationSchema).parse(
-  [...citationsJson, ...expandedCitations].filter(
+  [...citationsJson, ...expandedCitations, ...specialLawCitations].filter(
     (citation) => !isExcludedCitation(citation.id),
   ),
 );
 const durations = z.array(durationEstimateSchema).parse(
-  [...durationsJson, ...expandedDurations].filter(
+  [...durationsJson, ...expandedDurations, ...specialLawDurations].filter(
     (duration) => !excludedNonPermitProcedureIds.has(duration.procedureId),
   ),
 );

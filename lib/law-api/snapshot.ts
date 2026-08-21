@@ -2,6 +2,7 @@ import documentsJson from "@/data/snapshots/law-api/documents.json";
 import manifestJson from "@/data/snapshots/law-api/manifest.json";
 import legalSourcesJson from "@/data/catalog/legal-sources.json";
 import { expandedLegalSources } from "@/lib/data/expanded-catalog";
+import { specialLawLegalSources } from "@/lib/data/special-laws";
 import { legalSourceSchema } from "@/lib/domain/schemas";
 import {
   normalizedLawDocumentSchema,
@@ -16,6 +17,7 @@ const storedDocuments = z.array(normalizedLawDocumentSchema).parse(documentsJson
 const catalogSources = z.array(legalSourceSchema).parse([
   ...legalSourcesJson,
   ...expandedLegalSources,
+  ...specialLawLegalSources,
 ]);
 const generatedDocuments = catalogSources
   .filter((source) => ["ACT", "ENFORCEMENT_DECREE", "ENFORCEMENT_RULE"].includes(source.documentType))

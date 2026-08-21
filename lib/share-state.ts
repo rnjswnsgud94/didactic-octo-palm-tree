@@ -19,6 +19,12 @@ const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["demolitionRequired", "demo"],
   ["roadConnectionRequired", "road"],
   ["trafficImpactAssessmentRequired", "tia"],
+  ["landscapeReviewRequired", "lsr"],
+  ["buildingCommitteeReviewRequired", "bcr"],
+  ["gridImpactAssessmentRequired", "gia"],
+  ["aiDataCenterActFacilityConfirmed", "aic"],
+  ["aiDataCenterOneStopStatus", "aos"],
+  ["appliedSpecialLawIds", "sl"],
   ["permitCoordination", "pc"],
   ["airEmissionFacility", "air"],
   ["waterDischargeFacility", "wat"],
@@ -63,6 +69,15 @@ const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["waterDemandM3Day", "sup"],
   ["wastewaterM3Day", "ww"],
 ];
+
+const version8OnlyFields = new Set<keyof ScenarioAnswers>([
+  "landscapeReviewRequired",
+  "buildingCommitteeReviewRequired",
+  "gridImpactAssessmentRequired",
+  "aiDataCenterActFacilityConfirmed",
+  "aiDataCenterOneStopStatus",
+  "appliedSpecialLawIds",
+]);
 
 const version2Fields: Array<[keyof ScenarioAnswers, string]> = [
   ["landCategory", "land"],
@@ -110,6 +125,7 @@ const version3Fields: Array<[keyof ScenarioAnswers, string]> = [
 ];
 
 function encodeValue(value: ScenarioAnswers[keyof ScenarioAnswers]) {
+  if (Array.isArray(value)) return value.join(".");
   if (value === null) return "u";
   if (value === true) return "1";
   if (value === false) return "0";
@@ -119,8 +135,11 @@ function encodeValue(value: ScenarioAnswers[keyof ScenarioAnswers]) {
 function decodeValue(
   key: keyof ScenarioAnswers,
   value: string,
-): string | number | boolean | null {
+): string | number | boolean | string[] | null {
   if (value === "u") return null;
+  if (key === "appliedSpecialLawIds") {
+    return value ? value.split(".").filter(Boolean).slice(0, 10) : [];
+  }
   if (
     [
       "insideIndustrialComplex",
@@ -130,6 +149,10 @@ function decodeValue(
       "demolitionRequired",
       "roadConnectionRequired",
       "trafficImpactAssessmentRequired",
+      "landscapeReviewRequired",
+      "buildingCommitteeReviewRequired",
+      "gridImpactAssessmentRequired",
+      "aiDataCenterActFacilityConfirmed",
       "integratedEnvironmentalPermitTarget",
       "chemicalsHandled",
       "chemicalManufactureOrImport",
@@ -192,7 +215,7 @@ export function encodeShareState(
   tab: string,
 ) {
   const params = new URLSearchParams();
-  params.set("v", "7");
+  params.set("v", "8");
   for (const [key, shortKey] of keys) {
     params.set(shortKey, encodeValue(answers[key]));
   }
@@ -211,11 +234,20 @@ export function decodeShareState(
   const params = new URLSearchParams(search);
   if (!params.has("v")) return { answers: fallback };
   const version = params.get("v");
-  if (!["1", "2", "3", "4", "5", "6", "7"].includes(version ?? "")) {
+  if (!["1", "2", "3", "4", "5", "6", "7", "8"].includes(version ?? "")) {
     return { answers: fallback, warning: "지원하지 않는 공유 주소 버전입니다." };
   }
   const warnings: string[] = [];
   const candidate: Record<string, unknown> = { ...fallback };
+  if (version !== "8") {
+    candidate.gridImpactAssessmentRequired = null;
+    candidate.aiDataCenterActFacilityConfirmed = null;
+    candidate.landscapeReviewRequired = null;
+    candidate.buildingCommitteeReviewRequired = null;
+    candidate.aiDataCenterOneStopStatus = "NOT_APPLIED";
+    candidate.appliedSpecialLawIds = [];
+    warnings.push("예전 공유 주소에는 AI 데이터센터 특례 조건이 없어 미확인·미선택 상태로 복원했습니다.");
+  }
   if (version === "1") {
     const missingNewFields = version2Fields.filter(([, shortKey]) => !params.has(shortKey));
     for (const [key] of missingNewFields) candidate[key] = null;
@@ -230,11 +262,12 @@ export function decodeShareState(
   for (const [key, shortKey] of keys) {
     const value = params.get(shortKey);
     if (value === null) continue;
-    if (!["6", "7"].includes(version ?? "") && key === "plannedConstructionStartDate" && /^\d{4}-\d{2}$/.test(value)) {
+    if (version !== "8" && version8OnlyFields.has(key)) continue;
+    if (!["6", "7", "8"].includes(version ?? "") && key === "plannedConstructionStartDate" && /^\d{4}-\d{2}$/.test(value)) {
       candidate[key] = `${value}-01`;
       continue;
     }
-    if (!["6", "7"].includes(version ?? "") && key === "plannedConstructionEndDate" && /^\d{4}-\d{2}$/.test(value)) {
+    if (!["6", "7", "8"].includes(version ?? "") && key === "plannedConstructionEndDate" && /^\d{4}-\d{2}$/.test(value)) {
       const [year, month] = value.split("-").map(Number);
       const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
       candidate[key] = end;
@@ -242,7 +275,7 @@ export function decodeShareState(
     }
     candidate[key] = decodeValue(key, value);
   }
-  if (!["6", "7"].includes(version ?? "") && (params.has("cs") || params.has("ce"))) {
+  if (!["6", "7", "8"].includes(version ?? "") && (params.has("cs") || params.has("ce"))) {
     warnings.push("예전 공유 주소의 월 단위 공사 일정을 해당 월의 첫날과 마지막 날로 변환했습니다.");
   }
   const parsed = scenarioAnswerSchema.safeParse(candidate);

@@ -211,8 +211,9 @@ export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
                           aria-pressed={selectedId === decision.procedure.id}
                           onClick={() => onSelect(decision.procedure.id)}
                         >
-                          <span className="procedure-card-topline"><StatusBadge status={decision.status} compact /><span>{stageLabels[decision.procedure.stage]}</span></span>
+                          <span className="procedure-card-topline"><StatusBadge status={decision.status} isDeemed={decision.isDeemed} compact /><span>{stageLabels[decision.procedure.stage]}</span></span>
                           <strong>{decision.procedure.name}</strong>
+                          {decision.specialLawImpacts?.length ? <span className="special-law-chip">{decision.specialLawImpacts[0].effectLabel} · {decision.specialLawImpacts[0].statusLabel}</span> : null}
                           <span className="procedure-meta">{planningLabel(timelineNode)}{parallelCount > 1 ? <em>병렬</em> : null}</span>
                           {incoming.length ? (
                             <span className="procedure-route">
@@ -241,7 +242,7 @@ export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
         <section className="unscheduled-procedures">
           <h3>현재 일정에서 제외된 절차</h3>
           <p>비적용 조건과 일치했거나 일정 포함 설정에서 빠진 항목입니다. 상세 화면에서 판정 이유를 확인할 수 있습니다.</p>
-          <div>{unscheduledDecisions.map((decision) => <button type="button" key={decision.procedure.id} onClick={() => onSelect(decision.procedure.id)}><StatusBadge status={decision.status} compact />{decision.procedure.name}</button>)}</div>
+          <div>{unscheduledDecisions.map((decision) => <button type="button" key={decision.procedure.id} onClick={() => onSelect(decision.procedure.id)}><StatusBadge status={decision.status} isDeemed={decision.isDeemed} compact />{decision.procedure.name}</button>)}</div>
         </section>
       ) : null}
       <p className="panel-footnote">카드를 선택하면 적용 이유, 제출자료, 선행·후속 절차와 법령 원문을 확인할 수 있습니다.</p>

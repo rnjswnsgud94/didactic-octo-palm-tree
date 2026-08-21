@@ -70,7 +70,12 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
   const timelineNode = schedule.projectTimeline?.nodes.find((item) => item.procedureId === procedure.id);
   const duration = catalog.durations.find((item) => item.id === procedure.durationId);
   const relatedEdges = catalog.edges.filter((edge) => edge.from === procedure.id || edge.to === procedure.id);
-  const apiSources = procedure.citationIds.flatMap((citationId) => {
+  const decisionCitationIds = [...new Set([
+    ...procedure.citationIds,
+    ...decision.traces.flatMap((trace) => trace.citationIds),
+    ...(decision.specialLawImpacts ?? []).flatMap((impact) => impact.citationIds),
+  ])];
+  const apiSources = decisionCitationIds.flatMap((citationId) => {
     const item = citationTitle(citationId);
     if (!item || !["ACT", "ENFORCEMENT_DECREE", "ENFORCEMENT_RULE"].includes(item.source.documentType)) return [];
     return [{
@@ -86,7 +91,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
     <aside className="procedure-drawer" aria-label={`${procedure.name} 상세정보`}>
       <div className="drawer-header">
         <div>
-          <StatusBadge status={decision.status} />
+          <StatusBadge status={decision.status} isDeemed={decision.isDeemed} />
           <p className="drawer-kicker">{procedure.domain} · {actionLabels[procedure.actionType]}</p>
           <h2>{procedure.name}</h2>
         </div>
@@ -135,6 +140,21 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
             <small>기간 근거 {evidenceLabels[duration.evidenceType] ?? duration.evidenceType} · 법적 근거 수준 {confidenceLabels[duration.legalConfidence]} · 기간자료 수준 {confidenceLabels[duration.estimateConfidence]} · 확인일 {duration.verifiedAt}</small>
           </> : <p>연결된 기간 데이터가 없습니다.</p>}
         </section>
+        {decision.specialLawImpacts?.length ? (
+          <section className="drawer-section special-law-impact-section">
+            <h3>업종별 특례 반영</h3>
+            <div className="special-law-impact-list">
+              {decision.specialLawImpacts.map((impact) => (
+                <article key={`${impact.lawId}-${impact.effect}`}>
+                  <div><strong>{impact.effectLabel}</strong><span className={`impact-status status-${impact.status.toLowerCase()}`}>{impact.statusLabel}</span></div>
+                  <p>{impact.description}</p>
+                  {impact.statutoryCap ? <small><b>법정 처리상한</b> {impact.statutoryCap}</small> : null}
+                  <a href={impact.officialUrl} target="_blank" rel="noreferrer">{impact.lawTitle} {impact.article} ↗</a>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
         {procedure.deemedByProcedureIds.length || procedure.deemedProcedureIds.length ? (
           <section className="drawer-section deeming-section">
             <h3>인허가 의제 관계</h3>
@@ -144,9 +164,9 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
           </section>
         ) : null}
         <section className="drawer-section">
-          <div className="section-heading-row"><h3>공식 근거</h3><span>{procedure.citationIds.length}건</span></div>
+          <div className="section-heading-row"><h3>공식 근거</h3><span>{decisionCitationIds.length}건</span></div>
           <div className="citation-list">
-            {procedure.citationIds.map((citationId) => {
+            {decisionCitationIds.map((citationId) => {
               const item = citationTitle(citationId);
               if (!item) return null;
               return (
@@ -156,7 +176,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
                 </a>
               );
             })}
-            {!procedure.citationIds.length ? <div className="citation-empty">공식 공급기관 기준을 아직 수집하지 않아 확정 근거로 표시하지 않습니다.</div> : null}
+            {!decisionCitationIds.length ? <div className="citation-empty">공식 공급기관 기준을 아직 수집하지 않아 확정 근거로 표시하지 않습니다.</div> : null}
           </div>
           <LawApiVerifier sources={apiSources} />
         </section>

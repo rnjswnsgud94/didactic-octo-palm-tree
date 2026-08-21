@@ -17,6 +17,7 @@ import { ProcedureDrawer } from "@/app/components/dashboard/ProcedureDrawer";
 import { StatusSummaryDialog } from "@/app/components/dashboard/StatusSummaryDialog";
 import { TotalDurationDialog } from "@/app/components/dashboard/TotalDurationDialog";
 import { ProjectInputSummary } from "@/app/components/dashboard/ScenarioPicker";
+import { SpecialLawSummary } from "@/app/components/dashboard/SpecialLawSummary";
 import { Swimlane } from "@/app/components/dashboard/Swimlane";
 import { Wizard } from "@/app/components/dashboard/Wizard";
 import { catalog, type ScenarioAnswers } from "@/lib/data/catalog";
@@ -43,6 +44,12 @@ const defaultAnswers: ScenarioAnswers = {
   demolitionRequired: null,
   roadConnectionRequired: null,
   trafficImpactAssessmentRequired: null,
+  landscapeReviewRequired: null,
+  buildingCommitteeReviewRequired: null,
+  gridImpactAssessmentRequired: null,
+  aiDataCenterActFacilityConfirmed: null,
+  aiDataCenterOneStopStatus: "NOT_APPLIED",
+  appliedSpecialLawIds: [],
   permitCoordination: null,
   airEmissionFacility: null,
   waterDischargeFacility: null,
@@ -93,6 +100,20 @@ const summaryClass: Record<ProcedureCategory, string> = {
   CONFIRM: "possibly_applies",
   NOT_REQUIRED: "does_not_apply",
 };
+
+function OrdinanceDisclosure({ answers }: { answers: ScenarioAnswers }) {
+  const [isOpen, setIsOpen] = useState(Boolean(answers.province));
+  return (
+    <details
+      className="ordinance-disclosure"
+      open={isOpen}
+      onToggle={(event) => setIsOpen(event.currentTarget.open)}
+    >
+      <summary>지역 자치법규 확인</summary>
+      <LocalOrdinancePanel answers={answers} />
+    </details>
+  );
+}
 
 export function DashboardClient() {
   const [answers, setAnswers] = useState<ScenarioAnswers>(defaultAnswers);
@@ -218,9 +239,9 @@ export function DashboardClient() {
   return (
     <main className="dashboard-page">
       <header className="topbar">
-        <a className="brand" href="#main-dashboard" aria-label="지방투자 인허가 입력으로 이동">
+        <a className="brand" href="#main-dashboard" aria-label="지역투자 인허가 입력으로 이동">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span><strong>지방투자 인허가</strong></span>
+          <span><h1>지역투자 인허가 로드맵</h1><small>비수도권 사업 검토</small></span>
         </a>
         <div className="topbar-meta">
           <span className="data-health"><i /> 법령 검토 기준 · {catalog.coverage.lastLegalReviewAt}</span>
@@ -228,37 +249,15 @@ export function DashboardClient() {
         </div>
       </header>
 
-      <section className="hero-band" aria-labelledby="dashboard-title">
-        <div><h1 id="dashboard-title">지방투자기업 인허가 로드맵</h1><p>사업 조건별 절차 · 순서 · 소요기간</p></div>
-      </section>
-
       <div id="main-dashboard" className="dashboard-grid">
         <Wizard answers={answers} activeStep={activeStep} onStepChange={setActiveStep} onChange={changeAnswer} />
         <section className="workspace" aria-label="판정 결과">
           <div className="workspace-toolbar">
+            <div className="workspace-title"><h2 id="dashboard-title">사업 검토 결과</h2><p>사업 조건에 맞는 절차, 적용 특례와 예상 일정을 확인합니다.</p></div>
             <div className="scenario-caption"><strong><LocalJurisdictionLinks answers={answers} /> · {answers.insideIndustrialComplex === null ? "입지 미확인" : answers.insideIndustrialComplex ? "산업단지" : "개별입지"}</strong><span>{answers.totalAreaM2 === null ? "면적 미확인" : `${answers.totalAreaM2.toLocaleString("ko-KR")}㎡`} · 검토 기준일 {answers.assessmentDate}</span><em>지역명은 전체 목록, 아래 지역기준 카드는 관련 조례 상세 원문으로 연결됩니다.</em></div>
             <div className="utility-actions"><button type="button" onClick={resetDashboard}>초기화</button><button type="button" onClick={() => window.print()}>인쇄</button></div>
           </div>
-          <ProjectInputSummary answers={answers} />
-
           <div className="summary-strip" aria-label="판정 요약">
-            {procedureCategoryOrder.map((category) => (
-              <button
-                id={`summary-${category}`}
-                type="button"
-                className={`summary-card summary-action summary-${summaryClass[category]}`}
-                key={category}
-                aria-haspopup="dialog"
-                aria-controls="status-summary-dialog"
-                aria-expanded={selectedSummaryCategory === category}
-                aria-label={`${procedureCategorySummaries[category].label} ${decisionsByCategory[category].length}개 목록 열기`}
-                onClick={() => setSelectedSummaryCategory(category)}
-              >
-                <span className="summary-card-copy"><b>{procedureCategorySummaries[category].label}</b><small>{procedureCategorySummaries[category].description}</small></span>
-                <strong>{decisionsByCategory[category].length}<small>개</small></strong>
-                <em>목록 보기</em>
-              </button>
-            ))}
             <div className="summary-card summary-schedule">
               <button
                 id="duration-summary-trigger"
@@ -281,9 +280,31 @@ export function DashboardClient() {
                 </div>
               </div>
             </div>
+            {procedureCategoryOrder.map((category) => (
+              <button
+                id={`summary-${category}`}
+                type="button"
+                className={`summary-card summary-action summary-${summaryClass[category]}`}
+                key={category}
+                aria-haspopup="dialog"
+                aria-controls="status-summary-dialog"
+                aria-expanded={selectedSummaryCategory === category}
+                aria-label={`${procedureCategorySummaries[category].label} ${decisionsByCategory[category].length}개 목록 열기`}
+                onClick={() => setSelectedSummaryCategory(category)}
+              >
+                <span className="summary-card-copy"><b>{procedureCategorySummaries[category].label}</b><small>{procedureCategorySummaries[category].description}</small></span>
+                <strong>{decisionsByCategory[category].length}<small>개</small></strong>
+                <em>목록 보기</em>
+              </button>
+            ))}
           </div>
+          <SpecialLawSummary industryCategory={answers.industryCategory} evaluations={evaluation.specialLawEvaluations} />
+          <ProjectInputSummary answers={answers} />
           <div className="decision-banner" role="note"><span className="decision-icon" aria-hidden="true">i</span><p><strong>화면의 결과는 사전 검토용입니다.</strong> 신청 전에는 필지·시설 규모·물질 수량과 최신 관할기준을 담당기관에 확인해야 합니다.</p></div>
-          <LocalOrdinancePanel answers={answers} />
+          <OrdinanceDisclosure
+            key={`${answers.province}:${answers.city}`}
+            answers={answers}
+          />
 
           <div className="tab-row">
             <nav className="dashboard-tabs" aria-label="결과 보기" role="tablist">
@@ -306,7 +327,7 @@ export function DashboardClient() {
             {activeTab === "SWIMLANE" ? <Swimlane decisions={filteredDecisions} schedule={schedule} selectedId={selectedId} onSelect={setSelectedId} /> : null}
             {activeTab === "LIST" ? <ProcedureList decisions={filteredDecisions} schedule={schedule} onSelect={setSelectedId} /> : null}
             {activeTab === "SCHEDULE" ? <ScheduleView schedule={schedule} /> : null}
-            {activeTab === "LEGAL" ? <LegalView decisions={evaluation.decisions.filter((decision) => procedureCategoryForDecision(decision) !== "NOT_REQUIRED")} onSelect={setSelectedId} /> : null}
+            {activeTab === "LEGAL" ? <LegalView decisions={evaluation.decisions.filter((decision) => procedureCategoryForDecision(decision) !== "NOT_REQUIRED" || decision.specialLawImpacts?.length)} onSelect={setSelectedId} /> : null}
             {activeTab === "GAPS" ? <GapsView decisions={evaluation.decisions} /> : null}
           </div>
         </section>

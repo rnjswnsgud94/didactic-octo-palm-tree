@@ -54,8 +54,8 @@ export function ProcedureList({ decisions, schedule, onSelect }: {
             const timelineNode = schedule.projectTimeline?.nodes.find((item) => item.procedureId === decision.procedure.id);
             return (
               <tr key={decision.procedure.id}>
-                <td><StatusBadge status={decision.status} /></td>
-                <td><strong>{decision.procedure.name}</strong><small>{decision.procedure.domain}</small></td>
+                <td><StatusBadge status={decision.status} isDeemed={decision.isDeemed} /></td>
+                <td><strong>{decision.procedure.name}</strong><small>{decision.procedure.domain}</small>{decision.specialLawImpacts?.length ? <em className="special-law-chip">{decision.specialLawImpacts[0].effectLabel} · {decision.specialLawImpacts[0].statusLabel}</em> : null}</td>
                 <td>{stageLabels[decision.procedure.stage]}</td>
                 <td>{decision.procedure.receivingAuthority}</td>
                 <td>{!timelineNode ? "일정 제외" : `${formatProcessingDuration(timelineNode.processingDuration, timelineNode.processingUnit)} · 근거수준 ${planningConfidenceLabels[timelineNode.durationConfidence]}`}</td>
@@ -155,7 +155,7 @@ export function ScheduleView({ schedule }: { schedule: ScheduleResult }) {
       <div className="gantt-shell" aria-label="인허가와 공사를 합친 날짜별 일정">
         <div className="gantt-scale"><span>{timeline.projectStartDate}</span><span>중간</span><span>{completionDate}</span></div>
         <div className="gantt-row construction-gantt-row">
-          <div className="gantt-label"><strong>공장 건설공사</strong><span>{displayedConstructionStart} ~ {displayedConstructionEnd} · {timeline.constructionCalendarDays}일</span></div>
+          <div className="gantt-label"><strong>건설공사</strong><span>{displayedConstructionStart} ~ {displayedConstructionEnd} · {timeline.constructionCalendarDays}일</span></div>
           <div className="gantt-track"><span className="gantt-bar is-construction" style={{ left: (constructionStartOffset / denominator) * 100 + "%", width: Math.min(constructionWidth, Math.max(1.5, 100 - (constructionStartOffset / denominator) * 100)) + "%" }} /></div>
         </div>
         {activeNodes.map((node) => {
@@ -186,13 +186,21 @@ export function ScheduleView({ schedule }: { schedule: ScheduleResult }) {
 }
 
 export function LegalView({ decisions, onSelect }: { decisions: ProcedureDecision[]; onSelect: (id: string) => void }) {
-  const relevantCitationIds = new Set(decisions.flatMap((decision) => decision.procedure.citationIds));
+  const relevantCitationIds = new Set(decisions.flatMap((decision) => [
+    ...decision.procedure.citationIds,
+    ...decision.traces.flatMap((trace) => trace.citationIds),
+    ...(decision.specialLawImpacts ?? []).flatMap((impact) => impact.citationIds),
+  ]));
   const relevantSourceIds = new Set(catalog.citations.filter((citation) => relevantCitationIds.has(citation.id)).map((citation) => citation.sourceId));
   return (
     <div className="legal-grid">
       {catalog.legalSources.filter((source) => relevantSourceIds.has(source.id)).map((source) => {
         const sourceCitations = catalog.citations.filter((citation) => citation.sourceId === source.id && relevantCitationIds.has(citation.id));
-        const linked = decisions.filter((decision) => decision.procedure.citationIds.some((id) => sourceCitations.some((citation) => citation.id === id)));
+        const linked = decisions.filter((decision) => [
+          ...decision.procedure.citationIds,
+          ...decision.traces.flatMap((trace) => trace.citationIds),
+          ...(decision.specialLawImpacts ?? []).flatMap((impact) => impact.citationIds),
+        ].some((id) => sourceCitations.some((citation) => citation.id === id)));
         return (
           <article className="source-card" key={source.id}>
             <div className="source-card-topline"><span>{documentTypeLabels[source.documentType]}</span><em className={`source-status source-${source.status.toLowerCase()}`}>{sourceStatusLabels[source.status]}</em></div>

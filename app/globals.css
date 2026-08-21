@@ -51,7 +51,7 @@ a { color: inherit; }
 }
 .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
 .brand > span:last-child { display: grid; line-height: 1.2; }
-.brand strong { font-size: 15px; letter-spacing: -.02em; }
+.brand h1 { margin: 0; font-size: 15px; letter-spacing: -.02em; }
 .brand-mark { display: flex; align-items: flex-end; gap: 3px; width: 31px; height: 31px; padding: 6px; border-radius: 7px; background: var(--navy); }
 .brand-mark i { display: block; width: 5px; background: white; }
 .brand-mark i:nth-child(1) { height: 9px; opacity: .7; }
@@ -256,6 +256,7 @@ a { color: inherit; }
 .status-badge { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 2px 5px; border-radius: 4px; font-size: 8.5px; font-weight: 800; white-space: nowrap; }
 .status-badge > span:first-child { display: grid; place-items: center; width: 12px; height: 12px; border-radius: 50%; color: white; font-size: 7px; }
 .status-applies { color: #08716b; background: var(--teal-soft); }.status-applies > span:first-child { background: var(--teal); }
+.status-deemed { color: #174a78; background: #eaf2f8; }.status-deemed > span:first-child { background: #174a78; }
 .status-possibly_applies { color: #8f590d; background: var(--amber-soft); }.status-possibly_applies > span:first-child { background: var(--amber); }
 .status-needs_more_info { color: #66458d; background: var(--violet-soft); }.status-needs_more_info > span:first-child { background: var(--violet); }
 .status-does_not_apply { color: #637080; background: var(--slate-soft); }.status-does_not_apply > span:first-child { background: #7b8796; }
@@ -348,6 +349,186 @@ a { color: inherit; }
 .duration-procedure-chips { display: grid; gap: 5px; }.duration-procedure-chips > span { display: grid; gap: 2px; padding: 7px 8px; border: 1px solid var(--soft-line); border-left: 3px solid #9aa7b5; border-radius: 5px; background: white; }.duration-procedure-chips > span.is-extending { border-left-color: var(--red); }.duration-procedure-chips > span.is-unknown { border-left-color: var(--amber); background: #fffaf1; }.duration-procedure-chips > span.is-post-operation { border-left-color: #8994a4; background: #f4f6f8; }.duration-procedure-chips b { font-size: 8px; line-height: 1.35; }.duration-procedure-chips small { color: var(--muted); font-size: 7px; }.duration-procedure-chips em { padding: 12px 4px; color: var(--muted); font-size: 8px; font-style: normal; text-align: center; }
 .duration-flow-legend { margin: 8px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
 
+/* 2026 compact workbench refresh: quiet surfaces, one primary accent, readable type. */
+:root {
+  --ink: #172033;
+  --muted: #5f6b7a;
+  --line: #d9dee7;
+  --soft-line: #eaedf2;
+  --canvas: #f6f7f9;
+  --navy: #174a78;
+  --navy-dark: #10395f;
+  --teal: #087a72;
+  --shadow: 0 4px 18px rgba(23, 32, 51, .05);
+  --radius: 10px;
+}
+body { font-size: 16px; }
+.topbar { height: 58px; padding: 0 clamp(18px, 3vw, 40px); }
+.brand { gap: 9px; }
+.brand-mark { width: 29px; height: 29px; border-radius: 6px; }
+.brand > span:last-child small { margin-top: 1px; color: var(--muted); font-size: 11px; }
+.brand h1 { margin: 0; font-size: 15px; }
+.data-health { font-size: 13px; }
+.share-button, .primary-button { min-height: 38px; padding: 8px 13px; font-size: 13px; }
+.dashboard-grid { grid-template-columns: 370px minmax(0, 1fr); gap: 16px; padding: 16px clamp(16px, 3vw, 40px) 42px; }
+.wizard-panel, .workspace { box-shadow: var(--shadow); }
+.wizard-panel { top: 74px; }
+.wizard-heading { padding: 17px 18px 14px; }
+.wizard-heading h2 { font-size: 19px; }
+.eyebrow { font-size: 12px; }
+.step-count, .wizard-steps strong { font-size: 13px; }
+.wizard-steps small { font-size: 11px; }
+.wizard-body { max-height: calc(100vh - 294px); padding: 18px; }
+.wizard-question { margin-bottom: 24px; }
+.wizard-question legend { font-size: 14px; }
+.question-hint, .question-error { font-size: 13px; line-height: 1.5; }
+.choice-button { min-height: 46px; }
+.choice-button span { font-size: 13px; }
+.choice-button small { font-size: 11px; }
+.segmented button { min-height: 42px; font-size: 13px; }
+.text-input, .wizard-question select, .scenario-picker select, .filterbar select { height: 42px; font-size: 14px; }
+.two-column-fields label, .number-field, .compact-tristates > label { font-size: 12px; }
+.input-with-unit input { height: 41px; font-size: 14px; }
+.input-with-unit em { top: 10px; font-size: 12px; }
+.threshold-note, .inline-notice { font-size: 12px; }
+.inline-notice strong { font-size: 13px; }
+.wizard-footer button { min-height: 40px; font-size: 13px; }
+.special-law-picker { display: grid; gap: 8px; }
+.special-law-picker label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; background: white; cursor: pointer; }
+.special-law-picker label:hover { border-color: #9eb4c8; }
+.special-law-picker label.is-selected { border-color: var(--navy); background: #f2f7fb; box-shadow: inset 3px 0 0 var(--navy); }
+.special-law-picker input { width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--navy); }
+.special-law-picker span { display: grid; gap: 3px; }
+.special-law-picker strong { font-size: 13px; }
+.special-law-picker small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.special-law-status-field { display: grid; gap: 6px; margin-top: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcfd; }
+.special-law-status-field > span { font-size: 13px; font-weight: 800; }
+.special-law-status-field > small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.workspace-toolbar { align-items: center; justify-content: space-between; padding: 20px 22px; }
+.workspace-title h2 { margin: 0; font-size: clamp(21px, 2vw, 28px); letter-spacing: -.035em; }
+.workspace-title p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.scenario-caption { margin-left: auto; }
+.scenario-caption strong { font-size: 13px; }
+.scenario-caption span { font-size: 12px; }
+.scenario-caption em { display: none; }
+.utility-actions button { min-height: 34px; padding: 6px 10px; font-size: 12px; }
+.summary-strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.summary-card { min-height: 112px; padding: 17px; }
+.summary-card-copy b { font-size: 13px; }
+.summary-card-copy small { font-size: 11px; }
+.summary-card > strong { font-size: 29px; }
+.summary-card > strong > small, .summary-action em { font-size: 11px; }
+.summary-schedule { grid-column: span 2; grid-template-rows: minmax(84px, 1fr) auto; }
+.duration-summary-trigger { padding: 15px 17px 12px; }
+.duration-summary-trigger > strong { font-size: 27px; }
+.duration-summary-trigger > strong > small, .duration-summary-trigger > em { font-size: 11px; }
+.summary-scenario-row > span, .scenario-switch button { font-size: 11px; }
+.special-law-summary { margin: 16px 20px 0; padding: 16px; border: 1px solid #cad8e5; border-radius: 9px; background: #f7fafc; }
+.special-law-summary > header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.special-law-summary > header span { color: var(--navy); font-size: 11px; font-weight: 800; }
+.special-law-summary h2 { margin: 2px 0 0; font-size: 17px; }
+.special-law-summary > header a { color: var(--navy); font-size: 12px; font-weight: 800; text-decoration: none; }
+.special-law-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin-top: 12px; }
+.special-law-item { padding: 12px; border: 1px solid var(--line); border-left: 3px solid var(--navy); border-radius: 7px; background: white; }
+.special-law-item > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.special-law-item > div span, .special-law-item > div em { font-size: 12px; font-style: normal; font-weight: 800; }
+.special-law-item > div span { color: var(--navy); }
+.special-law-item > div em { padding: 2px 6px; border-radius: 10px; background: #eaf2f8; color: var(--navy); }
+.special-law-item.status-future { border-left-color: var(--amber); }
+.special-law-item.status-future > div em { background: var(--amber-soft); color: #825112; }
+.special-law-item.status-unconfirmed { border-left-color: var(--amber); }
+.special-law-item.status-unconfirmed > div em { background: var(--amber-soft); color: #825112; }
+.special-law-item.status-mismatch { border-left-color: var(--red); }
+.special-law-item.status-mismatch > div em { background: var(--red-soft); color: var(--red); }
+.special-law-item h3 { margin: 7px 0 3px; font-size: 14px; }
+.special-law-item p, .special-law-item small { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.special-law-item p { margin: 0 0 6px; }
+.special-law-empty { display: grid; gap: 3px; margin-top: 12px; padding: 12px; border: 1px dashed #b9c8d6; border-radius: 7px; background: white; }
+.special-law-empty strong { font-size: 13px; }
+.special-law-empty span, .special-law-disclosure { color: var(--muted); font-size: 12px; }
+.special-law-disclosure { margin: 10px 0 0; }
+.project-input-summary { padding: 0; border-top: 1px solid var(--soft-line); background: #fafbfc; }
+.project-input-summary-heading { display: flex; align-items: center; justify-content: space-between; margin: 0; padding: 13px 20px; cursor: pointer; list-style: none; }
+.project-input-summary-heading::-webkit-details-marker { display: none; }
+.project-input-summary-heading h2 { margin: 0; font-size: 14px; }
+.project-input-summary-heading p { margin: 1px 0 0; font-size: 11px; }
+.project-input-summary-heading > span { color: var(--navy); font-size: 12px; font-weight: 800; }
+.project-input-summary-heading .details-action::before { content: "펼치기"; }
+.project-input-summary details[open] .details-action::before { content: "접기"; }
+.project-input-summary-sections { padding: 0 20px 18px; }
+.project-input-summary-section h3 { font-size: 12px; }
+.project-input-summary-section dt, .project-input-summary-section dd { font-size: 11px; }
+.decision-banner p { font-size: 12px; }
+.ordinance-disclosure { margin: 12px 20px 0; border: 1px solid var(--line); border-radius: 8px; background: #fbfcfd; }
+.ordinance-disclosure > summary { padding: 11px 13px; color: var(--navy); cursor: pointer; font-size: 13px; font-weight: 800; }
+.ordinance-disclosure[open] > summary { border-bottom: 1px solid var(--soft-line); }
+.ordinance-disclosure .local-ordinance-panel { margin: 0; border: 0; border-radius: 0; }
+.dashboard-tabs button { min-height: 48px; font-size: 13px; }
+.check-control { font-size: 12px; }
+.search-field input, .filterbar select { font-size: 13px; }
+.procedure-card > strong, .lane-header { font-size: 12px; }
+.swimlane-legend, .phase-route strong, .flow-instruction,
+.swimlane-corner, .stage-header span, .flow-header small { font-size: 11px; }
+.procedure-card-topline > span:last-child, .procedure-meta, .procedure-route { font-size: 11px; }
+.procedure-meta em, .route-chip em, .route-more { font-size: 11px; }
+.unscheduled-procedures p, .unscheduled-procedures button { font-size: 11px; }
+.status-badge { font-size: 11px; }
+.special-law-chip { position: relative; z-index: 1; display: inline-flex; width: fit-content; padding: 3px 6px; border-radius: 4px; background: #eaf2f8; color: var(--navy); font-size: 11px; font-style: normal; font-weight: 800; }
+.procedure-table td .special-law-chip { display: flex; margin-top: 5px; }
+.panel-footnote, .procedure-table th, .procedure-table td,
+.procedure-table td:nth-child(2) small, .text-button, .critical-text { font-size: 11px; }
+.local-ordinance-panel { margin: 0 0 16px; }
+.local-ordinance-panel h2 { font-size: 17px; }
+.local-ordinance-panel > header p, .local-ordinance-card p { font-size: 11px; }
+.local-ordinance-card h3 { font-size: 13px; }
+.local-ordinance-card > span, .local-ordinance-card a, .local-ordinance-card small,
+.local-ordinance-card .local-ordinance-links a small, .local-ordinance-links em,
+.local-ordinance-more summary, .local-ordinance-notice,
+.local-ordinance-caveat, .local-ordinance-checked { font-size: 11px; }
+.local-ordinance-card, .local-ordinance-links a { min-width: 0; overflow-wrap: anywhere; }
+.schedule-summary span, .schedule-summary small, .schedule-coverage span,
+.schedule-coverage small, .schedule-warning, .schedule-empty-state span,
+.timeline-milestones span, .timeline-milestones small, .gantt-scale,
+.gantt-label strong, .gantt-label span, .post-operation-list > p,
+.post-operation-list li, .warning-list { font-size: 11px; }
+.source-card-topline, .source-status, .source-card > p, .source-card li,
+.source-card-actions a, .source-card-actions button, .gap-section p,
+.gap-section li { font-size: 11px; }
+.special-law-impact-section { padding: 14px; border: 1px solid #cad8e5; border-left: 3px solid var(--navy); background: #f7fafc; }
+.special-law-impact-list { display: grid; gap: 8px; }
+.special-law-impact-list article { padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: white; }
+.special-law-impact-list article > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.special-law-impact-list article p { margin: 6px 0; }
+.special-law-impact-list article small { display: block; color: var(--muted); font-size: 12px; }
+.special-law-impact-list article a { display: inline-block; margin-top: 7px; color: var(--navy); font-size: 12px; font-weight: 800; text-decoration: none; }
+.impact-status { padding: 2px 6px; border-radius: 10px; background: #eaf2f8; color: var(--navy); font-size: 11px; }
+.impact-status.status-future { background: var(--amber-soft); color: #825112; }
+.impact-status.status-unconfirmed { background: var(--amber-soft); color: #825112; }
+.impact-status.status-mismatch { background: var(--red-soft); color: var(--red); }
+.drawer-kicker, .reason-box > span, .detail-grid dt, .duration-breakdown dt,
+.duration-breakdown dd, .duration-section > small, .section-heading-row span,
+.citation-card > span, .citation-card > strong, .citation-card small,
+.citation-empty, .law-api-controls label > span, .law-api-controls select,
+.law-api-controls button, .law-api-controls > a, .law-api-result strong,
+.law-api-result span, .law-api-result small, .law-api-result p,
+.law-api-result a, .law-api-error, .review-note strong,
+.review-note small { font-size: 11px; }
+.reason-box p, .detail-grid dd, .drawer-section p, .drawer-section li { font-size: 12px; }
+.drawer-section h3 { font-size: 14px; }
+.citation-card p, .review-note p { font-size: 11px; }
+.deeming-section small { font-size: 11px; }
+.status-dialog-panel > header span, .status-dialog-panel header p,
+.status-dialog-count, .status-dialog-list h3 small,
+.status-dialog-list li strong, .status-dialog-list li span,
+.status-dialog-list li p, .status-dialog-list li small,
+.duration-flow-empty span, .duration-route-summary span,
+.duration-result-note span, .duration-stage-flow > li > header > span,
+.duration-stage-flow > li > header strong,
+.duration-stage-flow > li > header small, .duration-procedure-chips b,
+.duration-procedure-chips small, .duration-procedure-chips em,
+.duration-flow-legend { font-size: 11px; }
+.dashboard-footer { font-size: 11px; }
+
 @media (max-width: 1100px) {
   .dashboard-grid { grid-template-columns: 270px minmax(0, 1fr); padding-left: 18px; padding-right: 18px; }
   .hero-band, .topbar { padding-left: 28px; padding-right: 28px; }
@@ -370,6 +551,21 @@ a { color: inherit; }
   .dashboard-footer { flex-direction: column; }.dashboard-footer span { white-space: normal; }
 }
 
+@media (max-width: 1100px) {
+  .summary-schedule { grid-column: span 2; }
+  .summary-card:last-child { grid-column: 1 / -1; }
+  .summary-card { min-height: 104px; }
+  .summary-schedule { min-height: 104px; }
+  .workspace-toolbar { align-items: flex-start; flex-wrap: wrap; }
+  .scenario-caption { margin-left: 0; text-align: left; }
+}
+
+@media (max-width: 820px) {
+  .workspace-title { width: 100%; }
+  .project-input-summary-heading { align-items: center; flex-direction: row; }
+  .special-law-list { grid-template-columns: 1fr 1fr; }
+}
+
 @media (max-width: 520px) {
   .share-button { padding: 8px 10px; font-size: 10px; }
   .hero-band h1 { font-size: 23px; }.hero-band p { font-size: 11px; }
@@ -384,6 +580,71 @@ a { color: inherit; }
   .detail-grid { grid-template-columns: 1fr; }.detail-grid div { border-right: 0; }.detail-grid div:nth-last-child(-n+2) { border-bottom: 1px solid var(--soft-line); }.detail-grid div:last-child { border-bottom: 0; }
 }
 
+@media (max-width: 520px) {
+  .summary-card:last-child { grid-column: 1 / -1; }
+  .summary-schedule { grid-column: 1 / -1; }
+  .share-button { font-size: 12px; }
+  .special-law-summary { margin: 12px 11px 0; padding: 13px; }
+  .special-law-list { grid-template-columns: 1fr; }
+  .special-law-summary > header { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .project-input-summary-heading { padding: 13px 14px; }
+  .project-input-summary-heading p,
+  .project-input-summary-section dt, .project-input-summary-section dd,
+  .summary-card > strong > small, .summary-action em,
+  .duration-summary-trigger > strong > small,
+  .duration-summary-trigger > em, .summary-scenario-row > span,
+  .scenario-switch button { font-size: 12px; }
+  .workspace-title h2 { font-size: 22px; }
+  .ordinance-disclosure { margin-left: 11px; margin-right: 11px; }
+  .swimlane-legend, .phase-route strong, .flow-instruction,
+  .swimlane-corner, .stage-header span, .flow-header small { font-size: 12px; }
+  .procedure-card > strong, .lane-header { font-size: 13px; }
+  .procedure-card-topline > span:last-child, .procedure-meta, .procedure-route,
+  .status-badge, .special-law-chip, .unscheduled-procedures p,
+  .unscheduled-procedures button { font-size: 12px; }
+  .procedure-meta em, .route-chip em, .route-more,
+  .status-badge > span:first-child { font-size: 11px; }
+  .procedure-table th, .procedure-table td,
+  .procedure-table td:nth-child(2) strong,
+  .procedure-table td:nth-child(2) small, .text-button,
+  .critical-text { font-size: 12px; }
+  .gantt-scale, .gantt-label strong, .gantt-label span { font-size: 12px; }
+  .local-ordinance-panel > header p, .local-ordinance-card p,
+  .local-ordinance-card > span, .local-ordinance-card a,
+  .local-ordinance-card small,
+  .local-ordinance-card .local-ordinance-links a small,
+  .local-ordinance-links em, .local-ordinance-more summary,
+  .local-ordinance-notice, .local-ordinance-caveat,
+  .local-ordinance-checked { font-size: 12px; }
+  .schedule-summary span, .schedule-summary small, .schedule-coverage span,
+  .schedule-coverage small, .schedule-warning, .schedule-empty-state span,
+  .timeline-milestones span, .timeline-milestones small,
+  .post-operation-list > p, .post-operation-list li, .warning-list,
+  .source-card-topline, .source-status, .source-card > p, .source-card li,
+  .source-card-actions a, .source-card-actions button,
+  .gap-section p, .gap-section li { font-size: 12px; }
+  .drawer-kicker, .detail-grid dt, .detail-grid dd,
+  .duration-breakdown dt, .duration-breakdown dd,
+  .citation-card > span, .citation-card > strong,
+  .citation-card p, .citation-card small,
+  .review-note strong, .review-note p, .review-note small { font-size: 12px; }
+  .reason-box > span, .duration-section > small, .section-heading-row span,
+  .citation-empty, .law-api-controls label > span, .law-api-controls select,
+  .law-api-controls button, .law-api-controls > a, .law-api-result strong,
+  .law-api-result span, .law-api-result small, .law-api-result p,
+  .law-api-result a, .law-api-error, .deeming-section small,
+  .status-dialog-panel > header span, .status-dialog-panel header p,
+  .status-dialog-count, .status-dialog-list h3 small,
+  .status-dialog-list li strong, .status-dialog-list li span,
+  .status-dialog-list li p, .status-dialog-list li small,
+  .duration-flow-empty span, .duration-route-summary span,
+  .duration-result-note span, .duration-stage-flow > li > header > span,
+  .duration-stage-flow > li > header strong,
+  .duration-stage-flow > li > header small, .duration-procedure-chips b,
+  .duration-procedure-chips small, .duration-procedure-chips em,
+  .duration-flow-legend, .dashboard-footer { font-size: 12px; }
+}
+
 @media print {
   @page { size: A4 landscape; margin: 12mm; }
   body { background: white; font-size: 10px; }
@@ -391,6 +652,7 @@ a { color: inherit; }
   .hero-band { min-height: 0; padding: 16px 18px; color: #111; background: white; border: 1px solid #999; }.hero-band p { color: #333; }
   .dashboard-grid { display: block; padding: 12px 0; }.workspace { box-shadow: none; }.view-panel { min-height: 0; }.swimlane-scroll { overflow: visible; }.swimlane-grid { min-width: 0; zoom: .67; }
   .dashboard-footer { padding: 10px 0; }.dashboard-tabs button:not(.is-active) { display: none; }
+  .project-input-summary details:not([open]) .project-input-summary-sections { display: grid !important; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
