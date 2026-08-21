@@ -49,6 +49,7 @@ function denseFixture(count: number): {
       activeEdgeIds: [],
       criticalProcedureIds: [],
       unknownDurationProcedureIds: [],
+      completedCheckpoints: [],
       warnings: [],
       projectTimeline: null,
     },
@@ -96,6 +97,40 @@ function crossesRect(
 }
 
 describe("swimlane dense procedure columns", () => {
+  it("edits a card-level user duration without nesting form controls in the detail button", () => {
+    const fixture = denseFixture(1);
+    const onOverride = vi.fn();
+    const view = render(
+      <Swimlane
+        decisions={fixture.decisions}
+        schedule={fixture.schedule}
+        selectedId={null}
+        userDurationOverrides={{}}
+        onSelect={vi.fn()}
+        onUserDurationOverrideChange={onOverride}
+      />,
+    );
+    const procedure = fixture.decisions[0].procedure;
+    const card = view.container.querySelector(".procedure-card") as HTMLElement;
+
+    expect(card.querySelector("button button")).toBeNull();
+    fireEvent.click(within(card).getByRole("button", { name: /내 예상.*기간 입력/ }));
+    fireEvent.change(
+      within(card).getByLabelText(`${procedure.name} 사용자 예상 처리기간`),
+      { target: { value: "30" } },
+    );
+    fireEvent.change(
+      within(card).getByLabelText(`${procedure.name} 사용자 예상 처리기간 단위`),
+      { target: { value: "CALENDAR_DAY" } },
+    );
+    fireEvent.click(within(card).getByRole("button", { name: "반영" }));
+
+    expect(onOverride).toHaveBeenCalledWith(procedure.id, {
+      value: 30,
+      unit: "CALENDAR_DAY",
+    });
+  });
+
   it("switches every lane cell when the whole flow column reaches ten procedures", () => {
     expect(denseProcedureColumnThreshold).toBe(10);
     const onSelect = vi.fn();
@@ -136,14 +171,14 @@ describe("swimlane dense procedure columns", () => {
     for (const cell of tenCells) {
       expect(cell).toHaveClass("is-dense");
       expect(cell).toHaveAttribute("data-item-count", "5");
-      expect(within(cell as HTMLElement).getAllByRole("button")).toHaveLength(5);
+      expect(cell.querySelectorAll(".procedure-card-main")).toHaveLength(5);
     }
     expect(
       (view.container.querySelector(".swimlane-grid") as HTMLElement).style
         .gridTemplateColumns,
     ).toContain("minmax(440px, 2fr)");
 
-    const clickedCard = view.container.querySelectorAll<HTMLButtonElement>(".procedure-card")[4];
+    const clickedCard = view.container.querySelectorAll<HTMLButtonElement>(".procedure-card-main")[4];
     const clickedName = clickedCard
       .getAttribute("aria-label")
       ?.replace(/ 상세 보기$/, "");
@@ -159,11 +194,27 @@ describe("swimlane dense procedure columns", () => {
     expect(orthogonalConnectorPath(
       { top: 100, right: 260, bottom: 160, left: 180, width: 80, height: 60 },
       { top: 210, right: 480, bottom: 270, left: 400, width: 80, height: 60 },
-    )).toBe("M 260 130 H 330 V 240 H 395");
+    )).toBe("M 260 130 H 330 V 240 H 396");
     expect(orthogonalConnectorPath(
       { top: 0, right: 0, bottom: 0, left: 0, width: 0, height: 0 },
       { top: 210, right: 480, bottom: 270, left: 400, width: 80, height: 60 },
     )).toBeNull();
+  });
+
+  it("reserves a straight runway for the arrowhead before an adjacent target card", () => {
+    const target = { top: 210, right: 380, bottom: 270, left: 300, width: 80, height: 60 };
+    const path = orthogonalConnectorPath(
+      { top: 100, right: 260, bottom: 160, left: 180, width: 80, height: 60 },
+      target,
+    );
+    const points = svgPathPoints(path!);
+    const beforeTarget = points.at(-2)!;
+    const endpoint = points.at(-1)!;
+
+    expect(path).not.toBeNull();
+    expect(endpoint).toEqual({ x: target.left - 4, y: 240 });
+    expect(beforeTarget.y).toBe(endpoint.y);
+    expect(Math.abs(endpoint.x - beforeTarget.x)).toBeGreaterThanOrEqual(12);
   });
 
   it("detours around intervening cards without lifting the line over their content", () => {

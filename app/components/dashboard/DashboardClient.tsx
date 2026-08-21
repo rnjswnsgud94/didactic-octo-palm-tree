@@ -12,6 +12,7 @@ import {
 } from "@/app/components/dashboard/constants";
 import { DashboardTabIcon } from "@/app/components/dashboard/DashboardTabIcon";
 import { ActionPlanView, GapsView, LegalView, ProcedureList, ScheduleView } from "@/app/components/dashboard/DashboardViews";
+import { InputCodeDialog } from "@/app/components/dashboard/InputCodeDialog";
 import { LocalJurisdictionLinks, LocalOrdinancePanel } from "@/app/components/dashboard/LocalOrdinancePanel";
 import { ProcedureDrawer } from "@/app/components/dashboard/ProcedureDrawer";
 import { StatusSummaryDialog } from "@/app/components/dashboard/StatusSummaryDialog";
@@ -24,7 +25,14 @@ import { catalog, type ScenarioAnswers } from "@/lib/data/catalog";
 import { evaluateProject } from "@/lib/engine/pipeline";
 import type { DurationScenario } from "@/lib/engine/schedule";
 import { formatCalendarPeriod } from "@/lib/format-duration";
-import { decodeShareState, encodeShareState, ShareStateTooLongError } from "@/lib/share-state";
+import {
+  decodeInputCode,
+  decodeShareState,
+  encodeInputCode,
+  encodeShareState,
+  InputCodeError,
+  ShareStateTooLongError,
+} from "@/lib/share-state";
 
 const defaultAnswers: ScenarioAnswers = {
   assessmentDate: catalog.coverage.assessmentDefault,
@@ -98,6 +106,9 @@ const defaultAnswers: ScenarioAnswers = {
   regionalSpecialZonePlanIncludedPermitIds: [],
   permitCoordination: null,
   airEmissionFacility: null,
+  airTotalManagementBusinessTarget: null,
+  supplementalPermitReviewedIds: [],
+  supplementalPermitTargetIds: [],
   waterDischargeFacility: null,
   noiseVibrationFacility: null,
   environmentalAssessmentType: null,
@@ -112,6 +123,7 @@ const defaultAnswers: ScenarioAnswers = {
   lpgSpecificUseFacility: null,
   cityGasSpecificUseFacility: null,
   psmCovered: null,
+  psmCoversSameHazardPreventionScope: null,
   fireFacilityWork: null,
   fireWorkSupervisionTarget: null,
   firstFireSelfInspectionTarget: null,
@@ -144,6 +156,7 @@ const defaultAnswers: ScenarioAnswers = {
   powerIncreaseMw: null,
   waterDemandM3Day: null,
   wastewaterM3Day: null,
+  userDurationOverrides: {},
 };
 const validTabs = new Set(Object.keys(tabLabels));
 const summaryClass: Record<ProcedureCategory, string> = {
@@ -181,10 +194,14 @@ export function DashboardClient() {
   const [includeConditional, setIncludeConditional] = useState(true);
   const [includePractical, setIncludePractical] = useState(true);
   const [shareMessage, setShareMessage] = useState("");
+  const [inputCode, setInputCode] = useState<string | null>(null);
+  const [inputCodeError, setInputCodeError] = useState("");
 
   useEffect(() => {
+    const initialSearch = window.location.search;
+    if (!new URLSearchParams(initialSearch).has("v")) return;
     const timeout = window.setTimeout(() => {
-      const restored = decodeShareState(window.location.search, defaultAnswers);
+      const restored = decodeShareState(initialSearch, defaultAnswers);
       setAnswers(restored.answers);
       if (restored.tab && validTabs.has(restored.tab)) setActiveTab(restored.tab as DashboardTab);
       if (restored.warning) setShareMessage(restored.warning);
@@ -199,6 +216,9 @@ export function DashboardClient() {
         window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
       } catch (error) {
         if (!(error instanceof ShareStateTooLongError)) throw error;
+        // Never leave a previous project's query string attached to a newer,
+        // larger input-code state that cannot be represented safely in a URL.
+        window.history.replaceState(null, "", window.location.pathname);
       }
     }, 180);
     return () => window.clearTimeout(timeout);
@@ -207,6 +227,7 @@ export function DashboardClient() {
   const evaluation = useMemo(() => evaluateProject(answers, { includeConditional, includePractical }), [answers, includeConditional, includePractical]);
   const schedule = evaluation.schedules[durationScenario];
   const timeline = schedule.projectTimeline;
+  const userDurationOverrideCount = Object.keys(answers.userDurationOverrides).length;
   const unknownOperationReadyDurationCount = timeline
     ? timeline.unknownPlanningDurationProcedureIds.filter(
         (id) => !timeline.postOperationProcedureIds.includes(id),
@@ -243,16 +264,24 @@ export function DashboardClient() {
     : timeline.durationStatus === "MINIMUM_ONLY"
       ? {
           value: formatCalendarPeriod(timeline.projectStartDate, timeline.minimumKnownCompletionDate),
-          detail: `누락 구성요소 · ${minimumOnlyMissingComponents.join(" · ") || "일정 구조 검증 항목"}`,
-          description: "공식 처리기간이 확인된 절차만 합산한 값으로, 총 소요기간이 아닙니다.",
+          detail: `누락 구성요소 · ${minimumOnlyMissingComponents.join(" · ") || "일정 구조 검증 항목"}${durationScenario === "USER" ? ` · 사용자 예상 ${timeline.userDurationOverrideProcedureIds.length}건 반영` : ""}`,
+          description: durationScenario === "USER"
+            ? "사용자 예상값과 확인된 공식 처리기간만 합산한 일정 하한입니다."
+            : "공식 처리기간이 확인된 절차만 합산한 값으로, 총 소요기간이 아닙니다.",
           isMinimumOnly: true,
         }
       : {
           value: formatCalendarPeriod(timeline.projectStartDate, timeline.operationReadyDate ?? timeline.minimumKnownCompletionDate),
-          detail: durationScenario === "MIN" ? "공식 최단 처리경로" : "공식 표준 처리경로",
+          detail: durationScenario === "MIN"
+            ? "공식 최단 처리경로"
+            : durationScenario === "USER"
+              ? `사용자 예상 ${timeline.userDurationOverrideProcedureIds.length}건 반영`
+              : "공식 기준 처리경로",
           description: durationScenario === "MIN"
             ? "가장 빠른 공식 처리경로를 기준으로 산정합니다."
-            : "확인된 공식 처리기간의 통상 경로를 기준으로 산정합니다.",
+            : durationScenario === "USER"
+              ? "카드에 입력한 실무 예상값을 우선 적용하며, 없는 절차는 공식 기준값을 사용합니다."
+              : "확인된 공식 처리분기와 관할 기준을 적용하며 실제 평균을 뜻하지 않습니다.",
           isMinimumOnly: false,
         };
   const durationHeading = !timeline
@@ -291,6 +320,19 @@ export function DashboardClient() {
     setAnswers((current) => ({ ...current, [key]: value }));
   }
 
+  function changeUserDurationOverride(
+    procedureId: string,
+    value: ScenarioAnswers["userDurationOverrides"][string] | null,
+  ) {
+    setAnswers((current) => {
+      const next = { ...current.userDurationOverrides };
+      if (value === null) delete next[procedureId];
+      else next[procedureId] = value;
+      return { ...current, userDurationOverrides: next };
+    });
+    setDurationScenario("USER");
+  }
+
   async function copyShareLink() {
     let link: string;
     try {
@@ -310,6 +352,43 @@ export function DashboardClient() {
     window.setTimeout(() => setShareMessage(""), 2600);
   }
 
+  function openInputCodeDialog() {
+    try {
+      setInputCodeError("");
+      setInputCode(encodeInputCode(answers));
+    } catch (error) {
+      if (!(error instanceof ShareStateTooLongError) && !(error instanceof InputCodeError)) throw error;
+      // Import remains available even if the current state is too large to
+      // export. The dialog explains why no initial code could be generated.
+      setInputCodeError(error.message);
+      setInputCode("");
+    }
+  }
+
+  function closeInputCodeDialog() {
+    setInputCode(null);
+    setInputCodeError("");
+    window.setTimeout(() => document.getElementById("input-code-trigger")?.focus(), 0);
+  }
+
+  function importInputCode(code: string) {
+    try {
+      const restoredAnswers = decodeInputCode(code, defaultAnswers);
+      setAnswers(restoredAnswers);
+      setActiveStep(0);
+      setIsDurationDialogOpen(false);
+      setSelectedSummaryCategory(null);
+      setSelectedId(null);
+      closeInputCodeDialog();
+      setShareMessage("입력값을 코드에서 복원했습니다.");
+      window.setTimeout(() => setShareMessage(""), 3000);
+      return null;
+    } catch (error) {
+      if (error instanceof InputCodeError) return error.message;
+      throw error;
+    }
+  }
+
   function resetDashboard() {
     setAnswers(defaultAnswers);
     setActiveStep(0);
@@ -324,6 +403,8 @@ export function DashboardClient() {
     setRequiredOnly(false);
     setIncludeConditional(true);
     setIncludePractical(true);
+    setInputCode(null);
+    setInputCodeError("");
   }
 
   function closeStatusDialog() {
@@ -350,6 +431,7 @@ export function DashboardClient() {
         </a>
         <div className="topbar-meta">
           <span className="data-health"><i /> 법령 검토 기준 · {catalog.coverage.lastLegalReviewAt}</span>
+          <button id="input-code-trigger" type="button" className="input-code-button" aria-label="입력 코드 저장·불러오기" aria-haspopup="dialog" aria-controls="input-code-dialog" aria-expanded={inputCode !== null} onClick={openInputCodeDialog}>입력 코드</button>
           <button type="button" className="share-button" onClick={copyShareLink}>공유 링크 복사</button>
         </div>
       </header>
@@ -399,8 +481,9 @@ export function DashboardClient() {
               <div className="summary-scenario-row">
                 <span>소요기간 기준</span>
                 <div className="scenario-switch" aria-label="소요기간 기준">
-                  {(["MIN", "TYPICAL"] as DurationScenario[]).map((scenario) => <button type="button" key={scenario} aria-pressed={durationScenario === scenario} className={durationScenario === scenario ? "is-selected" : ""} onClick={() => setDurationScenario(scenario)}>{scenario === "MIN" ? "최소기간" : "통상"}</button>)}
+                  {(["MIN", "TYPICAL", "USER"] as DurationScenario[]).map((scenario) => <button type="button" key={scenario} aria-pressed={durationScenario === scenario} className={durationScenario === scenario ? "is-selected" : ""} onClick={() => setDurationScenario(scenario)}>{scenario === "MIN" ? "최소기간" : scenario === "USER" ? `내 예상${userDurationOverrideCount ? ` ${userDurationOverrideCount}` : ""}` : "공식 기준"}</button>)}
                 </div>
+                {userDurationOverrideCount ? <button type="button" className="clear-user-durations" onClick={() => { changeAnswer("userDurationOverrides", {}); setDurationScenario("TYPICAL"); }}>예상값 전체 삭제</button> : null}
               </div>
             </div>
             {procedureCategoryOrder.map((category) => (
@@ -451,7 +534,7 @@ export function DashboardClient() {
           ) : null}
 
           <div id="dashboard-result-panel" className="view-panel" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
-            {activeTab === "SWIMLANE" ? <Swimlane decisions={filteredDecisions} schedule={schedule} selectedId={selectedId} onSelect={setSelectedId} /> : null}
+            {activeTab === "SWIMLANE" ? <Swimlane decisions={filteredDecisions} schedule={schedule} selectedId={selectedId} userDurationOverrides={answers.userDurationOverrides} onSelect={setSelectedId} onUserDurationOverrideChange={changeUserDurationOverride} /> : null}
             {activeTab === "ACTION" ? <ActionPlanView decisions={evaluation.decisions} schedule={schedule} answers={answers} onSelect={setSelectedId} /> : null}
             {activeTab === "LIST" ? <ProcedureList decisions={filteredDecisions} schedule={schedule} onSelect={setSelectedId} /> : null}
             {activeTab === "SCHEDULE" ? <ScheduleView schedule={schedule} answers={answers} /> : null}
@@ -471,6 +554,7 @@ export function DashboardClient() {
         />
       ) : null}
       {isDurationDialogOpen ? <TotalDurationDialog schedule={schedule} onClose={closeDurationDialog} /> : null}
+      {inputCode !== null ? <InputCodeDialog initialCode={inputCode} initialError={inputCodeError} onClose={closeInputCodeDialog} onImport={importInputCode} /> : null}
       <ProcedureDrawer decision={selectedDecision} schedule={schedule} onClose={() => setSelectedId(null)} />
       {shareMessage ? <div className="toast" role="status">{shareMessage}</div> : null}
     </main>

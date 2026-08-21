@@ -43,6 +43,34 @@ function readBlob(blob: Blob) {
 }
 
 describe("action plan", () => {
+  it("shows a validated completion checkpoint even when construction dates are missing", () => {
+    const answers: ScenarioAnswers = {
+      ...industrialComplexAnswers(),
+      plannedConstructionStartDate: null,
+      plannedConstructionEndDate: null,
+      industrialComplexOccupancyContractStatus: "COMPLETED",
+    };
+    const evaluation = renderActionPlan(answers);
+
+    expect(evaluation.schedules.TYPICAL.projectTimeline).toBeNull();
+    expect(evaluation.schedules.TYPICAL.completedCheckpoints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          procedureId: "industrial-complex-occupancy-contract",
+          confirmedAsOfDate: "2026-08-21",
+        }),
+      ]),
+    );
+    const contractTitle = screen.getByText("산업단지 입주계약·변경계약", {
+      selector: ".action-plan-card > header > strong",
+    });
+    const contractCard = contractTitle.closest("article");
+    expect(contractCard).not.toBeNull();
+    expect(contractCard).toHaveTextContent("기준일 현재 완료");
+    expect(contractCard).toHaveTextContent("완료 증빙을 보관");
+    expect(contractCard).not.toHaveTextContent("접수용 구비서류를 확정");
+  });
+
   it("keeps a fully matched draft include on the roadmap while exposing legal review", () => {
     renderActionPlan();
 

@@ -159,6 +159,7 @@ type FastTrackConfig = {
   lawName: string;
   scope: string;
   citationIds: string[];
+  durationCitationIds: string[];
 };
 
 const fastTracks: FastTrackConfig[] = [
@@ -173,6 +174,7 @@ const fastTracks: FastTrackConfig[] = [
       "cit-advanced-strategic-industry-act-19-deeming",
       "cit-advanced-strategic-industry-decree-30",
     ],
+    durationCitationIds: ["cit-advanced-strategic-industry-act-19-duration"],
   },
   {
     lawId: "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
@@ -184,6 +186,7 @@ const fastTracks: FastTrackConfig[] = [
       "cit-semiconductor-special-act-27-applicability",
       "cit-semiconductor-special-act-27-deeming",
     ],
+    durationCitationIds: ["cit-semiconductor-special-act-27-duration"],
   },
 ];
 
@@ -218,8 +221,10 @@ const plans: PlanConfig[] = [
     lawName: "산업단지 인·허가 절차 간소화 특례법",
     planName: "산업단지계획",
     citationIds: [
+      "cit-industrial-complex-fast-track-act-10-duration",
       "cit-industrial-complex-fast-track-act-15",
       "cit-industrial-complex-fast-track-act-16",
+      "cit-industrial-complex-fast-track-decree-11-duration-exception",
       "cit-industrial-location-act-21",
     ],
     deemedProcedureIds: industrialComplexPlanDeemedProcedureIds,
@@ -232,7 +237,10 @@ const plans: PlanConfig[] = [
     effectiveFrom: "2019-04-17",
     lawName: "규제자유특구 및 지역특화발전특구 규제특례법",
     planName: "특화특구계획·특구토지이용계획",
-    citationIds: ["cit-regional-special-zone-act-64-65"],
+    citationIds: [
+      "cit-regional-special-zone-act-64-65",
+      "cit-regional-special-zone-decree-7-duration",
+    ],
     deemedProcedureIds: regionalSpecialZoneDeemedProcedureIds,
     authority: "관할 지방자치단체 특구 담당부서",
     decisionMaker: "중소벤처기업부장관 및 관계 행정기관의 장",
@@ -449,7 +457,7 @@ export const specialLawProcessProcedures: Procedure[] = [
       statutoryDecisionMaker: "개별 인허가 관계기관의 장",
       consultationAuthorities: ["산업통상부", "개별 인허가 관계기관"],
       submissions: ["신속처리 요청일 증빙", "개별 신청 접수증", "처리계획 회신일·보완기간 산정표", "처리결과 통보일·연장요청·거부 통지"],
-      citations: config.citationIds,
+      citations: [...config.citationIds, ...config.durationCitationIds],
     }),
   ]),
   ...plans.flatMap((config) => [
@@ -526,6 +534,319 @@ const unknownDuration = (
   estimateConfidence: "UNVERIFIED",
 });
 
+const fastTrackResultDuration = (
+  procedureId: string,
+  citations: string[],
+): DurationEstimate => ({
+  id: `duration-${procedureId}`,
+  procedureId,
+  applicantPreparation: null,
+  authorityProcessing: null,
+  interagencyConsultation: null,
+  // The 15/30-day clocks start at different statutory events, and the
+  // 60-day rule is conditional deeming rather than an ordinary elapsed cap.
+  elapsed: null,
+  statutoryPeriod: "장관 요청 후 처리계획 15일(보완기간 제외, 늦어도 30일), 계획 제출 후 처리결과 15일(불가피한 경우 한 차례 15일 연장), 해당 단계기한 미준수 시에만 요청일부터 60일 경과일에 처리 완료로 보는 조건부 규정",
+  stopClockRules: [
+    "처리계획 회신 15일 산정에서는 신청서류 보완에 걸린 기간을 제외함",
+    "보완이 있더라도 처리계획은 장관 요청일부터 늦어도 30일 이내 회신해야 함",
+  ],
+  variabilityFactors: [
+    "신속처리 요청일",
+    "처리계획 회신일과 보완기간",
+    "처리계획 제출일",
+    "결과 통보의 한 차례 연장 여부",
+    "두 단계기한 미준수 여부와 요청 대상 인허가 포함 여부",
+  ],
+  evidenceType: "STATUTE",
+  citationIds: citations,
+  sampleSize: null,
+  assumptions: [
+    "15일·30일은 서로 다른 기산점과 연장·보완 조건이 있는 단계기한이므로 하나의 총 처리기간으로 더하지 않습니다.",
+    "60일은 해당 단계기한 미준수 요건이 성립할 때만 적용하는 처리완료 의제 시점이며 허가 승인으로 단정하지 않습니다.",
+  ],
+  verifiedAt: "2026-08-22",
+  legalConfidence: "HIGH",
+  estimateConfidence: "LOW",
+  planningBasis: "MILESTONE_ONLY",
+  referencePeriods: [
+    {
+      id: `ref-${procedureId}-plan-reply-basic-deadline`,
+      kind: "PROCESS_MILESTONE",
+      label: "처리계획 회신 기본기한",
+      range: { min: null, base: null, max: 15, unit: "CALENDAR_DAY" },
+      jurisdiction: null,
+      startsWhen: "인허가권자가 산업통상부장관의 신속처리 요청을 받은 날",
+      includes: ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+      citationIds: citations,
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "신청서류 보완기간은 15일 산정에서 제외됩니다.",
+    },
+    {
+      id: `ref-${procedureId}-plan-reply-absolute-deadline`,
+      kind: "LEGAL_DEADLINE",
+      label: "보완 포함 처리계획 회신 최장기한",
+      range: { min: null, base: null, max: 30, unit: "CALENDAR_DAY" },
+      jurisdiction: null,
+      startsWhen: "인허가권자가 산업통상부장관의 신속처리 요청을 받은 날",
+      includes: ["AUTHORITY_PROCESSING", "SUPPLEMENT", "RESULT_NOTICE"],
+      citationIds: citations,
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "보완이 있더라도 요청일부터 늦어도 30일 이내 처리계획을 회신하는 법정 단계기한입니다.",
+    },
+    {
+      id: `ref-${procedureId}-result-basic-deadline`,
+      kind: "PROCESS_MILESTONE",
+      label: "처리결과 통보 기본기한",
+      range: { min: null, base: null, max: 15, unit: "CALENDAR_DAY" },
+      jurisdiction: null,
+      startsWhen: "인허가권자가 산업통상부장관에게 처리계획을 제출한 날",
+      includes: ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+      citationIds: citations,
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "불가피한 사유가 있으면 한 차례 15일을 연장할 수 있습니다.",
+    },
+    {
+      id: `ref-${procedureId}-result-extended-deadline`,
+      kind: "LEGAL_DEADLINE",
+      label: "한 차례 연장 시 처리결과 통보 최장기한",
+      range: { min: null, base: null, max: 30, unit: "CALENDAR_DAY" },
+      jurisdiction: null,
+      startsWhen: "인허가권자가 산업통상부장관에게 처리계획을 제출한 날",
+      includes: ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+      citationIds: citations,
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "불가피한 사유로 법정 15일 연장을 모두 사용한 분기의 단계기한입니다.",
+    },
+    {
+      id: `ref-${procedureId}-conditional-deemed-completion`,
+      kind: "LEGAL_DEADLINE",
+      label: "단계기한 미준수 시 조건부 처리완료 시점",
+      range: { min: null, base: null, max: 60, unit: "CALENDAR_DAY" },
+      jurisdiction: null,
+      startsWhen: "산업통상부장관이 인허가권자에게 신속처리를 요청한 날",
+      includes: ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+      citationIds: citations,
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "처리계획 회신기한 또는 처리결과 통보기한을 지키지 않은 경우에만 처리 완료로 보는 시점입니다. 허가 승인으로 단정하지 않습니다.",
+    },
+  ],
+});
+
+const industrialComplexPlanConsultationDuration = (): DurationEstimate => ({
+  id: "duration-industrial-complex-plan-consultation",
+  procedureId: "industrial-complex-plan-consultation",
+  applicantPreparation: null,
+  authorityProcessing: null,
+  interagencyConsultation: {
+    min: null,
+    base: null,
+    max: 15,
+    unit: "BUSINESS_DAY",
+  },
+  // The 10/15-day reply periods are intermediate milestones inside the
+  // application-to-decision six-month cap, not an additional elapsed phase.
+  elapsed: null,
+  statutoryPeriod: "협의요청일부터 일반 관계기관은 근무일 기준 10일, 군사기지·군사시설 보호 협의는 근무일 기준 15일 이내 의견 회신",
+  stopClockRules: [
+    "관계 행정기관은 관련 서류의 보완을 한 차례만 요청할 수 있음",
+    "지정권자가 관련 서류를 보완하는 기간은 10일·15일 협의기간에 포함하지 않음",
+  ],
+  variabilityFactors: [
+    "군사기지·군사시설 보호 협의 포함 여부",
+    "관계기관의 한 차례 보완 요청",
+    "보완 후 이견 조정 또는 통합조정회의",
+  ],
+  evidenceType: "STATUTE",
+  citationIds: ["cit-industrial-complex-fast-track-act-10-duration"],
+  sampleSize: null,
+  assumptions: [
+    "10일과 15일은 빠름·통상·지연 범위가 아니라 관계기관 종류에 따른 법정 회신 상한입니다.",
+    "협의기한 내 의견을 회신하지 않으면 이견 없이 산업단지계획 신청내용을 협의한 것으로 보는 법정 효과와 실제 후속 의결·고시는 구분합니다.",
+    "신청인 계획도서 작성, 주민의견 수렴, 영향평가 및 산업단지계획심의위원회 대기는 포함하지 않습니다.",
+  ],
+  verifiedAt: "2026-08-22",
+  legalConfidence: "HIGH",
+  estimateConfidence: "HIGH",
+  planningBasis: "MILESTONE_ONLY",
+  referencePeriods: [
+    {
+      id: "ref-industrial-complex-plan-general-consultation-deadline",
+      kind: "PROCESS_MILESTONE",
+      label: "일반 관계기관 협의의견 회신 상한",
+      range: { min: null, base: null, max: 10, unit: "BUSINESS_DAY" },
+      jurisdiction: null,
+      startsWhen: "지정권자가 관계 행정기관에 산업단지계획 협의를 요청한 날",
+      includes: ["INTERAGENCY_CONSULTATION"],
+      citationIds: ["cit-industrial-complex-fast-track-act-10-duration"],
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "법정 회신 상한입니다. 한 차례 요청할 수 있는 서류 보완기간은 산입하지 않습니다.",
+    },
+    {
+      id: "ref-industrial-complex-plan-military-consultation-deadline",
+      kind: "PROCESS_MILESTONE",
+      label: "군사기지·군사시설 보호 협의의견 회신 상한",
+      range: { min: null, base: null, max: 15, unit: "BUSINESS_DAY" },
+      jurisdiction: null,
+      startsWhen: "지정권자가 군사시설 보호 관계기관에 산업단지계획 협의를 요청한 날",
+      includes: ["INTERAGENCY_CONSULTATION"],
+      citationIds: ["cit-industrial-complex-fast-track-act-10-duration"],
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "군사기지·군사시설 보호 협의가 실제 포함된 경우에만 적용합니다. 보완기간은 산입하지 않습니다.",
+    },
+  ],
+});
+
+const industrialComplexPlanApprovalDuration = (): DurationEstimate => ({
+  id: "duration-industrial-complex-plan-approval",
+  procedureId: "industrial-complex-plan-approval",
+  applicantPreparation: null,
+  authorityProcessing: { min: null, base: null, max: 6, unit: "MONTH" },
+  interagencyConsultation: null,
+  elapsed: { min: null, base: null, max: 6, unit: "MONTH" },
+  statutoryPeriod: "민간기업등의 산업단지계획 승인신청은 접수일부터 6개월 이내 승인 여부 결정·통지",
+  stopClockRules: [
+    "민간기업등의 귀책사유로 승인절차가 지연된 경우에는 6개월 제한의 예외인 정당한 사유에 해당함",
+  ],
+  variabilityFactors: [
+    "민간기업등의 법정 신청자 해당 여부",
+    "주민의견 수렴과 영향평가",
+    "관계기관 협의와 이견 조정",
+    "산업단지계획심의위원회",
+    "신청인 귀책 보완·변경",
+  ],
+  evidenceType: "STATUTE",
+  citationIds: [
+    "cit-industrial-complex-fast-track-act-16",
+    "cit-industrial-complex-fast-track-decree-11-duration-exception",
+  ],
+  sampleSize: null,
+  assumptions: [
+    "6개월은 민간기업등이 법 제8조제2항에 따라 신청한 경로의 법정 상한이며 통상 소요기간이 아닙니다.",
+    "공공 사업시행자의 신청이나 신청 접수 전 계획도서 작성기간에는 이 상한을 적용하지 않습니다.",
+    "관계기관 10일·15일 회신기한은 6개월 전체 결정기한 안의 중간 마일스톤이므로 별도로 더하지 않습니다.",
+  ],
+  verifiedAt: "2026-08-22",
+  legalConfidence: "HIGH",
+  estimateConfidence: "LOW",
+  planningBasis: "OFFICIAL_CAP_ONLY",
+  referencePeriods: [
+    {
+      id: "ref-industrial-complex-plan-private-approval-cap",
+      kind: "LEGAL_DEADLINE",
+      label: "민간기업등 산업단지계획 승인 결정 상한",
+      range: { min: null, base: null, max: 6, unit: "MONTH" },
+      jurisdiction: null,
+      startsWhen: "지정권자가 민간기업등의 산업단지계획 승인신청을 접수한 날",
+      includes: [
+        "AUTHORITY_PROCESSING",
+        "INTERAGENCY_CONSULTATION",
+        "COMMITTEE_WAIT",
+        "RESULT_NOTICE",
+      ],
+      citationIds: [
+        "cit-industrial-complex-fast-track-act-16",
+        "cit-industrial-complex-fast-track-decree-11-duration-exception",
+      ],
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "민간기업등 귀책으로 승인절차가 지연된 경우에는 6개월 제한의 예외가 될 수 있습니다.",
+    },
+  ],
+});
+
+const regionalSpecialZonePlanApprovalDuration = (): DurationEstimate => ({
+  id: "duration-regional-special-zone-plan-approval",
+  procedureId: "regional-special-zone-plan-approval",
+  applicantPreparation: null,
+  authorityProcessing: {
+    min: null,
+    base: null,
+    max: 135,
+    unit: "CALENDAR_DAY",
+  },
+  interagencyConsultation: null,
+  elapsed: { min: null, base: null, max: 135, unit: "CALENDAR_DAY" },
+  statutoryPeriod: "특화특구 지정신청 수령일부터 90일 이내 결정, 부득이한 경우 한 차례 최대 45일 연장",
+  stopClockRules: [
+    "시행령 제7조제2항이 열거한 제3조제2항 및 제7조제3항 단서에 따른 기간은 산입하지 않음",
+    "신청 지방자치단체의 장이 특화특구위원회 심의·의결 연기를 요청한 기간은 산입하지 않음",
+  ],
+  variabilityFactors: [
+    "한 차례 기간 연장 여부",
+    "관계 행정기관 협의",
+    "신청서류 보완",
+    "특화특구위원회 심의·의결 연기 요청",
+  ],
+  evidenceType: "STATUTE",
+  citationIds: ["cit-regional-special-zone-decree-7-duration"],
+  sampleSize: null,
+  assumptions: [
+    "90일과 연장 후 135일은 통상 소요기간이 아니라 법정 결정 상한입니다.",
+    "이 카탈로그의 지역특화발전특구 지정·특화특구계획 승인 경로에 적용하며 규제자유특구 지정 경로와 혼용하지 않습니다.",
+    "특화특구계획 작성, 지방자치단체 내부 검토와 지정신청 전 의견수렴 기간은 포함하지 않습니다.",
+  ],
+  verifiedAt: "2026-08-22",
+  legalConfidence: "HIGH",
+  estimateConfidence: "LOW",
+  planningBasis: "OFFICIAL_CAP_ONLY",
+  referencePeriods: [
+    {
+      id: "ref-regional-special-zone-plan-decision-cap",
+      kind: "LEGAL_DEADLINE",
+      label: "특화특구 지정 여부 기본 결정 상한",
+      range: { min: null, base: null, max: 90, unit: "CALENDAR_DAY" },
+      jurisdiction: null,
+      startsWhen: "중소벤처기업부장관이 특화특구 지정신청을 받은 날",
+      includes: [
+        "AUTHORITY_PROCESSING",
+        "INTERAGENCY_CONSULTATION",
+        "COMMITTEE_WAIT",
+        "RESULT_NOTICE",
+      ],
+      citationIds: ["cit-regional-special-zone-decree-7-duration"],
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "시행령 제7조제2항의 불산입기간은 별도입니다.",
+    },
+    {
+      id: "ref-regional-special-zone-plan-extended-cap",
+      kind: "LEGAL_DEADLINE",
+      label: "한 차례 연장 시 특화특구 지정 여부 최장 상한",
+      range: { min: null, base: null, max: 135, unit: "CALENDAR_DAY" },
+      jurisdiction: null,
+      startsWhen: "중소벤처기업부장관이 특화특구 지정신청을 받은 날",
+      includes: [
+        "AUTHORITY_PROCESSING",
+        "INTERAGENCY_CONSULTATION",
+        "COMMITTEE_WAIT",
+        "RESULT_NOTICE",
+      ],
+      citationIds: ["cit-regional-special-zone-decree-7-duration"],
+      sampleSize: null,
+      observedFrom: null,
+      observedTo: null,
+      note: "부득이한 사유로 한 차례 45일을 모두 연장한 경우의 상한이며, 법정 불산입기간은 별도입니다.",
+    },
+  ],
+});
+
 export const specialLawProcessDurations: DurationEstimate[] = [
   ...fastTracks.flatMap((config) => [
     unknownDuration(
@@ -534,39 +855,42 @@ export const specialLawProcessDurations: DurationEstimate[] = [
       "신속처리 요청 준비·발송 자체의 전국 공통 처리기간은 확인되지 않음",
       ["대상 인허가 확정", "요청 공문 발송", "신청서류 보완"],
     ),
-    unknownDuration(
+    fastTrackResultDuration(
       `${config.prefix}-result-check`,
-      config.citationIds,
-      "장관 요청 후 처리계획 회신 15일(보완기간 제외, 다만 최대 30일), 계획 제출 후 결과 통보 15일(1회 15일 연장) 기한을 지키지 않은 경우에만 요청일로부터 60일 경과일에 처리 완료로 보는 조건부 규정",
-      ["신속처리 요청일", "처리계획 회신일·보완기간", "계획 제출일", "결과 통보·연장·거부", "요청 대상 인허가 포함 여부"],
+      config.durationCitationIds,
     ),
   ]),
-  ...plans.flatMap((config) => [
-    unknownDuration(
+  ...plans.flatMap((config) => {
+    const application = unknownDuration(
       `${config.prefix}-application`,
       config.citationIds,
       config.lawId === "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL"
-        ? "민간기업등의 산업단지계획 승인신청은 접수일부터 6개월 이내 승인 여부 결정; 신청 준비기간은 별도"
+        ? "승인신청 준비·접수 자체의 처리기간은 없음. 민간기업등의 완비 신청 접수 시 별도 6개월 승인 결정 상한이 시작됨"
         : "계획 승인신청 준비·접수의 전국 공통 처리기간은 확인되지 않음",
       ["계획도서 완성도", "의제대상 서류", "주민의견·위원회 절차", "보완"],
-    ),
-    unknownDuration(
-      `${config.prefix}-consultation`,
-      config.citationIds,
+    );
+    const consultation =
       config.lawId === "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL"
-        ? "관계기관 협의의견 제출기한은 법정 조문에 따르며, 보완·재협의 총기간은 별도"
-        : "관계기관 사전협의의 전국 공통 총기간은 확인되지 않음",
-      ["의제 인허가 수", "관계기관 수", "서류 보완", "협의조건 조정"],
-    ),
-    unknownDuration(
-      `${config.prefix}-approval`,
-      config.citationIds,
+        ? industrialComplexPlanConsultationDuration()
+        : unknownDuration(
+            `${config.prefix}-consultation`,
+            config.citationIds,
+            "관계기관 사전협의의 전국 공통 총기간은 확인되지 않음",
+            ["의제 인허가 수", "관계기관 수", "서류 보완", "협의조건 조정"],
+          );
+    const approval =
       config.lawId === "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL"
-        ? "민간기업등의 승인신청 접수일부터 6개월 이내 승인 여부 결정; 상한을 통상값으로 사용하지 않음"
-        : "승인·고시 및 의제결과 정리의 전국 공통 처리기간은 확인되지 않음",
-      ["심의위원회", "협의조건 반영", "승인·고시", "개별 의제 범위 확인"],
-    ),
-  ]),
+        ? industrialComplexPlanApprovalDuration()
+        : config.lawId === "REGIONAL_SPECIAL_ZONE_PLAN_DEEMING"
+          ? regionalSpecialZonePlanApprovalDuration()
+          : unknownDuration(
+              `${config.prefix}-approval`,
+              config.citationIds,
+              "승인·고시 및 의제결과 정리의 전국 공통 처리기간은 확인되지 않음",
+              ["심의위원회", "협의조건 반영", "승인·고시", "개별 의제 범위 확인"],
+            );
+    return [application, consultation, approval];
+  }),
 ];
 
 const practicalEdge = (

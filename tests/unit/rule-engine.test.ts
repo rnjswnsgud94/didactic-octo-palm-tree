@@ -119,8 +119,11 @@ describe("deterministic four-state rules", () => {
     expect(decision(decisions, "air-facility-operation-start-report")?.isDeemed).toBe(true);
     expect(decision(decisions, "water-facility-operation-start-report")?.isDeemed).toBe(true);
     expect(status(decisions, "process-safety-report")).toBe("APPLIES");
-    expect(status(decisions, "hazard-prevention-plan")).toBe("DOES_NOT_APPLY");
-    expect(decision(decisions, "hazard-prevention-plan")?.isDeemed).toBe(true);
+    expect(status(decisions, "hazard-prevention-plan")).toBe("NEEDS_MORE_INFO");
+    expect(decision(decisions, "hazard-prevention-plan")?.isDeemed).toBe(false);
+    expect(decision(decisions, "hazard-prevention-plan")?.missingInputs).toContain(
+      "confirmation.supplementalPermitTargets.hazard-prevention-plan",
+    );
   });
 
   it("does not label an unrelated exclusion as deemed", () => {
@@ -334,6 +337,69 @@ describe("deterministic four-state rules", () => {
     expect(status(included, "electrical-pre-use-inspection")).toBe("APPLIES");
     expect(status(included, "specific-high-pressure-gas-use-report")).toBe("APPLIES");
   });
+
+  it("confirms every dependent chemical procedure as excluded when chemicals are not handled", () => {
+    const chemicalProcedureIds = [
+      "chemical-substance-confirmation",
+      "chemical-accident-prevention-plan",
+      "hazardous-chemical-facility-inspection",
+      "hazardous-chemical-business-permit",
+      "chemical-registration-notification",
+      "restricted-toxic-chemical-import-permit-report",
+      "hazardous-chemical-manager-appointment-report",
+      "hazardous-chemical-regular-inspection",
+    ];
+    const base = catalog.scenarios[1].answers;
+
+    for (const staleChildValues of [false, true]) {
+      const excluded = decide({
+        ...base,
+        chemicalsHandled: false,
+        chemicalManufactureOrImport: staleChildValues,
+        hazardousChemicalBusiness: staleChildValues,
+        chemicalRegistrationRequired: staleChildValues,
+        restrictedOrToxicChemicalImport: staleChildValues,
+      });
+
+      for (const procedureId of chemicalProcedureIds) {
+        expect(decision(excluded, procedureId), procedureId).toMatchObject({
+          status: "DOES_NOT_APPLY",
+          missingInputs: [],
+        });
+        expect(
+          procedureCategoryForDecision(decision(excluded, procedureId)!),
+          procedureId,
+        ).toBe("NOT_REQUIRED");
+      }
+    }
+  });
+
+  it.each([true, null] as const)(
+    "does not infer dependent chemical answers when the parent is %s",
+    (chemicalsHandled) => {
+      const pending = decide({
+        ...catalog.scenarios[1].answers,
+        chemicalsHandled,
+        chemicalManufactureOrImport: null,
+        hazardousChemicalBusiness: null,
+        chemicalRegistrationRequired: null,
+        restrictedOrToxicChemicalImport: null,
+      });
+
+      for (const procedureId of [
+        "chemical-substance-confirmation",
+        "chemical-accident-prevention-plan",
+        "hazardous-chemical-facility-inspection",
+        "hazardous-chemical-business-permit",
+        "chemical-registration-notification",
+        "restricted-toxic-chemical-import-permit-report",
+        "hazardous-chemical-manager-appointment-report",
+        "hazardous-chemical-regular-inspection",
+      ]) {
+        expect(status(pending, procedureId), procedureId).toBe("NEEDS_MORE_INFO");
+      }
+    },
+  );
 
   it("registers expanded exclusion rules on their procedures", () => {
     expect(decision(decide(), "air-facility-operation-start-report")?.procedure.ruleIds).toContain("rule-exp-air-operation-integrated-exclusion");

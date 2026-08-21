@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { DashboardClient } from "@/app/components/dashboard/DashboardClient";
+import { InputCodeDialog } from "@/app/components/dashboard/InputCodeDialog";
+import { catalog } from "@/lib/data/catalog";
+import { encodeInputCode, INPUT_CODE_PREFIX, MAX_INPUT_CODE_LENGTH } from "@/lib/share-state";
 
 const originalShowModal = Object.getOwnPropertyDescriptor(
   HTMLDialogElement.prototype,
@@ -46,6 +49,7 @@ afterAll(() => {
 
 afterEach(() => {
   window.history.replaceState(null, "", "/");
+  delete (document as unknown as { execCommand?: Document["execCommand"] }).execCommand;
   vi.restoreAllMocks();
 });
 
@@ -55,8 +59,12 @@ describe("dashboard UI", () => {
 
     expect(screen.getByRole("heading", { name: "지역투자 인허가 로드맵" })).toBeInTheDocument();
     const feedbackNotice = screen.getByRole("note", { name: "AI 활용 안내" });
-    expect(feedbackNotice).toHaveTextContent("AI를 활용한 인허가 로드맵 툴입니다. 오류 등 피드백 시 산업부 권준형 사무관(jnhnkn15@korea.kr)으로 연락 주세요.");
-    expect(within(feedbackNotice).getByRole("link", { name: "권준형 사무관에게 이메일 보내기" })).toHaveAttribute("href", "mailto:jnhnkn15@korea.kr");
+    expect(feedbackNotice).toHaveTextContent(
+      /AI를 활용한 인허가 로드맵 툴입니다.*오류 등 피드백 시 산업부.*사무관.*으로 연락 주세요/,
+    );
+    expect(
+      within(feedbackNotice).getByRole("link", { name: /이메일 보내기/ }).getAttribute("href"),
+    ).toMatch(/^mailto:[^@\s]+@korea\.kr$/);
     expect(screen.getByText("사업 조건에 맞는 절차, 적용 특례와 예상 일정을 확인합니다.")).toBeInTheDocument();
     expect(document.querySelector(".scope-card")).toBeNull();
     expect(screen.getByRole("heading", { name: "현재 사업조건" })).toBeInTheDocument();
@@ -64,6 +72,233 @@ describe("dashboard UI", () => {
     expect(screen.getByLabelText("시·도")).toHaveValue("");
     expect(screen.queryByText("청주시")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /사업 일정 산정 불가 계산 경로 열기/ })).toHaveTextContent("산정 불가");
+  });
+
+  it("copies a portable input code and safely restores another project's inputs", async () => {
+    const clipboard = vi.spyOn(window.navigator.clipboard, "writeText").mockResolvedValue();
+    render(<DashboardClient />);
+
+    const trigger = screen.getByRole("button", { name: "입력 코드 저장·불러오기" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "입력 코드 가져오기·내보내기" });
+    const textarea = within(dialog).getByRole("textbox", { name: "입력 코드" });
+    expect((textarea as HTMLTextAreaElement).value.startsWith(INPUT_CODE_PREFIX)).toBe(true);
+    expect(textarea).toHaveAttribute("aria-invalid", "false");
+    expect(within(dialog).getByText(/81,000자/)).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "코드 복사" }));
+    await waitFor(() => expect(clipboard).toHaveBeenCalledWith((textarea as HTMLTextAreaElement).value));
+    await waitFor(() => expect(within(dialog).getByRole("status")).toHaveTextContent("클립보드에 복사"));
+
+    fireEvent.change(textarea, { target: { value: "손상된 코드" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "입력값 불러오기" }));
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("지원하지 않는 입력 코드");
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(textarea).toHaveAttribute("aria-errormessage", "input-code-error");
+    expect(screen.getByLabelText("시·도")).toHaveValue("");
+
+    fireEvent.change(textarea, {
+      target: { value: encodeInputCode(catalog.scenarios[1].answers) },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "입력값 불러오기" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "입력 코드 가져오기·내보내기" })).not.toBeInTheDocument());
+    expect(screen.getByLabelText("시·도")).toHaveValue("충청남도");
+    expect(screen.getByLabelText("시·군·구")).toHaveValue("천안시");
+    expect(screen.getByRole("status")).toHaveTextContent("입력값을 코드에서 복원");
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("keeps the current project unchanged when an input-code import fails", async () => {
+    render(<DashboardClient />);
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
+    fireEvent.change(screen.getByLabelText("시·도"), {
+      target: { value: "부산광역시" },
+    });
+    fireEvent.change(screen.getByLabelText("시·군·구"), {
+      target: { value: "강서구" },
+    });
+    await waitFor(() => {
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get("pr")).toBe("부산광역시");
+      expect(params.get("ct")).toBe("강서구");
+    });
+    const locationBeforeImport = window.location.search;
+
+    const trigger = screen.getByRole("button", {
+      name: "입력 코드 저장·불러오기",
+    });
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", {
+      name: "입력 코드 가져오기·내보내기",
+    });
+    fireEvent.change(
+      within(dialog).getByRole("textbox", { name: "입력 코드" }),
+      { target: { value: "손상된 코드" } },
+    );
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "입력값 불러오기" }),
+    );
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "지원하지 않는 입력 코드",
+    );
+    expect(screen.getByLabelText("시·도")).toHaveValue("부산광역시");
+    expect(screen.getByLabelText("시·군·구")).toHaveValue("강서구");
+    expect(window.location.search).toBe(locationBeforeImport);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("exposes dialog semantics and restores trigger focus after cancel", async () => {
+    render(<DashboardClient />);
+    const trigger = screen.getByRole("button", {
+      name: "입력 코드 저장·불러오기",
+    });
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", {
+      name: "입력 코드 가져오기·내보내기",
+    });
+
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveAttribute(
+      "aria-describedby",
+      "input-code-dialog-description",
+    );
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => {
+      expect(
+        within(dialog).getByRole("heading", {
+          name: "입력 코드 가져오기·내보내기",
+        }),
+      ).toHaveFocus();
+    });
+
+    fireEvent(
+      dialog,
+      new Event("cancel", { bubbles: false, cancelable: true }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", {
+          name: "입력 코드 가져오기·내보내기",
+        }),
+      ).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps import available when the current project cannot be exported", async () => {
+    const onClose = vi.fn();
+    const onImport = vi.fn(() => null);
+    render(
+      <InputCodeDialog
+        initialCode=""
+        initialError="현재 입력은 코드로 내보낼 수 없습니다."
+        onClose={onClose}
+        onImport={onImport}
+      />,
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "입력 코드 가져오기·내보내기",
+    });
+    const textarea = within(dialog).getByRole("textbox", {
+      name: "입력 코드",
+    });
+
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "현재 입력은 코드로 내보낼 수 없습니다.",
+    );
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "입력값 불러오기" }),
+    );
+    expect(onImport).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "불러올 입력 코드를 붙여 넣어 주세요.",
+    );
+
+    fireEvent.change(textarea, { target: { value: "FPR1.test" } });
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "입력값 불러오기" }),
+    );
+    expect(onImport).toHaveBeenCalledWith("FPR1.test");
+  });
+
+  it("selects the portable code when clipboard access fails", async () => {
+    vi.spyOn(window.navigator.clipboard, "writeText").mockRejectedValue(new Error("blocked"));
+    render(<DashboardClient />);
+
+    fireEvent.click(screen.getByRole("button", { name: "입력 코드 저장·불러오기" }));
+    const dialog = await screen.findByRole("dialog", { name: "입력 코드 가져오기·내보내기" });
+    const textarea = within(dialog).getByRole("textbox", { name: "입력 코드" }) as HTMLTextAreaElement;
+    fireEvent.click(within(dialog).getByRole("button", { name: "코드 복사" }));
+
+    await waitFor(() => expect(within(dialog).getByRole("status")).toHaveTextContent("코드를 선택"));
+    expect(textarea).toHaveFocus();
+    expect(textarea.selectionStart).toBe(0);
+    expect(textarea.selectionEnd).toBe(textarea.value.length);
+  });
+
+  it("uses the legacy copy command when the Clipboard API is blocked", async () => {
+    vi.spyOn(window.navigator.clipboard, "writeText").mockRejectedValue(new Error("blocked"));
+    const execCommand = vi.fn().mockReturnValue(true);
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: execCommand,
+    });
+    render(<DashboardClient />);
+
+    fireEvent.click(screen.getByRole("button", { name: "입력 코드 저장·불러오기" }));
+    const dialog = await screen.findByRole("dialog", { name: "입력 코드 가져오기·내보내기" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "코드 복사" }));
+
+    await waitFor(() => expect(execCommand).toHaveBeenCalledWith("copy"));
+    expect(within(dialog).getByRole("status")).toHaveTextContent("클립보드에 복사");
+  });
+
+  it("bounds oversized pasted codes and exposes the error to assistive technology", async () => {
+    render(<DashboardClient />);
+
+    fireEvent.click(screen.getByRole("button", { name: "입력 코드 저장·불러오기" }));
+    const dialog = await screen.findByRole("dialog", { name: "입력 코드 가져오기·내보내기" });
+    const textarea = within(dialog).getByRole("textbox", { name: "입력 코드" }) as HTMLTextAreaElement;
+    fireEvent.change(textarea, {
+      target: { value: "A".repeat(MAX_INPUT_CODE_LENGTH + 100) },
+    });
+
+    expect(textarea.value).toHaveLength(MAX_INPUT_CODE_LENGTH + 1);
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("허용 길이를 초과");
+  });
+
+  it("removes a stale share query after importing a code too large for a URL", async () => {
+    const permitIds = Array.from(
+      { length: 120 },
+      (_, index) => `permit-${String(index).padStart(3, "0")}-${"x".repeat(32)}`,
+    );
+    const answers = {
+      ...catalog.scenarios[1].answers,
+      advancedStrategicIndustryFastTrackPermitIds: permitIds,
+      semiconductorClusterFastTrackPermitIds: permitIds,
+      semiconductorClusterPlanIncludedPermitIds: permitIds,
+      industrialComplexPlanIncludedPermitIds: permitIds,
+      regionalSpecialZonePlanIncludedPermitIds: permitIds,
+    };
+    const code = encodeInputCode(answers);
+    render(<DashboardClient />);
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
+
+    fireEvent.click(screen.getByRole("button", { name: "입력 코드 저장·불러오기" }));
+    const dialog = await screen.findByRole("dialog", { name: "입력 코드 가져오기·내보내기" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "입력 코드" }), {
+      target: { value: code },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "입력값 불러오기" }));
+
+    await waitFor(() => expect(window.location.search).toBe(""));
+    expect(screen.getByLabelText("시·도")).toHaveValue("충청남도");
   });
 
   it("keeps each result-summary description on its own full-width row", () => {
@@ -119,6 +354,101 @@ describe("dashboard UI", () => {
     fireEvent.click(within(hazardousMaterials!).getByRole("button", { name: "있음" }));
     expect(screen.getByText("위험물 탱크 설치 여부", { selector: "legend" })).toBeInTheDocument();
     expect(screen.getByText("가스·산업안전 추가 확인")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("공사·환경 법정 임계값 정밀검토"));
+    const reviewGroup = screen.getByRole("group", {
+      name: "공사·환경 법정 임계값 검토 결과",
+    });
+    expect(
+      within(reviewGroup).getAllByRole("group", { name: /대상 여부$/ }),
+    ).toHaveLength(9);
+    const roadOccupation = within(reviewGroup).getByRole("group", {
+      name: "도로점용허가 대상 여부",
+    });
+    expect(
+      within(roadOccupation).getByRole("button", { name: "미확인" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(
+      within(roadOccupation).getByRole("button", { name: "대상" }),
+    );
+    expect(screen.getByText("1/9 검토 · 1개 대상")).toBeInTheDocument();
+
+    const nonpointSource = within(reviewGroup).getByRole("group", {
+      name: "비점오염원 설치신고 대상 여부",
+    });
+    fireEvent.click(
+      within(nonpointSource).getByRole("button", { name: "비대상" }),
+    );
+    expect(screen.getByText("2/9 검토 · 1개 대상")).toBeInTheDocument();
+  });
+
+  it("asks and clears the PSM same-equipment scope only when both parent targets apply", () => {
+    render(<DashboardClient />);
+
+    fireEvent.click(within(screen.getByRole("navigation", { name: "입력 단계" })).getByRole("button", { name: /^3 환경·안전/ }));
+    expect(
+      screen.queryByText("PSM이 동일 유해·위험설비를 포함하는지", {
+        selector: "legend",
+      }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("공사·환경 법정 임계값 정밀검토"));
+    const reviewGroup = screen.getByRole("group", {
+      name: "공사·환경 법정 임계값 검토 결과",
+    });
+    const hazardPlan = within(reviewGroup).getByRole("group", {
+      name: /유해위험방지계획서 제출·심사 대상 여부$/,
+    });
+    fireEvent.click(within(hazardPlan).getByRole("button", { name: "대상" }));
+
+    fireEvent.click(screen.getByText("가스·산업안전 추가 확인"));
+    const psm = screen.getByText("PSM 대상 설비 여부", { selector: "legend" })
+      .closest("fieldset");
+    fireEvent.click(within(psm!).getByRole("button", { name: "대상" }));
+
+    const sameScopeLegend = screen.getByText(
+      "PSM이 동일 유해·위험설비를 포함하는지",
+      { selector: "legend" },
+    );
+    const sameScope = sameScopeLegend.closest("fieldset");
+    fireEvent.click(
+      within(sameScope!).getByRole("button", { name: "동일 설비 포함" }),
+    );
+
+    fireEvent.click(within(psm!).getByRole("button", { name: "비대상" }));
+    expect(
+      screen.queryByText("PSM이 동일 유해·위험설비를 포함하는지", {
+        selector: "legend",
+      }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(within(psm!).getByRole("button", { name: "대상" }));
+    const restoredScope = screen.getByText(
+      "PSM이 동일 유해·위험설비를 포함하는지",
+      { selector: "legend" },
+    ).closest("fieldset");
+    expect(
+      within(restoredScope!).getByRole("button", { name: "미확인" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(
+      within(restoredScope!).getByRole("button", { name: "동일 설비 포함" }),
+    );
+    fireEvent.click(within(hazardPlan).getByRole("button", { name: "비대상" }));
+    expect(
+      screen.queryByText("PSM이 동일 유해·위험설비를 포함하는지", {
+        selector: "legend",
+      }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(within(hazardPlan).getByRole("button", { name: "대상" }));
+    const scopeAfterRetarget = screen.getByText(
+      "PSM이 동일 유해·위험설비를 포함하는지",
+      { selector: "legend" },
+    ).closest("fieldset");
+    expect(
+      within(scopeAfterRetarget!).getByRole("button", { name: "미확인" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   it("reflects every edited Project Input value directly in the summary", () => {
@@ -169,17 +499,19 @@ describe("dashboard UI", () => {
     expect(screen.getByText(/공사 [\d,]+일/)).toBeInTheDocument();
   });
 
-  it("offers only minimum and typical official schedule scenarios without user duration assumptions", () => {
+  it("keeps official scenarios and offers a separately labelled user-expected scenario", () => {
     render(<DashboardClient />);
     const range = screen.getByLabelText("소요기간 기준");
     const minimum = within(range).getByRole("button", { name: "최소기간" });
-    const typical = within(range).getByRole("button", { name: "통상" });
+    const typical = within(range).getByRole("button", { name: "공식 기준" });
+    const user = within(range).getByRole("button", { name: "내 예상" });
 
-    expect(within(range).getAllByRole("button")).toEqual([minimum, typical]);
+    expect(within(range).getAllByRole("button")).toEqual([minimum, typical, user]);
     expect(range.closest(".summary-schedule")).not.toBeNull();
     expect(document.querySelector(".tab-row .scenario-switch")).toBeNull();
     expect(typical).toHaveAttribute("aria-pressed", "true");
     expect(minimum).toHaveAttribute("aria-pressed", "false");
+    expect(user).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.click(minimum);
     expect(minimum).toHaveAttribute("aria-pressed", "true");
@@ -192,9 +524,52 @@ describe("dashboard UI", () => {
     expect(screen.queryByText("일정 가정")).not.toBeInTheDocument();
   });
 
+  it("applies a card-level user expected duration to the total and shared state", async () => {
+    render(<DashboardClient />);
+    const editorToggle = screen.getAllByRole("button", {
+      name: /내 예상.*기간 입력/,
+    })[0];
+    const card = editorToggle.closest(".procedure-card") as HTMLElement;
+    fireEvent.click(editorToggle);
+    fireEvent.change(within(card).getByRole("spinbutton"), {
+      target: { value: "30" },
+    });
+    fireEvent.change(within(card).getByRole("combobox"), {
+      target: { value: "CALENDAR_DAY" },
+    });
+    fireEvent.click(within(card).getByRole("button", { name: "반영" }));
+
+    const range = screen.getByLabelText("소요기간 기준");
+    expect(within(range).getByRole("button", { name: "내 예상 1" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(card).toHaveTextContent("30일 · 수정");
+    await waitFor(() => {
+      expect(new URLSearchParams(window.location.search).get("ud")).toContain("~30~c");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /공사 일정/ }));
+    fireEvent.change(screen.getByLabelText("착공 예정일"), {
+      target: { value: "2027-01-01" },
+    });
+    fireEvent.change(screen.getByLabelText("준공 예정일"), {
+      target: { value: "2028-12-31" },
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/사용자 예상 1건 반영/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "예상값 전체 삭제" }));
+    expect(within(screen.getByLabelText("소요기간 기준")).getByRole(
+      "button",
+      { name: "공식 기준" },
+    )).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("opens the total-duration result as a simplified six-stage graphic and restores focus", async () => {
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=12"));
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
     fireEvent.click(screen.getByRole("button", { name: /공사 일정/ }));
     fireEvent.change(screen.getByLabelText("착공 예정일"), { target: { value: "2027-01-01" } });
     fireEvent.change(screen.getByLabelText("준공 예정일"), { target: { value: "2028-12-31" } });
@@ -291,12 +666,12 @@ describe("dashboard UI", () => {
 
   it("restores edited inputs from the share URL without a scenario id", async () => {
     const first = render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=12"));
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
     fireEvent.click(screen.getByRole("button", { name: "증설" }));
 
     await waitFor(() => {
       expect(window.location.search).toContain("it=EXPANSION");
-      expect(window.location.search).toContain("v=12");
+      expect(window.location.search).toContain("v=13");
       expect(new URLSearchParams(window.location.search).has("sc")).toBe(false);
     });
     first.unmount();
@@ -316,6 +691,9 @@ describe("dashboard UI", () => {
     expect(drawer).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /원문 열기/ })[0]).toHaveAttribute("href", expect.stringMatching(/^https:\/\//));
     expect(drawer).toHaveTextContent("업무일");
+    expect(drawer).toHaveTextContent("법정·공식 기간과 실무 참고값");
+    expect(drawer).toHaveTextContent("전국 공신력 있는 평균·중앙값 자료가 없어");
+    expect(drawer).not.toHaveTextContent("통상 14");
     expect(drawer).not.toHaveTextContent(/\b(?:HIGH|MEDIUM|LOW|UNVERIFIED|BUSINESS_DAY|MVP)\b/);
   });
 
@@ -414,7 +792,7 @@ describe("dashboard UI", () => {
     );
 
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=12"));
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "충청남도" },
     });
@@ -467,7 +845,7 @@ describe("dashboard UI", () => {
     );
 
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=12"));
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "전북특별자치도" },
     });
@@ -503,7 +881,7 @@ describe("dashboard UI", () => {
     );
 
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=12"));
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "대전광역시" },
     });
@@ -520,7 +898,7 @@ describe("dashboard UI", () => {
     expect(screen.getByText(/검증 저장본 먼저 표시/)).toBeInTheDocument();
   });
 
-  it("applies an editable industry profile without treating the industry as a final permit ruling", () => {
+  it("applies an editable industry profile and excludes hidden chemical follow-ups when handling is disabled", async () => {
     render(<DashboardClient />);
     fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
       target: { value: "CHEMICAL_PRODUCTS" },
@@ -535,11 +913,34 @@ describe("dashboard UI", () => {
     expect(chemicalQuestion).not.toBeNull();
     fireEvent.click(within(chemicalQuestion!).getByRole("button", { name: "없음" }));
     expect(document.querySelector('[data-input-key="chemicalsHandled"]')).toHaveTextContent("아니오");
+
+    const confirmTrigger = screen.getByRole("button", {
+      name: /^추가 확인 필요 절차 \d+개 목록 열기$/,
+    });
+    fireEvent.click(confirmTrigger);
+    const confirmDialog = await screen.findByRole("dialog", {
+      name: /추가 확인 필요 절차 \d+개/,
+    });
+    await waitFor(() => {
+      expect(within(confirmDialog).queryByText("유해화학물질 영업허가")).not.toBeInTheDocument();
+      expect(within(confirmDialog).queryByText("유해화학물질 취급시설 설치검사")).not.toBeInTheDocument();
+    });
+    fireEvent.click(within(confirmDialog).getByRole("button", { name: "목록 닫기" }));
+
+    const excludedTrigger = screen.getByRole("button", {
+      name: /^확인된 제외 절차 \d+개 목록 열기$/,
+    });
+    fireEvent.click(excludedTrigger);
+    const excludedDialog = await screen.findByRole("dialog", {
+      name: /확인된 제외 절차 \d+개/,
+    });
+    expect(within(excludedDialog).getByText("유해화학물질 영업허가")).toBeInTheDocument();
+    expect(within(excludedDialog).getByText("유해화학물질 취급시설 설치검사")).toBeInTheDocument();
   });
 
   it("automatically surfaces other special-law candidates and activates only a confirmed route", async () => {
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=12"));
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "충청남도" },
     });
@@ -586,7 +987,7 @@ describe("dashboard UI", () => {
 
   it("adds AI data centers and carries selected special-law treatment into the result", async () => {
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=12"));
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
     fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
       target: { value: "AI_DATA_CENTER" },
     });
@@ -607,7 +1008,7 @@ describe("dashboard UI", () => {
     expect(screen.getAllByText(/기한 종료 다음 날/).length).toBeGreaterThan(0);
     expect(screen.getByText(/시설 규모 산정 특례 또는 입지 특례/)).toBeInTheDocument();
     await waitFor(() => {
-      expect(window.location.search).toContain("v=12");
+      expect(window.location.search).toContain("v=13");
       expect(window.location.search).toContain("sl=AIDC_ONE_STOP");
       expect(window.location.search).toContain("aic=1");
       expect(window.location.search).toContain("aos=PLANNED");
@@ -616,7 +1017,7 @@ describe("dashboard UI", () => {
 
   it("clears hidden AI-only special-law values when switching to another industry", async () => {
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=12"));
+    await waitFor(() => expect(window.location.search).toContain("v=13"));
     fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
       target: { value: "AI_DATA_CENTER" },
     });

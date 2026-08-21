@@ -78,7 +78,7 @@ export function evaluateProject(
     evaluatedAnswers,
   );
   const schedules = Object.fromEntries(
-    (["MIN", "TYPICAL"] as DurationScenario[]).map((scenario) => [
+    (["MIN", "TYPICAL", "USER"] as DurationScenario[]).map((scenario) => [
       scenario,
       calculateSchedule({
         decisions,
@@ -93,6 +93,7 @@ export function evaluateProject(
           plannedEndDate: evaluatedAnswers.plannedConstructionEndDate,
         },
         planningDurations,
+        userDurationOverrides: evaluatedAnswers.userDurationOverrides,
       }),
     ]),
   ) as Record<DurationScenario, ReturnType<typeof calculateSchedule>>;

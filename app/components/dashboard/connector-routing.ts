@@ -32,8 +32,12 @@ type HeapEntry = {
   state: number;
 };
 
-const connectorClearance = 4;
-const targetMarkerGap = 3;
+// Keep enough unobstructed line immediately before every target for the fixed-size
+// arrow marker. A one-pixel terminal segment lets the marker overlap the final
+// bend and makes its head look clipped when cards sit in adjacent columns.
+const connectorClearance = 16;
+const targetMarkerGap = 4;
+const minimumDirectGap = connectorClearance * 2;
 const bendPenalty = 24;
 
 function rounded(value: number) {
@@ -230,26 +234,26 @@ class MinHeap {
 function legacyPath(source: LocalRect, target: LocalRect) {
   const sourceY = source.top + source.height / 2;
   const targetY = target.top + target.height / 2;
-  if (target.left > source.right + 16) {
+  if (target.left > source.right + minimumDirectGap) {
     const bendX = source.right + (target.left - source.right) / 2;
     return {
-      path: `M ${formatCoordinate(source.right)} ${formatCoordinate(sourceY)} H ${formatCoordinate(bendX)} V ${formatCoordinate(targetY)} H ${formatCoordinate(target.left - 5)}`,
+      path: `M ${formatCoordinate(source.right)} ${formatCoordinate(sourceY)} H ${formatCoordinate(bendX)} V ${formatCoordinate(targetY)} H ${formatCoordinate(target.left - targetMarkerGap)}`,
       points: [
         { x: source.right, y: sourceY },
         { x: bendX, y: sourceY },
         { x: bendX, y: targetY },
-        { x: target.left - 5, y: targetY },
+        { x: target.left - targetMarkerGap, y: targetY },
       ],
     };
   }
   const sideX = Math.max(source.right, target.right) + 10;
   return {
-    path: `M ${formatCoordinate(source.right)} ${formatCoordinate(sourceY)} H ${formatCoordinate(sideX)} V ${formatCoordinate(targetY)} H ${formatCoordinate(target.right + 5)}`,
+    path: `M ${formatCoordinate(source.right)} ${formatCoordinate(sourceY)} H ${formatCoordinate(sideX)} V ${formatCoordinate(targetY)} H ${formatCoordinate(target.right + targetMarkerGap)}`,
     points: [
       { x: source.right, y: sourceY },
       { x: sideX, y: sourceY },
       { x: sideX, y: targetY },
-      { x: target.right + 5, y: targetY },
+      { x: target.right + targetMarkerGap, y: targetY },
     ],
   };
 }
@@ -332,7 +336,7 @@ export function createObstacleAvoidingConnectorRouter(
       .map(([, rect]) => rect);
     const direct = legacyPath(source, target);
     if (
-      target.left > source.right + 16
+      target.left > source.right + minimumDirectGap
       && pathIsClear(direct.points, otherObstacles)
     ) return direct.path;
 

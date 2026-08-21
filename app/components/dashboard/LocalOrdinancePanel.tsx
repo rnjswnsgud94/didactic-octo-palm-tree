@@ -69,7 +69,7 @@ export function LocalJurisdictionLinks({ answers }: { answers: ScenarioAnswers }
         <a href={links.municipality.url} target="_blank" rel="noreferrer" title="기초 자치법규 현행 목록">
           {links.municipality.name}
         </a>
-      ) : answers.city ? <span>{answers.city}</span> : <span>시·군·구 미선택</span>}
+      ) : answers.city ? <span>{answers.city}</span> : links.notice ? <span>시·군·구 미선택</span> : null}
     </span>
   );
 }

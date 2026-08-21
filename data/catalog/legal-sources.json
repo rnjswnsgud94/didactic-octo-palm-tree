@@ -91,7 +91,7 @@
     "apiRetrievedAt": null,
     "internallyVerifiedAt": "2026-08-20",
     "contentHash": "metadata-only:not-retrieved",
-    "officialUrl": "https://www.law.go.kr/법령/산업안전보건법/제44조",
+    "officialUrl": "https://www.law.go.kr/법령/산업안전보건법",
     "status": "AUTHORITATIVE"
   },
   {
@@ -206,6 +206,25 @@
     "internallyVerifiedAt": "2026-08-20",
     "contentHash": "web-verified-20260820-water-permit",
     "officialUrl": "https://www.gov.kr/mw/AA020InfoCappView.do?CappBizCD=14800000112&HighCtgCD=A09006",
+    "status": "AUTHORITATIVE"
+  },
+  {
+    "id": "src-water-enforcement-rule-zero-discharge-current",
+    "title": "물환경보전법 시행규칙",
+    "documentType": "ENFORCEMENT_RULE",
+    "issuingAuthority": "기후에너지환경부",
+    "jurisdictionCode": null,
+    "industrialComplexId": null,
+    "lawId": null,
+    "mst": null,
+    "proclamationDate": null,
+    "proclamationNumber": null,
+    "effectiveDate": null,
+    "repealDate": null,
+    "apiRetrievedAt": null,
+    "internallyVerifiedAt": "2026-08-22",
+    "contentHash": "official-form-review-20260822-zero-discharge-water",
+    "officialUrl": "https://www.law.go.kr/법령/물환경보전법시행규칙",
     "status": "AUTHORITATIVE"
   },
   {

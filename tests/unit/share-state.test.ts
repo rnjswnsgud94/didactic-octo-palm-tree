@@ -2,19 +2,187 @@ import { describe, expect, it } from "vitest";
 
 import { catalog, scenarioAnswerSchema, type ScenarioAnswers } from "@/lib/data/catalog";
 import {
+  decodeInputCode,
   decodeShareState,
+  encodeInputCode,
   encodeShareState,
+  INPUT_CODE_PREFIX,
+  InputCodeError,
+  MAX_INPUT_CODE_LENGTH,
   MAX_SHARE_STATE_LENGTH,
+  SHARE_STATE_FIELDS,
   ShareStateTooLongError,
 } from "@/lib/share-state";
 
+function decodeInputCodePayload(code: string) {
+  const [, payload] = code.slice(INPUT_CODE_PREFIX.length).split(".");
+  return Buffer.from(payload, "base64url").toString("utf8");
+}
+
+function inputCodeChecksum(value: string) {
+  let hash = 0x811c9dc5;
+  for (const byte of new TextEncoder().encode(value)) {
+    hash = Math.imul(hash ^ byte, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function encodeInputCodePayload(payload: string) {
+  return `${INPUT_CODE_PREFIX}${inputCodeChecksum(payload)}.${Buffer.from(payload, "utf8").toString("base64url")}`;
+}
+
 describe("versioned share state", () => {
+  it("exports and imports every golden input as a deterministic portable code", () => {
+    for (const scenario of catalog.scenarios) {
+      const first = encodeInputCode(scenario.answers);
+      const second = encodeInputCode(scenario.answers);
+      expect(first).toBe(second);
+      expect(first.startsWith(INPUT_CODE_PREFIX)).toBe(true);
+      expect(first).toMatch(/^FPR1\.[0-9a-f]{8}\.[A-Za-z0-9_-]+$/);
+      expect(first.length).toBeLessThanOrEqual(MAX_INPUT_CODE_LENGTH);
+      expect(decodeInputCode(first, catalog.scenarios[0].answers)).toEqual(scenario.answers);
+    }
+  });
+
+  it("keeps the portable-code whitelist aligned with every project input", () => {
+    const schemaFields = Object.keys(scenarioAnswerSchema.shape).sort();
+    const exportedFields = [...SHARE_STATE_FIELDS].sort();
+
+    expect(exportedFields).toEqual(schemaFields);
+    expect(new Set(SHARE_STATE_FIELDS).size).toBe(SHARE_STATE_FIELDS.length);
+  });
+
+  it("rejects unsupported, malformed, changed, and oversized input codes", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const valid = encodeInputCode(catalog.scenarios[1].answers);
+    const changed = `${valid.slice(0, -1)}${valid.endsWith("A") ? "B" : "A"}`;
+
+    expect(() => decodeInputCode("FPR0.invalid", fallback)).toThrow(InputCodeError);
+    expect(() => decodeInputCode(`${INPUT_CODE_PREFIX}%%%`, fallback)).toThrow("형식이 올바르지");
+    expect(() => decodeInputCode(changed, fallback)).toThrow(InputCodeError);
+    expect(() => decodeInputCode(
+      `${INPUT_CODE_PREFIX}${"A".repeat(MAX_INPUT_CODE_LENGTH)}`,
+      fallback,
+    )).toThrow("허용 길이를 초과");
+    expect(() => decodeInputCode(
+      `${" ".repeat(MAX_INPUT_CODE_LENGTH + 1)}${valid}`,
+      fallback,
+    )).toThrow("허용 길이를 초과");
+
+    const payload = decodeInputCodePayload(valid);
+    const [validChecksum, validBase64] = valid.slice(INPUT_CODE_PREFIX.length).split(".");
+    const changedWithStaleChecksum = `${INPUT_CODE_PREFIX}${validChecksum}.${validBase64.slice(0, -1)}${validBase64.endsWith("A") ? "B" : "A"}`;
+    expect(() => decodeInputCode(changedWithStaleChecksum, fallback)).toThrow("변경되었거나");
+    expect(() => decodeInputCode(
+      encodeInputCodePayload(`${payload}&unexpected=1`),
+      fallback,
+    )).toThrow("변경되었거나");
+    expect(() => decodeInputCode(
+      encodeInputCodePayload(`${payload}&pr=강원특별자치도`),
+      fallback,
+    )).toThrow("변경되었거나");
+  });
+
+  it("round-trips escaped array items and still accepts legacy array payloads", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const answers: ScenarioAnswers = {
+      ...fallback,
+      advancedStrategicIndustryFastTrackPermitIds: [
+        "permit.v1",
+        "percent%id",
+        "",
+        "%2E",
+      ],
+    };
+
+    const shared = encodeShareState(answers, "SWIMLANE");
+    expect(new URLSearchParams(shared).get("ac")).toBe("1");
+    expect(decodeShareState(shared, fallback).answers).toEqual(answers);
+    expect(decodeInputCode(encodeInputCode(answers), fallback)).toEqual(answers);
+
+    const legacyAnswers: ScenarioAnswers = {
+      ...fallback,
+      advancedStrategicIndustryFastTrackPermitIds: [
+        "permit",
+        "v1",
+        "percent%id",
+      ],
+    };
+    const legacyState = new URLSearchParams(
+      encodeShareState(legacyAnswers, "SWIMLANE"),
+    );
+    legacyState.delete("ac");
+    legacyState.set(
+      "aspi",
+      legacyAnswers.advancedStrategicIndustryFastTrackPermitIds.join("."),
+    );
+    const legacyPayload = legacyState.toString();
+
+    expect(decodeShareState(legacyPayload, fallback).answers).toEqual(
+      legacyAnswers,
+    );
+    expect(
+      decodeInputCode(encodeInputCodePayload(legacyPayload), fallback),
+    ).toEqual(legacyAnswers);
+  });
+
+  it("rejects oversized array selections before exporting a non-restorable code", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const answers: ScenarioAnswers = {
+      ...fallback,
+      advancedStrategicIndustryFastTrackPermitIds: Array.from(
+        { length: 251 },
+        (_, index) => `permit-${index}`,
+      ),
+    };
+
+    expect(() => encodeInputCode(answers)).toThrow("항목별 250개 이하");
+  });
+
+  it("uses input codes for valid states that are too large for a share URL", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const longPermitIds = Array.from(
+      { length: 120 },
+      (_, index) => `permit-${String(index).padStart(3, "0")}-${"x".repeat(32)}`,
+    );
+    const answers: ScenarioAnswers = {
+      ...fallback,
+      advancedStrategicIndustryFastTrackPermitIds: longPermitIds,
+      semiconductorClusterFastTrackPermitIds: longPermitIds,
+      semiconductorClusterPlanIncludedPermitIds: longPermitIds,
+      industrialComplexPlanIncludedPermitIds: longPermitIds,
+      regionalSpecialZonePlanIncludedPermitIds: longPermitIds,
+    };
+
+    expect(() => encodeShareState(answers, "SWIMLANE")).toThrow(ShareStateTooLongError);
+    const code = encodeInputCode(answers);
+    expect(decodeInputCodePayload(code).length).toBeGreaterThan(MAX_SHARE_STATE_LENGTH);
+    expect(code.length).toBeLessThanOrEqual(MAX_INPUT_CODE_LENGTH);
+    expect(decodeInputCode(code, fallback)).toEqual(answers);
+  });
+
+  it("preserves a literal u in text fields and never serializes server secret names", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const answers: ScenarioAnswers = {
+      ...fallback,
+      siteAddress: "u",
+      products: "u",
+      coreProcesses: "u",
+    };
+    const code = encodeInputCode(answers);
+    const payload = decodeInputCodePayload(code);
+
+    expect(decodeInputCode(code, fallback)).toEqual(answers);
+    expect(payload).not.toContain("LAW_API_OC");
+    expect(payload).not.toContain("NEXT_PUBLIC");
+  });
+
   it("round-trips the whitelisted non-sensitive fields deterministically", () => {
     const answers = catalog.scenarios[2].answers;
     const first = encodeShareState(answers, "SCHEDULE");
     const second = encodeShareState(answers, "SCHEDULE");
     expect(first).toBe(second);
-    expect(first).toContain("v=12");
+    expect(first).toContain("v=13");
     expect(decodeShareState(first, catalog.scenarios[0].answers)).toEqual({ answers, tab: "SCHEDULE" });
     expect(first).not.toContain("address");
   });
@@ -129,7 +297,7 @@ describe("versioned share state", () => {
     };
     const encoded = encodeShareState(answers, "LEGAL");
 
-    expect(encoded).toContain("v=12");
+    expect(encoded).toContain("v=13");
     expect(encoded).toContain("ipa=1");
     expect(encoded).toContain("ipad=2026-08-20");
     expect(decodeShareState(encoded, fallback)).toEqual({ answers, tab: "LEGAL" });
@@ -151,7 +319,7 @@ describe("versioned share state", () => {
     };
     const encoded = encodeShareState(answers, "SWIMLANE");
 
-    expect(encoded).toContain("v=12");
+    expect(encoded).toContain("v=13");
     expect(encoded).toContain("noi=1");
     expect(decodeShareState(encoded, fallback)).toEqual({ answers, tab: "SWIMLANE" });
 
@@ -160,6 +328,122 @@ describe("versioned share state", () => {
     const restored = decodeShareState(legacy.toString(), fallback);
     expect(restored.answers.noiseVibrationFacility).toBeNull();
     expect(restored.warning).toContain("소음·진동배출시설 확인값");
+  });
+
+  it("round-trips sorted per-procedure user duration overrides only in v13", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const answers: ScenarioAnswers = {
+      ...fallback,
+      userDurationOverrides: {
+        "landscape-review": { value: 0, unit: "BUSINESS_DAY" },
+        "building-permit": { value: 45, unit: "CALENDAR_DAY" },
+      },
+    };
+    const encoded = encodeShareState(answers, "SCHEDULE");
+    const params = new URLSearchParams(encoded);
+
+    expect(params.get("v")).toBe("13");
+    expect(params.get("ud")).toBe(
+      "building-permit~45~c.landscape-review~0~b",
+    );
+    expect(decodeShareState(encoded, fallback)).toEqual({
+      answers,
+      tab: "SCHEDULE",
+    });
+    expect(decodeInputCode(encodeInputCode(answers), fallback)).toEqual(answers);
+
+    params.set("v", "12");
+    params.delete("ud");
+    const restored = decodeShareState(params.toString(), {
+      ...fallback,
+      userDurationOverrides: {
+        "building-permit": { value: 99, unit: "CALENDAR_DAY" },
+      },
+    });
+    expect(restored.answers.userDurationOverrides).toEqual({});
+    expect(restored.warning).toContain("사용자 예상 처리기간");
+  });
+
+  it("imports a checksummed v12 portable code and migrates it to empty user estimates", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const legacyParams = new URLSearchParams(
+      decodeInputCodePayload(encodeInputCode(fallback)),
+    );
+    legacyParams.set("v", "12");
+    legacyParams.delete("ud");
+    legacyParams.sort();
+
+    expect(
+      decodeInputCode(encodeInputCodePayload(legacyParams.toString()), fallback),
+    ).toEqual({ ...fallback, userDurationOverrides: {} });
+  });
+
+  it("preserves the compact supplemental threshold review and selected targets", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const answers: ScenarioAnswers = {
+      ...fallback,
+      supplementalPermitReviewedIds: [
+        "road-occupation-permit",
+        "hazard-prevention-plan",
+      ],
+      supplementalPermitTargetIds: [
+        "road-occupation-permit",
+        "hazard-prevention-plan",
+      ],
+      psmCovered: true,
+      psmCoversSameHazardPreventionScope: true,
+    };
+    const encoded = encodeShareState(answers, "SWIMLANE");
+
+    expect(encoded).toContain(
+      "spr=road-occupation-permit.hazard-prevention-plan",
+    );
+    expect(encoded).toContain(
+      "spt=road-occupation-permit.hazard-prevention-plan",
+    );
+    expect(encoded).toContain("psm=1");
+    expect(encoded).toContain("pss=1");
+    expect(decodeShareState(encoded, fallback)).toEqual({
+      answers,
+      tab: "SWIMLANE",
+    });
+    expect(decodeInputCode(encodeInputCode(answers), fallback)).toEqual(answers);
+  });
+
+  it("rejects a supplemental target that was not individually reviewed", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const inconsistent: ScenarioAnswers = {
+      ...fallback,
+      supplementalPermitReviewedIds: [],
+      supplementalPermitTargetIds: ["road-occupation-permit"],
+    };
+    const payload = encodeShareState(inconsistent, "SWIMLANE");
+    const externallyBuiltCode = encodeInputCodePayload(payload);
+
+    expect(scenarioAnswerSchema.safeParse(inconsistent).success).toBe(false);
+    expect(() => encodeInputCode(inconsistent)).toThrow("검토 완료 절차에 포함");
+    expect(() => decodeInputCode(externallyBuiltCode, fallback)).toThrow(
+      "입력 코드를 적용할 수 없습니다",
+    );
+  });
+
+  it("rejects an orphaned PSM same-equipment answer in schemas and portable codes", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const inconsistent: ScenarioAnswers = {
+      ...fallback,
+      psmCovered: false,
+      psmCoversSameHazardPreventionScope: true,
+    };
+    const payload = encodeShareState(inconsistent, "SWIMLANE");
+    const externallyBuiltCode = encodeInputCodePayload(payload);
+
+    expect(scenarioAnswerSchema.safeParse(inconsistent).success).toBe(false);
+    expect(() => encodeInputCode(inconsistent)).toThrow(
+      "PSM과 유해위험방지계획서가 모두 대상",
+    );
+    expect(() => decodeInputCode(externallyBuiltCode, fallback)).toThrow(
+      "입력 코드를 적용할 수 없습니다",
+    );
   });
 
   it("ignores injected v8-only special-law fields in a legacy-version URL", () => {
@@ -221,7 +505,7 @@ describe("versioned share state", () => {
     expect(() => encodeShareState(answers, "ACTION")).toThrow(ShareStateTooLongError);
   });
 
-  it("stores daily construction dates but no user-entered planning duration", () => {
+  it("stores daily construction dates without retired phase-wide planning assumptions", () => {
     const answers = {
       ...catalog.scenarios[2].answers,
       investmentType: "EXPANSION",

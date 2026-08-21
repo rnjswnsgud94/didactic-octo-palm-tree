@@ -18,6 +18,7 @@ export const INDUSTRY_TAXONOMY_SOURCE = {
 
 export const industryReviewFieldLabels = {
   airEmissionFacility: "대기배출시설",
+  airTotalManagementBusinessTarget: "대기 총량관리사업장 설치허가",
   waterDischargeFacility: "폐수배출시설",
   noiseVibrationFacility: "소음·진동배출시설",
   wasteFacility: "폐기물처리시설 설치",

@@ -5,7 +5,11 @@ import { useEffect, useMemo, useRef } from "react";
 import { stageLabels } from "@/app/components/dashboard/constants";
 import { catalog } from "@/lib/data/catalog";
 import type { ScheduleResult } from "@/lib/engine/schedule";
-import { formatCalendarPeriod } from "@/lib/format-duration";
+import {
+  formatCalendarPeriod,
+  formatCompletedCheckpoint,
+  formatTimelineProcessingDuration,
+} from "@/lib/format-duration";
 
 const procedureNames = new Map(
   catalog.procedures.map((procedure) => [procedure.id, procedure.name]),
@@ -102,7 +106,13 @@ export function TotalDurationDialog({
         {!timeline ? (
           <div className="duration-flow-empty">
             <strong>공사 시작일과 준공일을 입력해 주세요.</strong>
-              <span>두 날짜가 입력되면 확인된 인허가 선행기간과 공사기간을 연결하고, 기간이 비어 있으면 일정 하한으로 표시합니다.</span>
+            <span>두 날짜가 입력되면 확인된 인허가 선행기간과 공사기간을 연결하고, 기간이 비어 있으면 일정 하한으로 표시합니다.</span>
+            {schedule.completedCheckpoints.length ? (
+              <section className="company-milestones" aria-label="확인된 완료 이정표">
+                <header><strong>확인된 완료 이정표</strong><span>이미 끝난 절차는 남은 처리기간에 더하지 않습니다.</span></header>
+                <div>{schedule.completedCheckpoints.map((checkpoint) => <p key={checkpoint.procedureId}><span>{procedureNames.get(checkpoint.procedureId) ?? checkpoint.procedureId}</span><strong>{formatCompletedCheckpoint(checkpoint)}</strong></p>)}</div>
+              </section>
+            ) : null}
           </div>
         ) : (
           <div className="duration-flow-body">
@@ -120,10 +130,12 @@ export function TotalDurationDialog({
               <strong>{formatCalendarPeriod(timeline.projectStartDate, completionDate!)}</strong>
               <span>
                 {timeline.durationStatus === "MINIMUM_ONLY"
-                  ? `총 소요기간이 아닙니다. 현재 확인된 공식 처리기간과 공사기간만 합산했습니다. 처리기간 자체가 미확인인 절차 ${unknownActiveCount}개와 신청준비·심사·협의 기간 구성이 미확인인 절차 ${incompleteActiveCount}개가 남아 있습니다.`
+                  ? `총 소요기간이 아닙니다. 현재 확인된 공식 처리기간${schedule.scenario === "USER" ? `과 사용자 예상 ${timeline.userDurationOverrideProcedureIds.length}건` : ""}, 공사기간만 합산했습니다. 처리기간 자체가 미확인인 절차 ${unknownActiveCount}개와 신청준비·심사·협의 기간 구성이 미확인인 절차 ${incompleteActiveCount}개가 남아 있습니다.`
                   : schedule.scenario === "MIN"
                     ? "각 절차의 확인된 최소 처리기간을 적용했습니다."
-                    : "각 절차의 확인된 통상 처리기간을 적용했습니다."}
+                    : schedule.scenario === "USER"
+                      ? `사용자가 카드에 입력한 전체 경과 예상값 ${timeline.userDurationOverrideProcedureIds.length}건을 우선 적용하고, 나머지는 공식 기준을 사용했습니다. 사용자값은 법정 처리기간이나 기관 평균이 아닙니다.`
+                      : "각 절차의 확인된 공식 처리분기·관할 기준을 적용했습니다. 실제 평균 처리기간을 뜻하지 않습니다."}
               </span>
             </div>
 
@@ -140,13 +152,16 @@ export function TotalDurationDialog({
                           node.excludedFromOperationReady ? "is-post-operation" : "",
                           node.processingDuration === null ? "is-unknown" : "",
                           node.extendsOperationReady ? "is-extending" : "",
+                          node.completedCheckpoint ? "is-completed" : "",
                         ].filter(Boolean).join(" ")}
                       >
                         <b>{procedureNames.get(node.procedureId) ?? node.procedureId}</b>
-                        {node.excludedFromOperationReady
+                        {node.completedCheckpoint
+                          ? <small>완료 이정표 · 잔여 처리기간 0일</small>
+                          : node.excludedFromOperationReady
                           ? <small>가동 후 별도</small>
                           : node.processingDuration === null
-                            ? <small>기간 확인 필요</small>
+                            ? <small>{formatTimelineProcessingDuration(node)}</small>
                             : node.extendsOperationReady
                               ? <small>총기간 연장</small>
                               : node.overlapsConstruction

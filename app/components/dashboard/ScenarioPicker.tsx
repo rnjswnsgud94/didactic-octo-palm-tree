@@ -98,6 +98,9 @@ export const projectInputSections: readonly InputSection[] = [
     title: "시설·환경",
     fields: [
       { key: "airEmissionFacility" },
+      { key: "airTotalManagementBusinessTarget" },
+      { key: "supplementalPermitReviewedIds" },
+      { key: "supplementalPermitTargetIds" },
       { key: "waterDischargeFacility" },
       { key: "noiseVibrationFacility" },
       { key: "wasteFacility" },
@@ -132,6 +135,7 @@ export const projectInputSections: readonly InputSection[] = [
       { key: "lpgSpecificUseFacility" },
       { key: "cityGasSpecificUseFacility" },
       { key: "psmCovered" },
+      { key: "psmCoversSameHazardPreventionScope" },
       { key: "fireFacilityWork" },
       { key: "fireWorkSupervisionTarget" },
       { key: "firstFireSelfInspectionTarget" },
@@ -236,6 +240,11 @@ const valueLabels: Record<string, Record<string, string>> = {
 };
 
 function getInputValue(answers: ScenarioAnswers, key: string) {
+  if (
+    key === "city" &&
+    !answers.city &&
+    answers.province === "세종특별자치시"
+  ) return "세종특별자치시(광역 단층제)";
   return (answers as unknown as Record<string, unknown>)[key];
 }
 
@@ -291,6 +300,15 @@ export function isProjectInputFieldVisible(
   answers: ScenarioAnswers,
   key: string,
 ) {
+  if (
+    key === "airTotalManagementBusinessTarget" &&
+    answers.airEmissionFacility !== true
+  ) return false;
+  if (
+    (key === "supplementalPermitReviewedIds" ||
+      key === "supplementalPermitTargetIds") &&
+    answers.supplementalPermitReviewedIds.length === 0
+  ) return false;
   if (industrialComplexBaseKeys.has(key) && answers.insideIndustrialComplex !== true) return false;
   if (key === "industrialComplexPlanSpecialCaseConfirmed" && !answers.province) return false;
   if (industrialComplexPlanEvidenceKeys.has(key)) {
@@ -337,6 +355,10 @@ export function isProjectInputFieldVisible(
     return answers.hazardousMaterials === true;
   }
   if (key === "highPressureGasBusinessStartTarget") return answers.highPressureGas === true;
+  if (key === "psmCoversSameHazardPreventionScope") {
+    return answers.psmCovered === true
+      && answers.supplementalPermitTargetIds.includes("hazard-prevention-plan");
+  }
   if (["fireWorkSupervisionTarget", "firstFireSelfInspectionTarget"].includes(key)) {
     return answers.fireFacilityWork === true;
   }
@@ -378,6 +400,20 @@ export function formatProjectInputValue(
     if (!value.length) return "선택 없음";
     return value
       .map((id) => getSpecialLawDefinition(String(id) as Parameters<typeof getSpecialLawDefinition>[0])?.shortLabel ?? String(id))
+      .join(" · ");
+  }
+
+  if (
+    (key === "supplementalPermitReviewedIds" ||
+      key === "supplementalPermitTargetIds") &&
+    Array.isArray(value)
+  ) {
+    if (!value.length) return key === "supplementalPermitTargetIds" ? "대상 없음" : "검토 없음";
+    return value
+      .map((id) =>
+        catalog.procedures.find((procedure) => procedure.id === id)?.name ??
+        String(id),
+      )
       .join(" · ");
   }
 

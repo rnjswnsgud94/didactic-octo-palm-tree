@@ -4,6 +4,7 @@ import {
   filterFastTrackTargetProcedureIds,
   filterPlanDeemedProcedureIds,
 } from "@/lib/data/special-law-processes";
+import { supplementalPermitTargetIds } from "@/lib/data/supplemental-permit-targets";
 
 export function known(value: NonNullable<Fact["value"]>, unit?: string): Fact {
   return {
@@ -97,6 +98,10 @@ export function scenarioAnswersToProjectInput(
   >[],
 ): ProjectInput {
   const inside = nullableFact(answers.insideIndustrialComplex);
+  const normalizedProvince = answers.province.trim();
+  const normalizedCity = answers.city.trim() || (
+    normalizedProvince === "세종특별자치시" ? normalizedProvince : ""
+  );
   const advancedStrategicIndustryFastTrackPermitIds =
     filterFastTrackTargetProcedureIds(
       "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
@@ -201,6 +206,10 @@ export function scenarioAnswersToProjectInput(
     ...industrialComplexPlanTokens,
     ...regionalSpecialZonePlanTokens,
   ];
+  const chemicalDetailFact = (value: boolean | null) =>
+    answers.chemicalsHandled === false
+      ? notApplicable()
+      : nullableFact(value);
   return {
     assessmentDate: answers.assessmentDate,
     ...(answers.plannedConstructionStartDate
@@ -217,8 +226,8 @@ export function scenarioAnswersToProjectInput(
       : {}),
     investmentType: choiceFact(answers.investmentType),
     location: {
-      province: choiceFact(answers.province),
-      city: answers.city.trim() ? known(answers.city.trim()) : unknown(),
+      province: choiceFact(normalizedProvince),
+      city: normalizedCity ? known(normalizedCity) : unknown(),
       address: answers.siteAddress.trim() ? known(answers.siteAddress.trim()) : unknown(),
       capitalRegionControlArea: unknown(),
     },
@@ -301,16 +310,19 @@ export function scenarioAnswersToProjectInput(
     },
     environment: {
       airEmissionFacility: nullableFact(answers.airEmissionFacility),
+      airTotalManagementBusinessTarget: nullableFact(
+        answers.airTotalManagementBusinessTarget,
+      ),
       waterDischargeFacility: nullableFact(answers.waterDischargeFacility),
       noiseVibrationFacility: nullableFact(answers.noiseVibrationFacility),
       wasteFacility: nullableFact(answers.wasteFacility),
       chemicalsHandled: nullableFact(answers.chemicalsHandled),
       environmentalAssessmentType: nullableFact(answers.environmentalAssessmentType),
       integratedPermitTarget: nullableFact(answers.integratedEnvironmentalPermitTarget),
-      chemicalManufactureOrImport: nullableFact(answers.chemicalManufactureOrImport),
-      hazardousChemicalBusiness: nullableFact(answers.hazardousChemicalBusiness),
-      chemicalRegistrationRequired: nullableFact(answers.chemicalRegistrationRequired),
-      restrictedOrToxicChemicalImport: nullableFact(answers.restrictedOrToxicChemicalImport),
+      chemicalManufactureOrImport: chemicalDetailFact(answers.chemicalManufactureOrImport),
+      hazardousChemicalBusiness: chemicalDetailFact(answers.hazardousChemicalBusiness),
+      chemicalRegistrationRequired: chemicalDetailFact(answers.chemicalRegistrationRequired),
+      restrictedOrToxicChemicalImport: chemicalDetailFact(answers.restrictedOrToxicChemicalImport),
     },
     safety: {
       hazardousMaterials: nullableFact(answers.hazardousMaterials),
@@ -319,6 +331,9 @@ export function scenarioAnswersToProjectInput(
       lpgSpecificUseFacility: nullableFact(answers.lpgSpecificUseFacility),
       cityGasSpecificUseFacility: nullableFact(answers.cityGasSpecificUseFacility),
       psmCovered: nullableFact(answers.psmCovered),
+      psmCoversSameHazardPreventionScope: nullableFact(
+        answers.psmCoversSameHazardPreventionScope,
+      ),
       fireSafetyManagerRequired: nullableFact(answers.fireSafetyManagerRequired),
       hazardousMaterialsTank: nullableFact(answers.hazardousMaterialsTank),
       hazardousMaterialsPreventionRulesRequired: nullableFact(answers.hazardousMaterialsPreventionRulesRequired),
@@ -346,6 +361,16 @@ export function scenarioAnswersToProjectInput(
     },
     confirmation: {
       forestRestorationObligation: nullableFact(answers.forestRestorationObligation),
+      supplementalPermitTargets: Object.fromEntries(
+        supplementalPermitTargetIds.map((procedureId) => [
+          procedureId,
+          answers.supplementalPermitTargetIds.includes(procedureId)
+            ? known(true)
+            : answers.supplementalPermitReviewedIds.includes(procedureId)
+              ? known(false)
+              : unknown(),
+        ]),
+      ),
       fireWorkSupervisionTarget: nullableFact(answers.fireWorkSupervisionTarget),
       firstFireSelfInspectionTarget: nullableFact(answers.firstFireSelfInspectionTarget),
       highPressureGasBusinessStartTarget: nullableFact(answers.highPressureGasBusinessStartTarget),

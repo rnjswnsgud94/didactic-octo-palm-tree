@@ -121,13 +121,13 @@
     "validity": "설비·공정 변경 및 법정 주기별 이행상태 평가 검토",
     "followUpObligations": ["적합 통보 전 관련 유해·위험설비 가동 금지", "변경 시 변경관리 및 재제출 여부 검토"],
     "ruleIds": ["rule-psm-covered"],
-    "citationIds": ["cit-osh-44-1", "cit-gov24-psm-duration"],
+    "citationIds": ["cit-osh-44-1", "cit-osh-42-3-psm-deeming", "cit-gov24-psm-duration"],
     "durationId": "duration-psm",
-    "verificationStatus": "AI_ASSISTED_DRAFT",
-    "reviewedAt": "2026-08-20",
-    "reviewNote": "사용자가 PSM 대상 여부를 이미 확인한 경우만 적용 판정. 업종·물질·수량 임계값 자동판정은 미지원.",
+    "verificationStatus": "INTERNAL_REVIEWED",
+    "reviewedAt": "2026-08-21",
+    "reviewNote": "산업안전보건법 제44조의 적용 절차와 제42조제3항의 동일 유해·위험설비 의제범위를 공식 원문으로 검토. 사용자가 PSM 대상 여부와 동일 설비 포함 여부를 각각 확인한 경우만 확정 판정하며, 업종·물질·수량 임계값 자동판정은 미지원.",
     "deemedByProcedureIds": [],
-    "deemedProcedureIds": []
+    "deemedProcedureIds": ["hazard-prevention-plan"]
   },
   {
     "id": "construction-start-report",

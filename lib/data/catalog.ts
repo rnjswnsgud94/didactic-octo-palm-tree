@@ -37,6 +37,7 @@ import {
   specialLawProcessRuleIdsByProcedure,
   specialLawProcessRules,
 } from "@/lib/data/special-law-processes";
+import { supplementalPermitTargetIds } from "@/lib/data/supplemental-permit-targets";
 import {
   applicabilityRuleSchema,
   durationEstimateSchema,
@@ -141,6 +142,13 @@ export const scenarioAnswerSchema = z.object({
   regionalSpecialZonePlanIncludedPermitIds: z.array(z.string()).default([]),
   permitCoordination: z.string().nullable(),
   airEmissionFacility: z.boolean().nullable(),
+  airTotalManagementBusinessTarget: z.boolean().nullable().default(null),
+  supplementalPermitReviewedIds: z
+    .array(z.enum(supplementalPermitTargetIds))
+    .default([]),
+  supplementalPermitTargetIds: z
+    .array(z.enum(supplementalPermitTargetIds))
+    .default([]),
   waterDischargeFacility: z.boolean().nullable(),
   noiseVibrationFacility: z.boolean().nullable().default(null),
   environmentalAssessmentType: z.enum(["NONE", "ENVIRONMENTAL", "SMALL"]).nullable(),
@@ -155,6 +163,7 @@ export const scenarioAnswerSchema = z.object({
   lpgSpecificUseFacility: z.boolean().nullable().default(null),
   cityGasSpecificUseFacility: z.boolean().nullable().default(null),
   psmCovered: z.boolean().nullable(),
+  psmCoversSameHazardPreventionScope: z.boolean().nullable().default(null),
   fireFacilityWork: z.boolean().nullable(),
   fireWorkSupervisionTarget: z.boolean().nullable().default(null),
   firstFireSelfInspectionTarget: z.boolean().nullable().default(null),
@@ -196,6 +205,43 @@ export const scenarioAnswerSchema = z.object({
   powerIncreaseMw: z.number().nullable(),
   waterDemandM3Day: z.number().nullable(),
   wastewaterM3Day: z.number().nullable(),
+  userDurationOverrides: z.record(
+    z.string().regex(/^[a-z0-9-]{1,100}$/),
+    z.object({
+      value: z.number().int().min(0).max(3_650),
+      unit: z.enum(["BUSINESS_DAY", "CALENDAR_DAY", "MONTH"]),
+    }),
+  ).default({}),
+}).superRefine((answers, context) => {
+  if (Object.keys(answers.userDurationOverrides).length > 250) {
+    context.addIssue({
+      code: "custom",
+      path: ["userDurationOverrides"],
+      message: "사용자 예상 처리기간은 최대 250개 절차까지 입력할 수 있습니다.",
+    });
+  }
+  const reviewed = new Set(answers.supplementalPermitReviewedIds);
+  for (const targetId of answers.supplementalPermitTargetIds) {
+    if (reviewed.has(targetId)) continue;
+    context.addIssue({
+      code: "custom",
+      path: ["supplementalPermitTargetIds"],
+      message: "대상으로 선택한 정밀검토 절차는 검토 완료 목록에도 포함되어야 합니다.",
+    });
+  }
+  if (
+    answers.psmCoversSameHazardPreventionScope !== null
+    && (
+      answers.psmCovered !== true
+      || !answers.supplementalPermitTargetIds.includes("hazard-prevention-plan")
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["psmCoversSameHazardPreventionScope"],
+      message: "PSM 동일설비 범위는 PSM과 유해위험방지계획서가 모두 대상일 때만 입력할 수 있습니다.",
+    });
+  }
 });
 
 const scenarioSchema = z.object({

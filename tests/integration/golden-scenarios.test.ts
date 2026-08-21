@@ -32,9 +32,9 @@ describe("golden manufacturing scenarios", () => {
     expect(byId(offsite, "factory-completion-report-offsite")?.provisionalEffect).toBe("INCLUDE");
   });
 
-  it("provides only the automatic minimum and typical schedules", () => {
+  it("provides minimum, official-basis, and user-expected schedules", () => {
     const result = evaluateProject(catalog.scenarios[2].answers);
-    expect(Object.keys(result.schedules).sort()).toEqual(["MIN", "TYPICAL"]);
+    expect(Object.keys(result.schedules).sort()).toEqual(["MIN", "TYPICAL", "USER"]);
     expect(result.schedules.MIN.total).toBeLessThanOrEqual(result.schedules.TYPICAL.total);
     expect(result.schedules.MIN.projectTimeline?.minimumKnownCalendarDays).toBeLessThanOrEqual(
       result.schedules.TYPICAL.projectTimeline?.minimumKnownCalendarDays ?? 0,
@@ -144,13 +144,17 @@ describe("golden manufacturing scenarios", () => {
     expect(result.schedules.TYPICAL.topologicalOrder.length).toBeGreaterThan(70);
     expect(typical?.nodes).toHaveLength(result.schedules.TYPICAL.topologicalOrder.length);
     expect(typical?.nodes.filter((node) => node.processingDuration !== null).length).toBeGreaterThan(55);
-    expect(typical?.minimumKnownCalendarDays).toBeGreaterThan(minimum?.minimumKnownCalendarDays ?? 0);
+    expect(typical?.minimumKnownCalendarDays).toBeGreaterThanOrEqual(minimum?.minimumKnownCalendarDays ?? 0);
     expect(typical?.minimumKnownCalendarDays).toBeGreaterThan(731);
     expect(typical?.warnings.join(" ")).not.toContain("역행");
 
     const typicalNode = (id: string) => typical?.nodes.find((node) => node.procedureId === id);
     expect(typicalNode("factory-establishment-approval")?.processingDuration).toBe(30);
-    expect(typicalNode("building-permit")?.processingDuration).toBe(25);
+    expect(typicalNode("building-permit")).toMatchObject({
+      processingDuration: null,
+      processingUpperBound: 70,
+      durationPlanningBasis: "UNRESOLVED_OFFICIAL_BRANCH",
+    });
     expect(typicalNode("disaster-impact-assessment-consultation")?.processingDuration).toBe(45);
   });
 

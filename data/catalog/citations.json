@@ -154,6 +154,17 @@
     "summary": "대통령령상 유해·위험설비가 있는 사업주는 공정안전보고서를 작성·제출해 심사를 받아야 하며 적합 통보 전 관련 설비를 가동할 수 없다."
   },
   {
+    "id": "cit-osh-42-3-psm-deeming",
+    "sourceId": "src-osh-act-20260601",
+    "article": "제42조",
+    "paragraph": "제3항",
+    "subparagraph": null,
+    "item": null,
+    "role": "DEEMING",
+    "sourceVersion": "시행 2026.6.1., 법률 제21374호",
+    "summary": "사업주가 제44조제1항에 따라 공정안전보고서를 제출한 경우 해당 유해·위험설비에 대해서는 유해위험방지계획서를 제출한 것으로 본다."
+  },
+  {
     "id": "cit-gov24-factory-duration",
     "sourceId": "src-gov24-factory-approval",
     "article": null,
@@ -218,6 +229,17 @@
     "role": "DURATION",
     "sourceVersion": "정부24 확인 2026.8.20.",
     "summary": "폐수배출시설 설치허가·신고 처리기간을 총 10일로 안내한다."
+  },
+  {
+    "id": "cit-water-zero-discharge-duration",
+    "sourceId": "src-water-enforcement-rule-zero-discharge-current",
+    "article": "별지 제12호서식",
+    "paragraph": null,
+    "subparagraph": null,
+    "item": null,
+    "role": "DURATION",
+    "sourceVersion": "현행 서식 확인 2026.8.22.",
+    "summary": "폐수무방류배출시설 설치허가는 처리기간 60일, 그 밖의 폐수배출시설 설치허가·신고는 10일로 구분한다."
   },
   {
     "id": "cit-gov24-psm-duration",

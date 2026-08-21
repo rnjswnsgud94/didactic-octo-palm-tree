@@ -1,7 +1,7 @@
 {
-  "catalogVersion": "2026.08.21-permits.8-environment-flow",
-  "assessmentDefault": "2026-08-21",
-  "lastLegalReviewAt": "2026-08-21",
+  "catalogVersion": "2026.08.22-permits.10-duration-completeness",
+  "assessmentDefault": "2026-08-22",
+  "lastLegalReviewAt": "2026-08-22",
   "lastLawApiSyncAt": null,
   "snapshotStatus": "SNAPSHOT_ONLY",
   "nextReviewDueAt": "2026-09-11",

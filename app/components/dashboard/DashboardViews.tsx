@@ -10,7 +10,11 @@ import type { ScenarioAnswers } from "@/lib/data/catalog";
 import { planningDurationNotice } from "@/lib/data/planning-durations";
 import type { ProcedureDecision } from "@/lib/engine/rule-engine";
 import type { ScheduleResult } from "@/lib/engine/schedule";
-import { formatCalendarPeriod, formatProcessingDuration } from "@/lib/format-duration";
+import {
+  formatCalendarPeriod,
+  formatCompletedCheckpoint,
+  formatTimelineProcessingDuration,
+} from "@/lib/format-duration";
 
 const planningConfidenceLabels = {
   HIGH: "높음",
@@ -192,11 +196,21 @@ export function ActionPlanView({
   const timelineById = new Map(
     (schedule.projectTimeline?.nodes ?? []).map((node) => [node.procedureId, node]),
   );
+  const completedCheckpointById = new Map(
+    schedule.completedCheckpoints.map((checkpoint) => [
+      checkpoint.procedureId,
+      checkpoint,
+    ]),
+  );
   const rows = decisions
     .filter((decision) => procedureCategoryForDecision(decision) !== "NOT_REQUIRED")
     .map((decision) => {
       const category = procedureCategoryForDecision(decision);
       const timeline = timelineById.get(decision.procedure.id);
+      const completedCheckpoint =
+        timeline?.completedCheckpoint ??
+        completedCheckpointById.get(decision.procedure.id) ??
+        null;
       const incoming = catalog.edges.filter(
         (edge) => edge.to === decision.procedure.id && activeEdgeIds.has(edge.id),
       );
@@ -243,7 +257,9 @@ export function ActionPlanView({
           ? answers.plannedConstructionStartDate
           : null;
       const inputMatchedInclusion = isInputMatchedRoadmapInclusion(decision);
-      const nextAction = decision.isDeemed
+      const nextAction = completedCheckpoint
+        ? "완료 증빙을 보관하고 허가·계약 조건 및 후속 의무 이행상태를 확인"
+        : decision.isDeemed
         ? `${receivingAuthority.label} 제출용 상위 승인문서·의제목록·관계기관 협의완료 증빙 확보`
         : category === "CONFIRM"
           ? decision.missingInputs.length
@@ -257,6 +273,7 @@ export function ActionPlanView({
         category,
         inputMatchedInclusion,
         timeline,
+        completedCheckpoint,
         legalPrerequisites,
         recommendedPrerequisites,
         unsupportedLegalPrerequisites,
@@ -265,11 +282,15 @@ export function ActionPlanView({
         consultationAuthorities,
         hasSubmissionCitation,
         hasAuthorityCitation,
-        targetDate: timeline?.startDate ?? milestoneTarget ?? "미정",
+        targetDate: completedCheckpoint
+          ? completedCheckpoint.completedDate ?? `${completedCheckpoint.confirmedAsOfDate} 기준일 현재 완료`
+          : timeline?.startDate ?? milestoneTarget ?? "미정",
         nextAction,
       };
     })
     .sort((left, right) =>
+      Number(right.completedCheckpoint !== null) -
+        Number(left.completedCheckpoint !== null) ||
       (left.timeline?.startOffsetDays ?? Number.MAX_SAFE_INTEGER) -
         (right.timeline?.startOffsetDays ?? Number.MAX_SAFE_INTEGER) ||
       left.decision.procedure.name.localeCompare(right.decision.procedure.name),
@@ -278,7 +299,13 @@ export function ActionPlanView({
     exactAuthority: rows.filter((row) => row.receivingAuthority.specific).length,
     authorityCitation: rows.filter((row) => row.hasAuthorityCitation).length,
     submissionCitation: rows.filter((row) => row.hasSubmissionCitation).length,
-    knownDuration: rows.filter((row) => row.timeline?.processingDuration !== null && row.timeline !== undefined).length,
+    durationScope: rows.filter((row) => row.completedCheckpoint === null).length,
+    knownDuration: rows.filter(
+      (row) =>
+        row.completedCheckpoint === null &&
+        row.timeline?.processingDuration !== null &&
+        row.timeline !== undefined,
+    ).length,
   };
 
   function downloadCsv() {
@@ -329,7 +356,7 @@ export function ActionPlanView({
         <div><span>기관명 구체화</span><strong>{evidenceSummary.exactAuthority}</strong><small>/ {rows.length}</small></div>
         <div className={evidenceSummary.authorityCitation < rows.length ? "has-gap" : ""}><span>권한 원문 연결</span><strong>{evidenceSummary.authorityCitation}</strong><small>/ {rows.length}</small></div>
         <div className={evidenceSummary.submissionCitation < rows.length ? "has-gap" : ""}><span>제출자료 원문 연결</span><strong>{evidenceSummary.submissionCitation}</strong><small>/ {rows.length}</small></div>
-        <div className={evidenceSummary.knownDuration < rows.length ? "has-gap" : ""}><span>처리기간 근거 확인</span><strong>{evidenceSummary.knownDuration}</strong><small>/ {rows.length}</small></div>
+        <div className={evidenceSummary.knownDuration < evidenceSummary.durationScope ? "has-gap" : ""}><span>잔여 처리기간 근거</span><strong>{evidenceSummary.knownDuration}</strong><small>/ {evidenceSummary.durationScope}</small></div>
       </section>
       <div className="action-plan-list">
         {rows.map((row, index) => (
@@ -373,14 +400,20 @@ export function ProcedureList({ decisions, schedule, onSelect }: {
           {decisions.map((decision) => {
             const node = schedule.nodes.find((item) => item.procedureId === decision.procedure.id);
             const timelineNode = schedule.projectTimeline?.nodes.find((item) => item.procedureId === decision.procedure.id);
+            const completedCheckpoint =
+              timelineNode?.completedCheckpoint ??
+              schedule.completedCheckpoints.find(
+                (item) => item.procedureId === decision.procedure.id,
+              ) ??
+              null;
             return (
               <tr key={decision.procedure.id}>
                 <td><StatusBadge status={decision.status} isDeemed={decision.isDeemed} provisionalEffect={decision.provisionalEffect} missingInputs={decision.missingInputs} conflictRuleIds={decision.conflictRuleIds} needsLegalReview={decision.needsLegalReview} /></td>
                 <td><strong>{decision.procedure.name}</strong><small>{decision.procedure.domain}</small>{decision.specialLawImpacts?.length ? <em className="special-law-chip">{decision.specialLawImpacts[0].effectLabel} · {decision.specialLawImpacts[0].statusLabel}</em> : null}</td>
                 <td>{stageLabels[decision.procedure.stage]}</td>
                 <td>{decision.procedure.receivingAuthority}</td>
-                <td>{!timelineNode ? "일정 제외" : `${formatProcessingDuration(timelineNode.processingDuration, timelineNode.processingUnit)} · 근거수준 ${planningConfidenceLabels[timelineNode.durationConfidence]}`}</td>
-                <td>{!timelineNode ? "일정 제외" : timelineNode.excludedFromOperationReady ? "가동 후 별도" : timelineNode.overlapsConstruction && !timelineNode.extendsOperationReady ? `공사 중 흡수(${timelineNode.overlapWithConstructionDays}일)` : timelineNode.extendsOperationReady ? "준공 뒤 연장" : node?.parallel ? "병렬 진행" : "순차 진행"}</td>
+                <td>{completedCheckpoint ? formatCompletedCheckpoint(completedCheckpoint) : !timelineNode ? "일정 제외" : `${formatTimelineProcessingDuration(timelineNode)} · 근거수준 ${planningConfidenceLabels[timelineNode.durationConfidence]}`}</td>
+                <td>{completedCheckpoint ? "완료 이정표 · 잔여 업무 없음" : !timelineNode ? "일정 제외" : timelineNode.excludedFromOperationReady ? "가동 후 별도" : timelineNode.overlapsConstruction && !timelineNode.extendsOperationReady ? `공사 중 흡수(${timelineNode.overlapWithConstructionDays}일)` : timelineNode.extendsOperationReady ? "준공 뒤 연장" : node?.parallel ? "병렬 진행" : "순차 진행"}</td>
                 <td><button type="button" className="text-button" onClick={() => onSelect(decision.procedure.id)}>보기</button></td>
               </tr>
             );
@@ -402,13 +435,21 @@ export function ScheduleView({ schedule, answers }: { schedule: ScheduleResult; 
           <strong>공사 시작일과 준공일을 입력해 주세요.</strong>
           <span>공사 일정이 있어야 공식 처리기간, 공사기간, 병행 가능한 절차를 한 일정으로 계산할 수 있습니다.</span>
         </div>
+        {schedule.completedCheckpoints.length ? (
+          <section className="company-milestones" aria-label="확인된 완료 이정표">
+            <header><strong>확인된 완료 이정표</strong><span>공사 일정과 별개로 이미 끝난 절차이며 남은 처리기간에 더하지 않습니다.</span></header>
+            <div>{schedule.completedCheckpoints.map((checkpoint) => <p key={checkpoint.procedureId}><span>{names.get(checkpoint.procedureId) ?? checkpoint.procedureId}</span><strong>{formatCompletedCheckpoint(checkpoint)}</strong></p>)}</div>
+          </section>
+        ) : null}
       </div>
     );
   }
 
   const activeNodes = timeline.nodes.filter((node) => !node.excludedFromOperationReady);
   const postNodes = timeline.nodes.filter((node) => node.excludedFromOperationReady);
-  const timedActiveNodes = activeNodes.filter((node) => node.processingDuration !== null);
+  const timedActiveNodes = activeNodes.filter(
+    (node) => !node.completedCheckpoint && node.processingDuration !== null,
+  );
   const absorbedNodes = timedActiveNodes.filter(
     (node) => node.overlapsConstruction && !node.extendsOperationReady,
   );
@@ -441,7 +482,9 @@ export function ScheduleView({ schedule, answers }: { schedule: ScheduleResult; 
         ? "적용 여부를 확인할 절차까지 포함했습니다."
         : schedule.scenario === "MIN"
           ? "확인된 공식 최단 처리경로입니다."
-          : "확인된 공식 표준 처리경로입니다.";
+          : schedule.scenario === "USER"
+            ? `사용자 예상 처리기간 ${timeline.userDurationOverrideProcedureIds.length}건을 반영한 경로입니다.`
+            : "확인된 공식 기준 처리경로입니다. 실제 평균을 뜻하지 않습니다.";
   const durationLabel = timeline.durationStatus === "MINIMUM_ONLY"
     ? "확인된 일정 하한"
     : "총 소요기간";
@@ -459,7 +502,7 @@ export function ScheduleView({ schedule, answers }: { schedule: ScheduleResult; 
       <div className="schedule-summary">
         <div>
           <span>{durationLabel}</span>
-          <strong>{totalDuration}<small>{timeline.durationStatus === "MINIMUM_ONLY" ? ` · 확인된 처리기간 기준 하한 · 처리기간 미확인 ${unknownActiveNodes.length}개 · 기간 구성 미확인 ${incompleteActiveDurationComponentCount}개` : schedule.scenario === "MIN" ? " · 최소기간" : " · 통상"}</small></strong>
+          <strong>{totalDuration}<small>{timeline.durationStatus === "MINIMUM_ONLY" ? ` · 확인된 처리기간 기준 하한 · 처리기간 미확인 ${unknownActiveNodes.length}개 · 기간 구성 미확인 ${incompleteActiveDurationComponentCount}개${schedule.scenario === "USER" ? ` · 사용자 예상 ${timeline.userDurationOverrideProcedureIds.length}건 반영` : ""}` : schedule.scenario === "MIN" ? " · 최소기간" : schedule.scenario === "USER" ? ` · 사용자 예상 ${timeline.userDurationOverrideProcedureIds.length}건 반영` : " · 공식 기준"}</small></strong>
         </div>
         <div>
           <span>{timeline.permitLeadCalendarDays === null ? "계획상 착공 준비" : "착공 전 인허가"}</span>
@@ -501,16 +544,16 @@ export function ScheduleView({ schedule, answers }: { schedule: ScheduleResult; 
           <div className="gantt-track"><span className="gantt-bar is-construction" style={{ left: (constructionStartOffset / denominator) * 100 + "%", width: Math.min(constructionWidth, Math.max(1.5, 100 - (constructionStartOffset / denominator) * 100)) + "%" }} /></div>
         </div>
         {activeNodes.map((node) => {
-          const left = (node.startOffsetDays / denominator) * 100;
+          const left = Math.max(0, (node.startOffsetDays / denominator) * 100);
           const durationDays = Math.max(0, node.finishOffsetDays - node.startOffsetDays);
           const width = Math.max((durationDays / denominator) * 100, 1.2);
           return (
             <div className="gantt-row" key={node.procedureId}>
               <div className="gantt-label">
                 <strong>{names.get(node.procedureId)}</strong>
-                <span>{formatProcessingDuration(node.processingDuration, node.processingUnit)} · {node.startDate} ~ {node.finishDate}{node.overlapsConstruction ? " · 공사와 " + node.overlapWithConstructionDays + "일 병행" : ""}</span>
+                <span>{node.completedCheckpoint ? formatCompletedCheckpoint(node.completedCheckpoint) : `${formatTimelineProcessingDuration(node)} · ${node.startDate} ~ ${node.finishDate}${node.overlapsConstruction ? " · 공사와 " + node.overlapWithConstructionDays + "일 병행" : ""}`}</span>
               </div>
-              <div className="gantt-track"><span className={"gantt-bar " + (node.extendsOperationReady ? "is-critical " : "") + (node.overlapsConstruction ? "is-overlap " : "") + (node.processingDuration === null ? "is-unknown" : "")} style={{ left: left + "%", width: Math.min(width, Math.max(1.2, 100 - left)) + "%" }} /></div>
+              <div className="gantt-track"><span className={"gantt-bar " + (node.completedCheckpoint ? "is-completed " : "") + (node.extendsOperationReady ? "is-critical " : "") + (node.overlapsConstruction ? "is-overlap " : "") + (node.processingDuration === null ? "is-unknown" : "")} style={{ left: left + "%", width: Math.min(width, Math.max(1.2, 100 - left)) + "%" }} /></div>
             </div>
           );
         })}
@@ -519,7 +562,7 @@ export function ScheduleView({ schedule, answers }: { schedule: ScheduleResult; 
         <section className="post-operation-list">
           <h3>가동 후 별도 관리</h3>
           <p>아래 절차는 가동 준비 완료일과 총 소요기간에 넣지 않았습니다.</p>
-          <ul>{postNodes.map((node) => <li key={node.procedureId}><strong>{names.get(node.procedureId)}</strong><span>{formatProcessingDuration(node.processingDuration, node.processingUnit)} · {node.startDate}부터</span></li>)}</ul>
+          <ul>{postNodes.map((node) => <li key={node.procedureId}><strong>{names.get(node.procedureId)}</strong><span>{node.completedCheckpoint ? formatCompletedCheckpoint(node.completedCheckpoint) : `${formatTimelineProcessingDuration(node)} · ${node.startDate}부터`}</span></li>)}</ul>
         </section>
       ) : null}
       <div className="warning-list">{timeline.warnings.map((warning) => <p key={warning}>※ {warning}</p>)}</div>

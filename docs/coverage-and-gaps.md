@@ -1,7 +1,7 @@
 # Coverage and gaps
 
-Catalog version: `2026.08.21-permits.2`
-Legal and ELIS public-page review: `2026-08-21`
+Catalog version: `2026.08.22-permits.10-duration-completeness`
+Legal, duration and ELIS public-page review: `2026-08-22`
 Snapshot mode: `SNAPSHOT_ONLY`
 
 ## Covered common layer
@@ -14,6 +14,14 @@ Snapshot mode: `SNAPSHOT_ONLY`
 - PSM, hazard-prevention plan, hazardous materials, fire, electrical, high-pressure-gas, LPG, city-gas and energy procedures;
 - factory registration outside the factory-establishment-approval threshold, mechanical-equipment checks and public-water implementation/completion procedures.
 - reclaimed-water installation reporting, high-pressure-gas start reporting, fire-work-supervisor reporting and forest-restoration approval/completion inspection.
+- separated duration evidence for power-grid impact assessment, landscape review, building-committee review, development completion inspection, public-sewer completion inspection and hazardous-chemical facility inspections;
+- exact local official duration references for Geoje landscape review, Cheongju building review, Taean development completion and selected sewer jurisdictions, applied only on an exact city match.
+- nationwide Government24 7-business-day processing standard for development-activity completion inspection, while retaining a shorter local official standard only for an exact Taean match;
+- structured 15/30/60-calendar-day statutory milestones for the national-strategic-industry and semiconductor-cluster fast-track result checks; these are shown as conditional component deadlines, not an end-to-end total or automatic approval;
+- an explicit statutory-process explanation for national-heritage simplified diagnosis, whose Act and Enforcement Rule require expert review, decision and notice but set no nationwide fixed completion deadline;
+- separated soil-facility installation reporting from soil testing, and high-pressure-gas technical review, intermediate inspection and completion inspection so independent official periods are not collapsed into one card;
+- official duration branches for zero-discharge wastewater facilities, groundwater permit/report routes, hazardous-material installation/change permits, fire-work reporting and industrial-complex/special-zone statutory milestones;
+- component-only milestones for heat-use-equipment inspections and wastewater trial-operation checks where the official number is not an end-to-end completion period.
 
 ## Geographic and industry scope
 
@@ -31,6 +39,8 @@ Snapshot mode: `SNAPSHOT_ONLY`
 6. Provider-specific power, water and wastewater capacity, contracts and lead times.
 7. New industrial-complex designation, urban-management-plan change and major grid construction.
 8. Product-specific manufacturing/business permits for food, pharmaceuticals, medical devices, cosmetics, livestock products, feed, fertilizer and pesticides require a separate product-level input before deterministic inclusion.
+9. Nationwide empirical averages or percentiles for most permit preparation, supplement, committee wait and inspection-booking periods. Official caps and local service standards are shown separately and are not represented as actual averages.
+10. Detailed branch inputs for high-pressure-gas facility type, wastewater zero-discharge/treatment method, soil-test exemption and some inspection-booking routes. Until added, the roadmap shows the official branch range or milestone without selecting an arbitrary midpoint.
 
 ## Version warnings
 

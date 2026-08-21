@@ -1,10 +1,10 @@
 # ADR 0002: Official-duration dependency schedule
 
-Status: accepted (revised 2026-08-20)
+Status: accepted; user-duration paragraph superseded by ADR 0004 (2026-08-22)
 
 ## Decision
 
-Use an acyclic procedure graph and date-level critical-path calculation for two automatic scenarios: `MIN` and `TYPICAL`. Preserve each official duration unit, resolve input-dependent statutory branches, and calculate Korean business days with a reviewed 2026–2040 public-holiday calendar. Construction is a calendar-month interval that may absorb parallel procedures. User-entered permit-duration assumptions are not accepted.
+Use an acyclic procedure graph and date-level critical-path calculation for two automatic scenarios: `MIN` and `TYPICAL`. Preserve each official duration unit, resolve input-dependent statutory branches, and calculate Korean business days with a reviewed 2026–2040 public-holiday calendar. Construction is a calendar-month interval that may absorb parallel procedures. ADR 0004 adds a separately labelled, reversible `USER` overlay without changing the official catalog.
 
 ## Rationale
 

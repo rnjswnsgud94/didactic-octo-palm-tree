@@ -65,6 +65,63 @@ describe("AI data-center special-law routing", () => {
     expect(decision(evaluation, "building-permit").provisionalEffect).not.toBe("EXCLUDE");
   });
 
+  it("adds the separate port-hinterland entry contract only after the location special case takes effect", () => {
+    const beforeEffective = evaluateProject(
+      answers({
+        assessmentDate: "2027-03-09",
+        appliedSpecialLawIds: ["AIDC_PORT_HINTERLAND_ENTRY"],
+      }),
+    );
+    expect(beforeEffective.specialLawEvaluations[0]).toMatchObject({
+      id: "AIDC_PORT_HINTERLAND_ENTRY",
+      status: "FUTURE",
+    });
+    expect(decision(beforeEffective, "port-hinterland-entry-contract")).toMatchObject({
+      status: "DOES_NOT_APPLY",
+      provisionalEffect: "EXCLUDE",
+    });
+
+    const afterEffective = evaluateProject(
+      answers({
+        assessmentDate: "2027-03-10",
+        appliedSpecialLawIds: ["AIDC_PORT_HINTERLAND_ENTRY"],
+      }),
+    );
+    expect(afterEffective.specialLawEvaluations[0]).toMatchObject({
+      id: "AIDC_PORT_HINTERLAND_ENTRY",
+      status: "ACTIVE",
+      affectedProcedureIds: ["port-hinterland-entry-contract"],
+    });
+    expect(decision(afterEffective, "port-hinterland-entry-contract")).toMatchObject({
+      status: "APPLIES",
+      provisionalEffect: "INCLUDE",
+      procedure: {
+        receivingAuthority: "해당 1종 항만배후단지 관리기관",
+        citationIds: expect.arrayContaining([
+          "cit-aidc-special-act-23",
+          "cit-port-act-71-entry-contract",
+          "cit-port-act-decree-72-3-duration",
+        ]),
+      },
+    });
+    expect(
+      catalog.durations.find(
+        (item) => item.procedureId === "port-hinterland-entry-contract",
+      ),
+    ).toMatchObject({
+      elapsed: { min: 7, base: 7, max: 7, unit: "BUSINESS_DAY" },
+      evidenceType: "STATUTE",
+      citationIds: expect.arrayContaining([
+        "cit-port-act-decree-72-3-duration",
+        "cit-civil-petitions-act-19-time-calculation",
+      ]),
+    });
+    const order = afterEffective.schedules.TYPICAL.topologicalOrder;
+    expect(order.indexOf("port-hinterland-entry-contract")).toBeLessThan(
+      order.indexOf("building-permit"),
+    );
+  });
+
   it.each([null, false] as const)(
     "does not apply a selected exemption when facility qualification is %s",
     (aiDataCenterActFacilityConfirmed) => {

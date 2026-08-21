@@ -2,11 +2,25 @@ import { scenarioAnswerSchema, type ScenarioAnswers } from "@/lib/data/catalog";
 import { isSupportedNonCapitalProvince } from "@/lib/regions";
 
 export const MAX_SHARE_STATE_LENGTH = 8_000;
+export const INPUT_CODE_PREFIX = "FPR1.";
+const MAX_INPUT_STATE_LENGTH = 60_000;
+export const MAX_INPUT_CODE_LENGTH = 81_000;
+const MAX_ARRAY_ITEMS = 250;
+const ARRAY_CODEC_KEY = "ac";
+const ARRAY_CODEC_VERSION = "1";
+const EMPTY_ARRAY_ITEM_TOKEN = "%00";
 
 export class ShareStateTooLongError extends RangeError {
   constructor(readonly actualLength: number) {
     super(`공유 주소 상태가 ${actualLength}자로 ${MAX_SHARE_STATE_LENGTH}자 한도를 초과했습니다.`);
     this.name = "ShareStateTooLongError";
+  }
+}
+
+export class InputCodeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InputCodeError";
   }
 }
 
@@ -82,6 +96,9 @@ const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["regionalSpecialZonePlanIncludedPermitIds", "rspi"],
   ["permitCoordination", "pc"],
   ["airEmissionFacility", "air"],
+  ["airTotalManagementBusinessTarget", "atm"],
+  ["supplementalPermitReviewedIds", "spr"],
+  ["supplementalPermitTargetIds", "spt"],
   ["waterDischargeFacility", "wat"],
   ["noiseVibrationFacility", "noi"],
   ["environmentalAssessmentType", "eia"],
@@ -96,6 +113,7 @@ const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["lpgSpecificUseFacility", "lpg"],
   ["cityGasSpecificUseFacility", "cgs"],
   ["psmCovered", "psm"],
+  ["psmCoversSameHazardPreventionScope", "pss"],
   ["fireFacilityWork", "fire"],
   ["fireWorkSupervisionTarget", "fws"],
   ["firstFireSelfInspectionTarget", "ffi"],
@@ -128,7 +146,9 @@ const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["powerIncreaseMw", "pow"],
   ["waterDemandM3Day", "sup"],
   ["wastewaterM3Day", "ww"],
+  ["userDurationOverrides", "ud"],
 ];
+export const SHARE_STATE_FIELDS = keys.map(([key]) => key);
 
 const version8OnlyFields = new Set<keyof ScenarioAnswers>([
   "landscapeReviewRequired",
@@ -202,6 +222,10 @@ const version12OnlyFields = new Set<keyof ScenarioAnswers>([
   "noiseVibrationFacility",
 ]);
 
+const version13OnlyFields = new Set<keyof ScenarioAnswers>([
+  "userDurationOverrides",
+]);
+
 const version2Fields: Array<[keyof ScenarioAnswers, string]> = [
   ["landCategory", "land"],
   ["demolitionRequired", "demo"],
@@ -263,116 +287,204 @@ const textValueLimits: Partial<Record<keyof ScenarioAnswers, number>> = {
   regionalSpecialZonePlanApprovalNoticeReference: 300,
 };
 
-function encodeValue(value: ScenarioAnswers[keyof ScenarioAnswers]) {
-  if (Array.isArray(value)) return value.join(".");
+function encodeArrayItem(value: string) {
+  if (value === "") return EMPTY_ARRAY_ITEM_TOKEN;
+  return value.replaceAll("%", "%25").replaceAll(".", "%2E");
+}
+
+function decodeArrayItem(value: string) {
+  if (value === EMPTY_ARRAY_ITEM_TOKEN) return "";
+  return value.replaceAll("%2E", ".").replaceAll("%25", "%");
+}
+
+function encodeValue(
+  key: keyof ScenarioAnswers,
+  value: ScenarioAnswers[keyof ScenarioAnswers],
+  useEscapedArrayCodec: boolean,
+) {
+  if (key === "userDurationOverrides") {
+    const overrides = value as ScenarioAnswers["userDurationOverrides"];
+    return Object.entries(overrides)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([procedureId, override]) => {
+        const unit = override.unit === "BUSINESS_DAY"
+          ? "b"
+          : override.unit === "CALENDAR_DAY"
+            ? "c"
+            : "m";
+        return `${procedureId}~${override.value}~${unit}`;
+      })
+      .join(".");
+  }
+  if (Array.isArray(value)) {
+    return useEscapedArrayCodec
+      ? value.map(encodeArrayItem).join(".")
+      : value.join(".");
+  }
   if (value === null) return "u";
   if (value === true) return "1";
   if (value === false) return "0";
   return String(value);
 }
 
+const arrayValueFields = new Set<keyof ScenarioAnswers>([
+  "appliedSpecialLawIds",
+  "industrialComplexPlanIncludedPermitIds",
+  "regionalSpecialZonePlanIncludedPermitIds",
+  "semiconductorClusterPlanIncludedPermitIds",
+  "advancedStrategicIndustryFastTrackPermitIds",
+  "semiconductorClusterFastTrackPermitIds",
+  "supplementalPermitReviewedIds",
+  "supplementalPermitTargetIds",
+]);
+
+const booleanValueFields = new Set<keyof ScenarioAnswers>([
+  "insideIndustrialComplex",
+  "mechanicalEquipmentActTarget",
+  "airEmissionFacility",
+  "airTotalManagementBusinessTarget",
+  "waterDischargeFacility",
+  "noiseVibrationFacility",
+  "demolitionRequired",
+  "roadConnectionRequired",
+  "trafficImpactAssessmentRequired",
+  "landscapeReviewRequired",
+  "buildingCommitteeReviewRequired",
+  "gridImpactAssessmentRequired",
+  "aiDataCenterActFacilityConfirmed",
+  "advancedStrategicIndustryFastTrackConfirmed",
+  "advancedStrategicIndustryApplicantRoleConfirmed",
+  "advancedStrategicIndustryDelayRiskConfirmed",
+  "advancedStrategicIndustryCommitteeResolved",
+  "semiconductorClusterFastTrackConfirmed",
+  "semiconductorClusterApplicantRoleConfirmed",
+  "semiconductorClusterDelayRiskConfirmed",
+  "semiconductorClusterCommitteeResolved",
+  "semiconductorClusterPlanDeemingConfirmed",
+  "semiconductorClusterPlanDocumentsIncluded",
+  "semiconductorClusterPlanConsultationCompleted",
+  "semiconductorClusterPlanApprovalPublished",
+  "industrialComplexPlanSpecialCaseConfirmed",
+  "industrialComplexPlanDocumentsIncluded",
+  "industrialComplexPlanConsultationCompleted",
+  "industrialComplexPlanApprovalPublished",
+  "regionalSpecialZonePlanDeemingConfirmed",
+  "regionalSpecialZonePlanDocumentsIncluded",
+  "regionalSpecialZonePlanConsultationCompleted",
+  "regionalSpecialZonePlanApprovalPublished",
+  "integratedEnvironmentalPermitTarget",
+  "chemicalsHandled",
+  "chemicalManufactureOrImport",
+  "hazardousChemicalBusiness",
+  "hazardousMaterials",
+  "highPressureGas",
+  "highPressureGasBusinessStartTarget",
+  "specificHighPressureGasUse",
+  "lpgSpecificUseFacility",
+  "cityGasSpecificUseFacility",
+  "psmCovered",
+  "psmCoversSameHazardPreventionScope",
+  "fireFacilityWork",
+  "fireWorkSupervisionTarget",
+  "firstFireSelfInspectionTarget",
+  "privateElectricalFacilityWork",
+  "energyUsePlanRequired",
+  "groundwaterDevelopment",
+  "militaryProtectionConsultationRequired",
+  "riverOccupationRequired",
+  "publicWaterOccupationRequired",
+  "waterSourceProtectionZone",
+  "safetyManagementPlanRequired",
+  "specificWorkReportRequired",
+  "asbestosPresent",
+  "publicSewerConnection",
+  "privateSewageTreatmentFacility",
+  "wasteFacility",
+  "chemicalRegistrationRequired",
+  "restrictedOrToxicChemicalImport",
+  "fireSafetyManagerRequired",
+  "hazardousMaterialsTank",
+  "hazardousMaterialsPreventionRulesRequired",
+  "heatUseEquipment",
+  "hazardousMachineryInspectionRequired",
+  "safetyManagerRequired",
+  "healthManagerRequired",
+  "forestRestorationObligation",
+]);
+
+const numberValueFields = new Set<keyof ScenarioAnswers>([
+  "existingAreaM2",
+  "increaseAreaM2",
+  "totalAreaM2",
+  "powerIncreaseMw",
+  "waterDemandM3Day",
+  "wastewaterM3Day",
+]);
+
+const nullableScalarFields = new Set<keyof ScenarioAnswers>([
+  ...booleanValueFields,
+  ...numberValueFields,
+  "plannedConstructionStartDate",
+  "plannedConstructionEndDate",
+  "equipmentInstallationCompletionDate",
+  "commissioningStartDate",
+  "advancedStrategicIndustryMinisterRequestDate",
+  "semiconductorClusterMinisterRequestDate",
+  "semiconductorClusterPlanApprovalPublishedDate",
+  "industrialComplexPlanApprovalPublishedDate",
+  "regionalSpecialZonePlanApprovalPublishedDate",
+  "landCategory",
+  "permitCoordination",
+  "environmentalAssessmentType",
+  "disasterImpactAssessmentType",
+  "undergroundSafetyAssessmentType",
+  "nationalHeritageAssessmentType",
+]);
+
 function decodeValue(
   key: keyof ScenarioAnswers,
   value: string,
-): string | number | boolean | string[] | null {
-  if (value === "u") return null;
-  if ([
-    "appliedSpecialLawIds",
-    "industrialComplexPlanIncludedPermitIds",
-    "regionalSpecialZonePlanIncludedPermitIds",
-    "semiconductorClusterPlanIncludedPermitIds",
-    "advancedStrategicIndustryFastTrackPermitIds",
-    "semiconductorClusterFastTrackPermitIds",
-  ].includes(key)) {
-    return value ? value.split(".").filter(Boolean).slice(0, 40) : [];
+  useEscapedArrayCodec: boolean,
+): string | number | boolean | string[] | null | ScenarioAnswers["userDurationOverrides"] {
+  if (key === "userDurationOverrides") {
+    const overrides: ScenarioAnswers["userDurationOverrides"] = {};
+    if (!value) return overrides;
+    for (const entry of value.split(".").slice(0, MAX_ARRAY_ITEMS)) {
+      const [procedureId, rawValue, rawUnit, ...extra] = entry.split("~");
+      const number = Number(rawValue);
+      const unit = rawUnit === "b"
+        ? "BUSINESS_DAY"
+        : rawUnit === "c"
+          ? "CALENDAR_DAY"
+          : rawUnit === "m"
+            ? "MONTH"
+            : null;
+      if (
+        extra.length ||
+        !/^[a-z0-9-]{1,100}$/.test(procedureId ?? "") ||
+        !Number.isInteger(number) ||
+        number < 0 ||
+        number > 3_650 ||
+        unit === null ||
+        Object.hasOwn(overrides, procedureId)
+      ) continue;
+      overrides[procedureId] = { value: number, unit };
+    }
+    return overrides;
   }
-  if (
-    [
-      "insideIndustrialComplex",
-      "mechanicalEquipmentActTarget",
-      "airEmissionFacility",
-      "waterDischargeFacility",
-      "noiseVibrationFacility",
-      "demolitionRequired",
-      "roadConnectionRequired",
-      "trafficImpactAssessmentRequired",
-      "landscapeReviewRequired",
-      "buildingCommitteeReviewRequired",
-      "gridImpactAssessmentRequired",
-      "aiDataCenterActFacilityConfirmed",
-      "advancedStrategicIndustryFastTrackConfirmed",
-      "advancedStrategicIndustryApplicantRoleConfirmed",
-      "advancedStrategicIndustryDelayRiskConfirmed",
-      "advancedStrategicIndustryCommitteeResolved",
-      "semiconductorClusterFastTrackConfirmed",
-      "semiconductorClusterApplicantRoleConfirmed",
-      "semiconductorClusterDelayRiskConfirmed",
-      "semiconductorClusterCommitteeResolved",
-      "semiconductorClusterPlanDeemingConfirmed",
-      "semiconductorClusterPlanDocumentsIncluded",
-      "semiconductorClusterPlanConsultationCompleted",
-      "semiconductorClusterPlanApprovalPublished",
-      "industrialComplexPlanSpecialCaseConfirmed",
-      "industrialComplexPlanDocumentsIncluded",
-      "industrialComplexPlanConsultationCompleted",
-      "industrialComplexPlanApprovalPublished",
-      "regionalSpecialZonePlanDeemingConfirmed",
-      "regionalSpecialZonePlanDocumentsIncluded",
-      "regionalSpecialZonePlanConsultationCompleted",
-      "regionalSpecialZonePlanApprovalPublished",
-      "integratedEnvironmentalPermitTarget",
-      "chemicalsHandled",
-      "chemicalManufactureOrImport",
-      "hazardousChemicalBusiness",
-      "hazardousMaterials",
-      "highPressureGas",
-      "highPressureGasBusinessStartTarget",
-      "specificHighPressureGasUse",
-      "lpgSpecificUseFacility",
-      "cityGasSpecificUseFacility",
-      "psmCovered",
-      "fireFacilityWork",
-      "fireWorkSupervisionTarget",
-      "firstFireSelfInspectionTarget",
-      "privateElectricalFacilityWork",
-      "energyUsePlanRequired",
-      "groundwaterDevelopment",
-      "militaryProtectionConsultationRequired",
-      "riverOccupationRequired",
-      "publicWaterOccupationRequired",
-      "waterSourceProtectionZone",
-      "safetyManagementPlanRequired",
-      "specificWorkReportRequired",
-      "asbestosPresent",
-      "publicSewerConnection",
-      "privateSewageTreatmentFacility",
-      "wasteFacility",
-      "chemicalRegistrationRequired",
-      "restrictedOrToxicChemicalImport",
-      "fireSafetyManagerRequired",
-      "hazardousMaterialsTank",
-      "hazardousMaterialsPreventionRulesRequired",
-      "heatUseEquipment",
-      "hazardousMachineryInspectionRequired",
-      "safetyManagerRequired",
-      "healthManagerRequired",
-      "forestRestorationObligation",
-    ].includes(key)
-  ) {
+  if (value === "u" && nullableScalarFields.has(key)) return null;
+  if (arrayValueFields.has(key)) {
+    const items = value ? value.split(".").slice(0, MAX_ARRAY_ITEMS) : [];
+    return useEscapedArrayCodec
+      ? items.map(decodeArrayItem)
+      : items.filter(Boolean);
+  }
+  if (booleanValueFields.has(key)) {
     if (value === "1") return true;
     if (value === "0") return false;
     return null;
   }
-  if (
-    [
-      "existingAreaM2",
-      "increaseAreaM2",
-      "totalAreaM2",
-      "powerIncreaseMw",
-      "waterDemandM3Day",
-      "wastewaterM3Day",
-    ].includes(key)
-  ) {
+  if (numberValueFields.has(key)) {
     const number = Number(value);
     return Number.isFinite(number) && number >= 0 && number <= 1_000_000_000
       ? number
@@ -381,41 +493,54 @@ function decodeValue(
   return value.slice(0, textValueLimits[key] ?? 80);
 }
 
+function encodeState(
+  answers: ScenarioAnswers,
+  tab: string,
+  useEscapedArrayCodec = true,
+) {
+  const params = new URLSearchParams();
+  params.set("v", "13");
+  if (useEscapedArrayCodec) params.set(ARRAY_CODEC_KEY, ARRAY_CODEC_VERSION);
+  for (const [key, shortKey] of keys) {
+    params.set(shortKey, encodeValue(key, answers[key], useEscapedArrayCodec));
+  }
+  params.set("tab", tab);
+  params.sort();
+  return params.toString();
+}
+
 export function encodeShareState(
   answers: ScenarioAnswers,
   tab: string,
 ) {
-  const params = new URLSearchParams();
-  params.set("v", "12");
-  for (const [key, shortKey] of keys) {
-    params.set(shortKey, encodeValue(answers[key]));
-  }
-  params.set("tab", tab);
-  params.sort();
-  const encoded = params.toString();
+  const encoded = encodeState(answers, tab);
   if (encoded.length > MAX_SHARE_STATE_LENGTH) {
     throw new ShareStateTooLongError(encoded.length);
   }
   return encoded;
 }
 
-export function decodeShareState(
+function decodeState(
   search: string,
   fallback: ScenarioAnswers,
+  maximumLength: number,
+  oversizedWarning: string,
 ): { answers: ScenarioAnswers; tab?: string; warning?: string } {
   const encodedLength = search.startsWith("?") ? search.length - 1 : search.length;
-  if (encodedLength > MAX_SHARE_STATE_LENGTH) {
-    return { answers: fallback, warning: "공유 주소가 너무 길어 기본값을 사용했습니다." };
+  if (encodedLength > maximumLength) {
+    return { answers: fallback, warning: oversizedWarning };
   }
   const params = new URLSearchParams(search);
   if (!params.has("v")) return { answers: fallback };
   const version = params.get("v");
-  if (!["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].includes(version ?? "")) {
+  const useEscapedArrayCodec =
+    params.get(ARRAY_CODEC_KEY) === ARRAY_CODEC_VERSION;
+  if (!["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"].includes(version ?? "")) {
     return { answers: fallback, warning: "지원하지 않는 공유 주소 버전입니다." };
   }
   const warnings: string[] = [];
   const candidate: Record<string, unknown> = { ...fallback };
-  if (!["8", "9", "10", "11", "12"].includes(version ?? "")) {
+  if (!["8", "9", "10", "11", "12", "13"].includes(version ?? "")) {
     candidate.gridImpactAssessmentRequired = null;
     candidate.aiDataCenterActFacilityConfirmed = null;
     candidate.landscapeReviewRequired = null;
@@ -424,23 +549,27 @@ export function decodeShareState(
     candidate.appliedSpecialLawIds = [];
     warnings.push("예전 공유 주소에는 AI 데이터센터 특례 조건이 없어 미확인·미선택 상태로 복원했습니다.");
   }
-  if (!["9", "10", "11", "12"].includes(version ?? "")) {
+  if (!["9", "10", "11", "12", "13"].includes(version ?? "")) {
     for (const key of version9OnlyFields) candidate[key] = null;
     warnings.push("예전 공유 주소에는 업종·지역·산업단지 특별법 확인값이 없어 미확인 상태로 복원했습니다.");
   }
-  if (!["10", "11", "12"].includes(version ?? "")) {
+  if (!["10", "11", "12", "13"].includes(version ?? "")) {
     for (const key of version10OnlyFields) candidate[key] = fallback[key];
     warnings.push("예전 공유 주소에는 산단 계약·의제 증빙·세부 사업정보가 없어 기본값으로 복원했습니다.");
   }
-  if (!["11", "12"].includes(version ?? "")) {
+  if (!["11", "12", "13"].includes(version ?? "")) {
     for (const key of version11OnlyFields) {
       candidate[key] = key.endsWith("NoticeReference") ? "" : null;
     }
     warnings.push("예전 공유 주소에는 계획 승인·고시 완료 증거가 없어 미확인 상태로 복원했습니다.");
   }
-  if (version !== "12") {
+  if (!["12", "13"].includes(version ?? "")) {
     for (const key of version12OnlyFields) candidate[key] = null;
     warnings.push("예전 공유 주소에는 소음·진동배출시설 확인값이 없어 미확인 상태로 복원했습니다.");
+  }
+  if (version !== "13") {
+    for (const key of version13OnlyFields) candidate[key] = {};
+    warnings.push("예전 공유 주소에는 사용자 예상 처리기간이 없어 공식 기준으로 복원했습니다.");
   }
   if (version === "1") {
     const missingNewFields = version2Fields.filter(([, shortKey]) => !params.has(shortKey));
@@ -456,24 +585,25 @@ export function decodeShareState(
   for (const [key, shortKey] of keys) {
     const value = params.get(shortKey);
     if (value === null) continue;
-    if (!["8", "9", "10", "11", "12"].includes(version ?? "") && version8OnlyFields.has(key)) continue;
-    if (!["9", "10", "11", "12"].includes(version ?? "") && version9OnlyFields.has(key)) continue;
-    if (!["10", "11", "12"].includes(version ?? "") && version10OnlyFields.has(key)) continue;
-    if (!["11", "12"].includes(version ?? "") && version11OnlyFields.has(key)) continue;
-    if (version !== "12" && version12OnlyFields.has(key)) continue;
-    if (!["6", "7", "8", "9", "10", "11", "12"].includes(version ?? "") && key === "plannedConstructionStartDate" && /^\d{4}-\d{2}$/.test(value)) {
+    if (!["8", "9", "10", "11", "12", "13"].includes(version ?? "") && version8OnlyFields.has(key)) continue;
+    if (!["9", "10", "11", "12", "13"].includes(version ?? "") && version9OnlyFields.has(key)) continue;
+    if (!["10", "11", "12", "13"].includes(version ?? "") && version10OnlyFields.has(key)) continue;
+    if (!["11", "12", "13"].includes(version ?? "") && version11OnlyFields.has(key)) continue;
+    if (!["12", "13"].includes(version ?? "") && version12OnlyFields.has(key)) continue;
+    if (version !== "13" && version13OnlyFields.has(key)) continue;
+    if (!["6", "7", "8", "9", "10", "11", "12", "13"].includes(version ?? "") && key === "plannedConstructionStartDate" && /^\d{4}-\d{2}$/.test(value)) {
       candidate[key] = `${value}-01`;
       continue;
     }
-    if (!["6", "7", "8", "9", "10", "11", "12"].includes(version ?? "") && key === "plannedConstructionEndDate" && /^\d{4}-\d{2}$/.test(value)) {
+    if (!["6", "7", "8", "9", "10", "11", "12", "13"].includes(version ?? "") && key === "plannedConstructionEndDate" && /^\d{4}-\d{2}$/.test(value)) {
       const [year, month] = value.split("-").map(Number);
       const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
       candidate[key] = end;
       continue;
     }
-    candidate[key] = decodeValue(key, value);
+    candidate[key] = decodeValue(key, value, useEscapedArrayCodec);
   }
-  if (!["6", "7", "8", "9", "10", "11", "12"].includes(version ?? "") && (params.has("cs") || params.has("ce"))) {
+  if (!["6", "7", "8", "9", "10", "11", "12", "13"].includes(version ?? "") && (params.has("cs") || params.has("ce"))) {
     warnings.push("예전 공유 주소의 월 단위 공사 일정을 해당 월의 첫날과 마지막 날로 변환했습니다.");
   }
   const parsed = scenarioAnswerSchema.safeParse(candidate);
@@ -498,4 +628,172 @@ export function decodeShareState(
     ...(tab ? { tab } : {}),
     ...(warnings.length ? { warning: warnings.join(" ") } : {}),
   };
+}
+
+export function decodeShareState(
+  search: string,
+  fallback: ScenarioAnswers,
+): { answers: ScenarioAnswers; tab?: string; warning?: string } {
+  return decodeState(
+    search,
+    fallback,
+    MAX_SHARE_STATE_LENGTH,
+    "공유 주소가 너무 길어 기본값을 사용했습니다.",
+  );
+}
+
+function encodeBase64Url(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 8_192) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8_192));
+  }
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+/**
+ * FNV-1a is an accidental-corruption check, not an authentication mechanism.
+ * Keeping it synchronous lets the same portable code work in every browser
+ * without making the export action depend on Web Crypto availability.
+ */
+function inputCodeChecksum(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let hash = 0x811c9dc5;
+  for (const byte of bytes) {
+    hash = Math.imul(hash ^ byte, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function decodeBase64Url(value: string) {
+  if (!value || !/^[A-Za-z0-9_-]+$/.test(value) || value.length % 4 === 1) {
+    throw new InputCodeError("입력 코드 형식이 올바르지 않습니다.");
+  }
+  const base64 = value.replaceAll("-", "+").replaceAll("_", "/")
+    .padEnd(Math.ceil(value.length / 4) * 4, "=");
+  try {
+    const binary = atob(base64);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new InputCodeError("입력 코드가 손상되어 내용을 읽을 수 없습니다.");
+  }
+}
+
+/**
+ * Portable, input-only envelope around the same versioned state used by share
+ * URLs. The active result tab is intentionally fixed so importing never changes
+ * a user's current view preference.
+ */
+function hasUnreviewedSupplementalTarget(answers: ScenarioAnswers) {
+  const reviewedIds = new Set(answers.supplementalPermitReviewedIds);
+  return answers.supplementalPermitTargetIds.some(
+    (procedureId) => !reviewedIds.has(procedureId),
+  );
+}
+
+function hasOrphanedPsmSameScopeAnswer(answers: ScenarioAnswers) {
+  return answers.psmCoversSameHazardPreventionScope !== null
+    && (
+      answers.psmCovered !== true
+      || !answers.supplementalPermitTargetIds.includes("hazard-prevention-plan")
+    );
+}
+
+function hasOversizedArray(answers: ScenarioAnswers) {
+  return [...arrayValueFields].some((key) => {
+    const value = answers[key];
+    return Array.isArray(value) && value.length > MAX_ARRAY_ITEMS;
+  });
+}
+
+export function encodeInputCode(answers: ScenarioAnswers) {
+  if (hasOversizedArray(answers)) {
+    throw new InputCodeError(
+      `선택 항목이 너무 많아 코드로 내보낼 수 없습니다. 항목별 ${MAX_ARRAY_ITEMS}개 이하로 줄여 주세요.`,
+    );
+  }
+  if (hasUnreviewedSupplementalTarget(answers)) {
+    throw new InputCodeError("정밀검토 대상 절차는 검토 완료 절차에 포함되어야 합니다.");
+  }
+  if (hasOrphanedPsmSameScopeAnswer(answers)) {
+    throw new InputCodeError(
+      "PSM 동일설비 범위는 PSM과 유해위험방지계획서가 모두 대상일 때만 내보낼 수 있습니다.",
+    );
+  }
+  const encodedState = encodeState(answers, "SWIMLANE");
+  if (encodedState.length > MAX_INPUT_STATE_LENGTH) {
+    throw new InputCodeError("입력 내용이 많아 코드로 내보낼 수 없습니다. 긴 설명이나 선택 항목을 줄여 주세요.");
+  }
+  const code = `${INPUT_CODE_PREFIX}${inputCodeChecksum(encodedState)}.${encodeBase64Url(encodedState)}`;
+  if (code.length > MAX_INPUT_CODE_LENGTH) {
+    throw new InputCodeError("입력 내용이 많아 코드로 내보낼 수 없습니다. 긴 설명이나 선택 항목을 줄여 주세요.");
+  }
+  return code;
+}
+
+export function decodeInputCode(
+  code: string,
+  fallback: ScenarioAnswers,
+) {
+  if (code.length > MAX_INPUT_CODE_LENGTH) {
+    throw new InputCodeError("입력 코드가 허용 길이를 초과했습니다.");
+  }
+  const normalizedCode = code.trim();
+  if (!normalizedCode.startsWith(INPUT_CODE_PREFIX)) {
+    throw new InputCodeError("지원하지 않는 입력 코드입니다. FPR1.로 시작하는 코드를 사용해 주세요.");
+  }
+  const envelope = normalizedCode.slice(INPUT_CODE_PREFIX.length);
+  const separatorIndex = envelope.indexOf(".");
+  if (separatorIndex === -1 || envelope.indexOf(".", separatorIndex + 1) !== -1) {
+    throw new InputCodeError("입력 코드 형식이 올바르지 않습니다.");
+  }
+  const checksum = envelope.slice(0, separatorIndex);
+  if (!/^[0-9a-f]{8}$/.test(checksum)) {
+    throw new InputCodeError("입력 코드 형식이 올바르지 않습니다.");
+  }
+  const encodedState = decodeBase64Url(envelope.slice(separatorIndex + 1));
+  if (inputCodeChecksum(encodedState) !== checksum) {
+    throw new InputCodeError("입력 코드가 변경되었거나 일부 항목이 손상되었습니다.");
+  }
+  if (encodedState.length > MAX_INPUT_STATE_LENGTH) {
+    throw new InputCodeError("입력 코드의 데이터가 허용 길이를 초과했습니다.");
+  }
+  const encodedStateParams = new URLSearchParams(encodedState);
+  const encodedVersion = encodedStateParams.get("v");
+  const restored = decodeState(
+    encodedState,
+    fallback,
+    MAX_INPUT_STATE_LENGTH,
+    "입력 코드의 데이터가 허용 길이를 초과했습니다.",
+  );
+  const safeLegacyMigration =
+    encodedVersion !== "13" &&
+    restored.warning !== undefined &&
+    ![
+      "지원하지 않는",
+      "올바르지 않아",
+      "지원 범위 밖",
+      "너무 길어",
+    ].some((message) => restored.warning?.includes(message));
+  if (restored.warning && !safeLegacyMigration) {
+    throw new InputCodeError(
+      `입력 코드를 적용할 수 없습니다. ${restored.warning.replaceAll("공유 주소", "입력 코드")}`,
+    );
+  }
+  if (hasUnreviewedSupplementalTarget(restored.answers)) {
+    throw new InputCodeError("정밀검토 대상 절차는 검토 완료 절차에 포함되어야 합니다.");
+  }
+  const canonicalState = encodeState(
+    restored.answers,
+    "SWIMLANE",
+    encodedStateParams.get(ARRAY_CODEC_KEY) === ARRAY_CODEC_VERSION,
+  );
+  if (encodedVersion === "13" && canonicalState !== encodedState) {
+    throw new InputCodeError("입력 코드가 변경되었거나 일부 항목이 손상되었습니다.");
+  }
+  return restored.answers;
 }

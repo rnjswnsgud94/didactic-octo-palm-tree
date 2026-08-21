@@ -70,6 +70,8 @@ type PlanningSpec = {
   overlapPolicy: PlanningDuration["overlapPolicy"];
   releasePolicy?: PlanningDuration["releasePolicy"];
   endToEndMissingComponents?: string[];
+  completedCheckpoint?: PlanningDuration["completedCheckpoint"];
+  evidenceType?: PlanningDuration["evidenceType"];
 };
 
 function planning(values: Record<string, PlanningSpec>): PlanningDuration[] {
@@ -83,14 +85,15 @@ function planning(values: Record<string, PlanningSpec>): PlanningDuration[] {
       unit: value.unit,
       overlapPolicy: value.overlapPolicy,
       releasePolicy: value.releasePolicy ?? "EARLIEST_ALLOWED",
-      evidenceType: known
+      evidenceType: value.evidenceType ?? (known
         ? "OFFICIAL_SERVICE_STANDARD"
-        : "INSUFFICIENT_DATA",
+        : "INSUFFICIENT_DATA"),
       confidence: known ? "HIGH" : "UNVERIFIED",
       sourceLabel: known ? "테스트용 공식 처리기간" : null,
       assumptions: [],
       reviewedAt: known ? "2026-01-01" : null,
       endToEndMissingComponents: value.endToEndMissingComponents,
+      completedCheckpoint: value.completedCheckpoint,
     } satisfies PlanningDuration;
   });
 }
@@ -546,6 +549,322 @@ describe("automatic integrated construction timeline", () => {
       unknownPlanningDurationProcedureIds: ["unknown"],
     });
     expect(result.projectTimeline?.warnings.join(" ")).toContain("일정 하한");
+  });
+
+  it("uses a user-entered end-to-end duration without hiding the official gap", () => {
+    const result = calculateSchedule({
+      decisions: decisions(["unknown"]),
+      edges: [],
+      durations: durations({ unknown: null }),
+      scenario: "USER",
+      includeConditional: true,
+      includePractical: true,
+      constructionPlan,
+      planningDurations: planning({
+        unknown: {
+          minimum: null,
+          typical: null,
+          unit: null,
+          overlapPolicy: "PRE_OPERATION",
+          releasePolicy: "CONSTRUCTION_FINISH",
+        },
+      }),
+      userDurationOverrides: {
+        unknown: { value: 10, unit: "CALENDAR_DAY" },
+      },
+    });
+
+    expect(result.projectTimeline).toMatchObject({
+      durationStatus: "CALCULATED",
+      calculationBasis: "USER_EXPECTED",
+      totalCalendarDays: 160,
+      operationReadyDate: "2026-06-10",
+      unknownPlanningDurationProcedureIds: [],
+      officialUnknownPlanningDurationProcedureIds: ["unknown"],
+      userDurationOverrideProcedureIds: ["unknown"],
+    });
+    expect(result.projectTimeline?.nodes[0]).toMatchObject({
+      processingDuration: 10,
+      processingUnit: "CALENDAR_DAY",
+      officialProcessingDuration: null,
+      officialProcessingUnit: null,
+      durationSource: "USER_EXPECTED",
+      startDate: "2026-06-01",
+      finishDate: "2026-06-10",
+    });
+    expect(result.projectTimeline?.warnings.join(" ")).toContain(
+      "법정 처리기간이나 기관의 공식 평균이 아닙니다",
+    );
+  });
+
+  it("treats a user total as complete while retaining official component gaps", () => {
+    const result = calculateSchedule({
+      decisions: decisions(["permit"]),
+      edges: [],
+      durations: durations({ permit: 7 }),
+      scenario: "USER",
+      includeConditional: true,
+      includePractical: true,
+      constructionPlan,
+      planningDurations: planning({
+        permit: {
+          minimum: 7,
+          typical: 7,
+          unit: "BUSINESS_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          endToEndMissingComponents: ["신청인 준비", "관계기관 협의"],
+        },
+      }),
+      userDurationOverrides: {
+        permit: { value: 1, unit: "MONTH" },
+      },
+    });
+
+    expect(result.projectTimeline).toMatchObject({
+      incompleteDurationComponentProcedureIds: [],
+      officialIncompleteDurationComponentProcedureIds: ["permit"],
+      calculationBasis: "USER_EXPECTED",
+    });
+    expect(result.projectTimeline?.nodes[0]).toMatchObject({
+      processingDuration: 1,
+      processingUnit: "MONTH",
+      officialProcessingDuration: 7,
+      officialProcessingUnit: "BUSINESS_DAY",
+      durationSource: "USER_EXPECTED",
+    });
+  });
+
+  it("keeps a completed checkpoint visible without treating its unknown original duration as remaining work", () => {
+    const result = calculateSchedule({
+      decisions: decisions(["checkpoint", "permit"]),
+      edges: [edge("checkpoint-permit", "checkpoint", "permit")],
+      durations: durations({ checkpoint: null, permit: 5 }),
+      scenario: "MIN",
+      includeConditional: true,
+      includePractical: true,
+      constructionPlan,
+      planningDurations: planning({
+        checkpoint: {
+          minimum: 0,
+          typical: 0,
+          unit: "CALENDAR_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          evidenceType: "INSUFFICIENT_DATA",
+          endToEndMissingComponents: [],
+          completedCheckpoint: {
+            label: "입주계약 체결 완료",
+            completedDate: null,
+            confirmedAsOfDate: "2026-01-02",
+          },
+        },
+        permit: {
+          minimum: 5,
+          unit: "BUSINESS_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          endToEndMissingComponents: [],
+        },
+      }),
+    });
+
+    expect(result.complete).toBe(true);
+    expect(result.completedCheckpoints).toEqual([
+      {
+        procedureId: "checkpoint",
+        label: "입주계약 체결 완료",
+        completedDate: null,
+        confirmedAsOfDate: "2026-01-02",
+      },
+    ]);
+    expect(result.unknownDurationProcedureIds).not.toContain("checkpoint");
+    expect(result.projectTimeline?.unknownPlanningDurationProcedureIds).not.toContain(
+      "checkpoint",
+    );
+    expect(result.projectTimeline?.nodes.find(
+      (node) => node.procedureId === "checkpoint",
+    )).toMatchObject({
+      processingDuration: 0,
+      completedCheckpoint: {
+        label: "입주계약 체결 완료",
+        completedDate: null,
+        confirmedAsOfDate: "2026-01-02",
+      },
+    });
+    expect(result.projectTimeline?.nodes.find(
+      (node) => node.procedureId === "permit",
+    )?.processingDuration).toBe(5);
+  });
+
+  it("lets a confirmed completion supersede only a conflicting practical predecessor", () => {
+    const result = calculateSchedule({
+      decisions: decisions(["recommended-first", "completed", "legal-first"]),
+      edges: [
+        edge("recommended-completed", "recommended-first", "completed", {
+          strength: "PRACTICAL",
+        }),
+        edge("legal-completed", "legal-first", "completed"),
+      ],
+      durations: durations({ "recommended-first": 5, completed: null, "legal-first": 5 }),
+      planningDurations: planning({
+        "recommended-first": { minimum: 5, unit: "BUSINESS_DAY", overlapPolicy: "PRE_CONSTRUCTION" },
+        "legal-first": { minimum: 5, unit: "BUSINESS_DAY", overlapPolicy: "PRE_CONSTRUCTION" },
+        completed: {
+          minimum: 0,
+          unit: "CALENDAR_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          completedCheckpoint: {
+            label: "완료 확인",
+            completedDate: null,
+            confirmedAsOfDate: "2026-01-02",
+          },
+        },
+      }),
+      scenario: "MIN",
+      includeConditional: true,
+      includePractical: true,
+      constructionPlan,
+    });
+
+    expect(result.activeEdgeIds).not.toContain("recommended-completed");
+    expect(result.activeEdgeIds).toContain("legal-completed");
+    expect(result.warnings.join(" ")).toContain("실무 권장 선후행 1건");
+    expect(result.projectTimeline?.warnings.join(" ")).toContain("법적 선행절차 1건");
+  });
+
+  it("keeps a historical checkpoint at its actual date and ignores future incoming work in remaining-time arithmetic", () => {
+    const common = {
+      decisions: decisions(["future-permit", "checkpoint", "successor"]),
+      edges: [
+        edge("future-checkpoint", "future-permit", "checkpoint"),
+        edge("checkpoint-successor", "checkpoint", "successor"),
+      ],
+      durations: durations({
+        "future-permit": 10,
+        checkpoint: null,
+        successor: 5,
+      }),
+      scenario: "MIN" as const,
+      includeConditional: true,
+      includePractical: true,
+      planningDurations: planning({
+        "future-permit": {
+          minimum: 10,
+          unit: "BUSINESS_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          endToEndMissingComponents: [],
+        },
+        checkpoint: {
+          minimum: 0,
+          typical: 0,
+          unit: "CALENDAR_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          evidenceType: "INSUFFICIENT_DATA",
+          endToEndMissingComponents: [],
+          completedCheckpoint: {
+            label: "계획 승인·고시 완료",
+            completedDate: "2026-01-01",
+            confirmedAsOfDate: "2026-01-02",
+          },
+        },
+        successor: {
+          minimum: 5,
+          unit: "BUSINESS_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          endToEndMissingComponents: [],
+        },
+      }),
+    };
+    const result = calculateSchedule({ ...common, constructionPlan });
+    const checkpointNode = result.nodes.find(
+      (node) => node.procedureId === "checkpoint",
+    );
+    const datedCheckpoint = result.projectTimeline?.nodes.find(
+      (node) => node.procedureId === "checkpoint",
+    );
+
+    expect(result.total).toBe(10);
+    expect(checkpointNode).toMatchObject({
+      earliestStart: 0,
+      earliestFinish: 0,
+      latestStart: 0,
+      latestFinish: 0,
+      critical: false,
+    });
+    expect(result.nodes.find(
+      (node) => node.procedureId === "successor",
+    )).toMatchObject({ earliestStart: 0, earliestFinish: 5 });
+    expect(datedCheckpoint).toMatchObject({
+      startDate: "2026-01-01",
+      finishDate: "2026-01-01",
+      processingDuration: 0,
+      extendsOperationReady: false,
+    });
+    expect(result.projectTimeline?.nodes.find(
+      (node) => node.procedureId === "successor",
+    )?.startDate).toBe("2026-01-02");
+  });
+
+  it("exposes only validated completed checkpoints when construction dates are absent", () => {
+    const valid = calculateSchedule({
+      decisions: decisions(["checkpoint"]),
+      edges: [],
+      durations: durations({ checkpoint: null }),
+      scenario: "MIN",
+      includeConditional: true,
+      includePractical: true,
+      planningDurations: planning({
+        checkpoint: {
+          minimum: 0,
+          typical: 0,
+          unit: "CALENDAR_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          evidenceType: "INSUFFICIENT_DATA",
+          endToEndMissingComponents: [],
+          completedCheckpoint: {
+            label: "입주계약 체결 완료",
+            completedDate: null,
+            confirmedAsOfDate: "2026-01-02",
+          },
+        },
+      }),
+    });
+    const malformed = calculateSchedule({
+      decisions: decisions(["checkpoint"]),
+      edges: [],
+      durations: durations({ checkpoint: null }),
+      scenario: "MIN",
+      includeConditional: true,
+      includePractical: true,
+      constructionPlan,
+      planningDurations: planning({
+        checkpoint: {
+          minimum: 0,
+          typical: 0,
+          unit: "CALENDAR_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          evidenceType: "INSUFFICIENT_DATA",
+          endToEndMissingComponents: [],
+          completedCheckpoint: {
+            label: "입주계약 체결 완료",
+            completedDate: "2026-01-03",
+            confirmedAsOfDate: "2026-01-02",
+          },
+        },
+      }),
+    });
+
+    expect(valid.projectTimeline).toBeNull();
+    expect(valid.completedCheckpoints).toEqual([
+      expect.objectContaining({
+        procedureId: "checkpoint",
+        confirmedAsOfDate: "2026-01-02",
+      }),
+    ]);
+    expect(valid.unknownDurationProcedureIds).not.toContain("checkpoint");
+    expect(malformed.completedCheckpoints).toEqual([]);
+    expect(malformed.unknownDurationProcedureIds).toContain("checkpoint");
+    expect(malformed.projectTimeline?.nodes.find(
+      (node) => node.procedureId === "checkpoint",
+    )?.completedCheckpoint).toBeNull();
   });
 
   it("keeps a known processing period as a floor when preparation or consultation is missing", () => {

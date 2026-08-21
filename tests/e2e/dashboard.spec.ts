@@ -41,6 +41,41 @@ test("desktop result summary uses the available width without cramped copy", asy
   expect(Math.min(...geometry!.descriptionWidthRatios)).toBeGreaterThan(0.78);
   expect(Math.min(...geometry!.descriptionLineHeights)).toBeGreaterThanOrEqual(19);
   expect(geometry!.hasHorizontalOverflow).toBe(false);
+
+  const flowGeometry = await page.locator(".swimlane-grid").evaluate((element) => {
+    const marker = element.querySelector("marker");
+    return {
+      columnGap: Number.parseFloat(getComputedStyle(element).columnGap),
+      markerUnits: marker?.getAttribute("markerUnits"),
+      markerWidth: marker?.getAttribute("markerWidth"),
+      markerViewBox: marker?.getAttribute("viewBox"),
+    };
+  });
+  expect(flowGeometry.columnGap).toBeGreaterThanOrEqual(20);
+  expect(flowGeometry).toMatchObject({
+    markerUnits: "userSpaceOnUse",
+    markerWidth: "12",
+    markerViewBox: "-1 -5 12 10",
+  });
+});
+
+test("a card user estimate updates the scenario and survives reload", async ({ page }) => {
+  await page.goto("/");
+  const card = page.locator(".procedure-card").first();
+  await card.getByRole("button", { name: /내 예상.*기간 입력/ }).click();
+  await card.getByRole("spinbutton").fill("30");
+  await card.getByRole("combobox").selectOption("CALENDAR_DAY");
+  await card.getByRole("button", { name: "반영" }).click();
+
+  await expect(page.getByRole("button", { name: "내 예상 1" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(card).toContainText("30일 · 수정");
+  await expect(page).toHaveURL(/ud=.*30/);
+
+  await page.reload();
+  await expect(page.locator(".procedure-card").first()).toContainText("30일 · 수정");
 });
 
 test("wizard changes the route and detail links are official", async ({ page }) => {

@@ -132,4 +132,27 @@ describe("structured environmental installation decisions", () => {
     expect(result.provisionalEffect).toBe("INCLUDE");
     expect(procedureCategoryForDecision(result)).toBe("REQUIRED");
   });
+
+  it.each([
+    [true, "REQUIRED"],
+    [false, "NOT_REQUIRED"],
+    [null, "CONFIRM"],
+  ] as const)(
+    "routes the separately reviewed air-total-management target=%s into %s",
+    (airTotalManagementBusinessTarget, expectedCategory) => {
+      const result = decision(
+        decide({
+          airEmissionFacility: true,
+          airTotalManagementBusinessTarget,
+        }),
+        "air-total-management-business-permit",
+      );
+
+      expect(procedureCategoryForDecision(result)).toBe(expectedCategory);
+      expect(result.conflictRuleIds).toEqual([]);
+      if (airTotalManagementBusinessTarget !== null) {
+        expect(result.missingInputs).toEqual([]);
+      }
+    },
+  );
 });

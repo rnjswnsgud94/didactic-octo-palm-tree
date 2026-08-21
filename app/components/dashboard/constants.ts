@@ -1,4 +1,5 @@
 import type { ApplicabilityStatus } from "@/lib/domain/schemas";
+import { supplementalPermitTargetNames } from "@/lib/data/supplemental-permit-targets";
 
 export const stageLabels = {
   SITE_REVIEW: "입지 사전검토",
@@ -224,6 +225,10 @@ const inputLabels: Record<string, string> = {
   fireFacilityWork: "소방시설공사 대상 여부",
   "environment.airEmissionFacility": "대기배출시설 해당 여부",
   airEmissionFacility: "대기배출시설 해당 여부",
+  "environment.airTotalManagementBusinessTarget": "대기 총량관리사업장 설치허가 대상 여부",
+  airTotalManagementBusinessTarget: "대기 총량관리사업장 설치허가 대상 여부",
+  supplementalPermitReviewedIds: "공사·환경 정밀검토 완료 항목",
+  supplementalPermitTargetIds: "정밀검토 결과 대상 절차",
   "environment.waterDischargeFacility": "폐수배출시설 해당 여부",
   waterDischargeFacility: "폐수배출시설 해당 여부",
   "environment.noiseVibrationFacility": "소음·진동배출시설 해당 여부",
@@ -261,6 +266,8 @@ const inputLabels: Record<string, string> = {
   cityGasSpecificUseFacility: "도시가스 특정사용시설 완성검사 대상 여부",
   "safety.psmCovered": "PSM 대상 여부",
   psmCovered: "공정안전보고서(PSM) 대상 여부",
+  "safety.psmCoversSameHazardPreventionScope": "PSM 동일 유해·위험설비 포함 여부",
+  psmCoversSameHazardPreventionScope: "PSM 동일 유해·위험설비 포함 여부",
   fireWorkSupervisionTarget: "소방공사 감리자 지정신고 대상 확인",
   firstFireSelfInspectionTarget: "최초 소방시설 자체점검·결과보고 대상 확인",
   forestRestorationObligation: "산지 복구의무·면제 확인",
@@ -302,5 +309,10 @@ const inputLabels: Record<string, string> = {
 };
 
 export function inputLabel(path: string) {
+  const supplementalPrefix = "confirmation.supplementalPermitTargets.";
+  if (path.startsWith(supplementalPrefix)) {
+    const id = path.slice(supplementalPrefix.length);
+    return `공사·환경 정밀검토 · ${supplementalPermitTargetNames[id as keyof typeof supplementalPermitTargetNames] ?? id}`;
+  }
   return inputLabels[path] ?? path;
 }

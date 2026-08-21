@@ -12,7 +12,7 @@ import {
 } from "@/lib/calendar/korean-business-calendar";
 import type { ProcedureDecision } from "@/lib/engine/rule-engine";
 
-export type DurationScenario = "MIN" | "TYPICAL";
+export type DurationScenario = "MIN" | "TYPICAL" | "USER";
 
 export type ConstructionPlan = {
   /** ISO date used to apply the legal catalog version. */
@@ -36,6 +36,12 @@ export type PlanningReleasePolicy =
 
 export type DurationUnit = "BUSINESS_DAY" | "CALENDAR_DAY" | "MONTH";
 
+export type UserDurationOverride = {
+  /** User-entered expected end-to-end elapsed duration for this procedure. */
+  value: number;
+  unit: DurationUnit;
+};
+
 export type PlanningDurationConfidence =
   | "HIGH"
   | "MEDIUM"
@@ -47,6 +53,8 @@ export type PlanningDuration = {
   procedureId: string;
   minimum: number | null;
   typical: number | null;
+  /** Official maximum or statutory cap retained even when no typical value exists. */
+  upperBound?: number | null;
   unit: DurationUnit | null;
   overlapPolicy: PlanningOverlapPolicy;
   releasePolicy: PlanningReleasePolicy;
@@ -55,8 +63,22 @@ export type PlanningDuration = {
   sourceLabel: string | null;
   assumptions: string[];
   reviewedAt: string | null;
+  planningBasis?: DurationEstimate["planningBasis"];
+  referencePeriods?: DurationEstimate["referencePeriods"];
   /** Empty only when preparation, authority review, consultation, and elapsed time are all evidenced. */
   endToEndMissingComponents?: string[];
+  /** A user-confirmed past event kept visible as a zero-remaining-work checkpoint. */
+  completedCheckpoint?: {
+    label: string;
+    completedDate: string | null;
+    confirmedAsOfDate: string;
+  } | null;
+};
+
+export type ScheduleCompletedCheckpoint = NonNullable<
+  PlanningDuration["completedCheckpoint"]
+> & {
+  procedureId: string;
 };
 
 export type ScheduleNode = {
@@ -76,7 +98,12 @@ export type ScheduleNode = {
 export type ProjectTimelineNode = {
   procedureId: string;
   processingDuration: number | null;
+  processingUpperBound: number | null;
   processingUnit: DurationUnit | null;
+  /** Official value retained separately when the effective value is user-entered. */
+  officialProcessingDuration: number | null;
+  officialProcessingUnit: DurationUnit | null;
+  durationSource: "OFFICIAL" | "USER_EXPECTED";
   overlapPolicy: PlanningOverlapPolicy;
   startOffsetDays: number;
   finishOffsetDays: number;
@@ -93,6 +120,9 @@ export type ProjectTimelineNode = {
   durationConfidence: PlanningDurationConfidence;
   durationSourceLabel: string | null;
   durationAssumptions: string[];
+  durationPlanningBasis: DurationEstimate["planningBasis"] | null;
+  durationReferencePeriods: NonNullable<DurationEstimate["referencePeriods"]>;
+  completedCheckpoint: NonNullable<PlanningDuration["completedCheckpoint"]> | null;
 };
 
 export type ProjectTimelineDurationStatus =
@@ -124,8 +154,13 @@ export type ProjectTimelineResult = {
   absorbedByConstructionCalendarDays: number;
   complete: boolean;
   unknownPlanningDurationProcedureIds: string[];
+  /** Official gaps retained even when a user estimate makes the schedule computable. */
+  officialUnknownPlanningDurationProcedureIds: string[];
   /** Procedures with a processing value but an incomplete preparation/review/consultation breakdown. */
   incompleteDurationComponentProcedureIds: string[];
+  officialIncompleteDurationComponentProcedureIds: string[];
+  userDurationOverrideProcedureIds: string[];
+  calculationBasis: "OFFICIAL" | "USER_EXPECTED";
   conditionalProcedureIds: string[];
   omittedConditionalProcedureIds: string[];
   provisionalExcludedProcedureIds: string[];
@@ -144,6 +179,8 @@ export type ScheduleResult = {
   activeEdgeIds: string[];
   criticalProcedureIds: string[];
   unknownDurationProcedureIds: string[];
+  /** Validated past events that stay visible even when no dated construction plan exists. */
+  completedCheckpoints: ScheduleCompletedCheckpoint[];
   warnings: string[];
   /** 공사 일정과 공식 처리기간을 날짜 단위로 결합한 결과. */
   projectTimeline: ProjectTimelineResult | null;
@@ -242,16 +279,35 @@ function addCalendarMonths(day: number, months: number) {
 }
 
 function isValidPlanningDuration(value: PlanningDuration) {
-  const values = [value.minimum, value.typical];
+  const values = [value.minimum, value.typical, value.upperBound ?? null];
   if (values.some((part) => part !== null && (!Number.isInteger(part) || part < 0))) {
     return false;
   }
   const hasNumericValue = values.some((part) => part !== null);
+  const completedCheckpoint = value.completedCheckpoint ?? null;
+  if (completedCheckpoint) {
+    const completedDay = completedCheckpoint.completedDate === null
+      ? null
+      : parseIsoDay(completedCheckpoint.completedDate);
+    const confirmedDay = parseIsoDay(completedCheckpoint.confirmedAsOfDate);
+    if (
+      value.minimum !== 0 ||
+      value.typical !== 0 ||
+      value.unit !== "CALENDAR_DAY" ||
+      !completedCheckpoint.label.trim() ||
+      confirmedDay === null ||
+      (completedCheckpoint.completedDate !== null &&
+        (completedDay === null || completedDay > confirmedDay))
+    ) return false;
+  }
   if (hasNumericValue && value.unit === null) return false;
+  if (hasNumericValue && value.sourceLabel === null) {
+    return false;
+  }
   if (
     hasNumericValue &&
-    (value.evidenceType === "INSUFFICIENT_DATA" ||
-      value.sourceLabel === null)
+    !completedCheckpoint &&
+    value.evidenceType === "INSUFFICIENT_DATA"
   ) {
     return false;
   }
@@ -270,7 +326,27 @@ function isValidPlanningDuration(value: PlanningDuration) {
   ) {
     return false;
   }
+  if (
+    value.upperBound !== null &&
+    value.upperBound !== undefined &&
+    value.typical !== null &&
+    value.typical > value.upperBound
+  ) {
+    return false;
+  }
   return true;
+}
+
+function isValidUserDurationOverride(
+  value: UserDurationOverride | undefined,
+): value is UserDurationOverride {
+  return Boolean(
+    value &&
+    Number.isInteger(value.value) &&
+    value.value >= 0 &&
+    value.value <= 3_650 &&
+    ["BUSINESS_DAY", "CALENDAR_DAY", "MONTH"].includes(value.unit),
+  );
 }
 
 function advanceByUnit(start: number, value: number, unit: DurationUnit) {
@@ -316,9 +392,11 @@ function buildProjectTimeline({
   scenario,
   constructionPlan,
   planningDurations,
+  completedCheckpoints,
   conditionalProcedureIds,
   omittedConditionalProcedureIds,
   provisionalExcludedProcedureIds,
+  userDurationOverrides,
 }: {
   ids: string[];
   edges: ProcedureEdge[];
@@ -326,9 +404,11 @@ function buildProjectTimeline({
   scenario: DurationScenario;
   constructionPlan: ConstructionPlan;
   planningDurations: PlanningDuration[];
+  completedCheckpoints: ScheduleCompletedCheckpoint[];
   conditionalProcedureIds: string[];
   omittedConditionalProcedureIds: string[];
   provisionalExcludedProcedureIds: string[];
+  userDurationOverrides: Record<string, UserDurationOverride>;
 }): { timeline: ProjectTimelineResult | null; warnings: string[] } {
   const warnings: string[] = [];
   const assessmentDay = parseIsoDay(constructionPlan.assessmentDate);
@@ -355,6 +435,16 @@ function buildProjectTimeline({
   }
 
   const planningStartDay = Math.min(assessmentDay, plannedStartDay);
+  const completedCheckpointByProcedure = new Map(
+    completedCheckpoints.map((checkpoint) => [checkpoint.procedureId, checkpoint]),
+  );
+  const completedCheckpointAnchor = (procedureId: string) => {
+    const checkpoint = completedCheckpointByProcedure.get(procedureId);
+    if (!checkpoint) return null;
+    return checkpoint.completedDate === null
+      ? assessmentDay
+      : parseIsoDay(checkpoint.completedDate) ?? assessmentDay;
+  };
   const plannedEndBoundary = plannedEndDay + 1;
   if (
     !isCalendarCovered(planningStartDay) ||
@@ -395,15 +485,33 @@ function buildProjectTimeline({
   const planningByProcedure = new Map<string, PlanningDuration>();
   for (const item of planningDurations) planningByProcedure.set(item.procedureId, item);
 
+  const officialValueByProcedure = new Map<string, number | null>();
   const valueByProcedure = new Map<string, number | null>();
+  const unitByProcedure = new Map<string, DurationUnit | null>();
+  const userDurationOverrideProcedureIds: string[] = [];
+  const invalidUserDurationOverrideProcedureIds: string[] = [];
   for (const id of ids) {
     const item = planningByProcedure.get(id);
-    valueByProcedure.set(
-      id,
-      item && isValidPlanningDuration(item) ? planningDurationValue(item, scenario) : null,
-    );
+    const officialValue = item && isValidPlanningDuration(item)
+      ? planningDurationValue(item, scenario === "USER" ? "TYPICAL" : scenario)
+      : null;
+    officialValueByProcedure.set(id, officialValue);
+    const override = userDurationOverrides[id];
+    const useOverride =
+      scenario === "USER" &&
+      !completedCheckpointByProcedure.has(id) &&
+      isValidUserDurationOverride(override);
+    if (scenario === "USER" && override && !isValidUserDurationOverride(override)) {
+      invalidUserDurationOverrideProcedureIds.push(id);
+    }
+    if (useOverride) userDurationOverrideProcedureIds.push(id);
+    valueByProcedure.set(id, useOverride ? override.value : officialValue);
+    unitByProcedure.set(id, useOverride ? override.unit : item?.unit ?? null);
   }
 
+  const officialUnknownPlanningDurationProcedureIds = ids.filter(
+    (id) => officialValueByProcedure.get(id) === null || officialValueByProcedure.get(id) === undefined,
+  );
   const unknownPlanningDurationProcedureIds = ids.filter(
     (id) => valueByProcedure.get(id) === null || valueByProcedure.get(id) === undefined,
   );
@@ -414,10 +522,10 @@ function buildProjectTimeline({
     planningByProcedure.get(id)?.releasePolicy ?? "EARLIEST_ALLOWED";
 
   const finishAfterDuration = (id: string, start: number) => {
-    const item = planningByProcedure.get(id);
     const value = valueByProcedure.get(id);
-    if (!item || value === null || value === undefined || item.unit === null) return start;
-    const finish = advanceByUnit(start, value, item.unit);
+    const unit = unitByProcedure.get(id);
+    if (value === null || value === undefined || unit === null || unit === undefined) return start;
+    const finish = advanceByUnit(start, value, unit);
     if (finish === null || !isCalendarCovered(Math.max(start, finish - 1))) {
       calendarGapProcedureIds.add(id);
       return start;
@@ -426,10 +534,10 @@ function buildProjectTimeline({
   };
 
   const startBeforeDuration = (id: string, finish: number) => {
-    const item = planningByProcedure.get(id);
     const value = valueByProcedure.get(id);
-    if (!item || value === null || value === undefined || item.unit === null) return finish;
-    const start = rewindByUnit(finish, value, item.unit);
+    const unit = unitByProcedure.get(id);
+    if (value === null || value === undefined || unit === null || unit === undefined) return finish;
+    const start = rewindByUnit(finish, value, unit);
     if (start === null || !isCalendarCovered(start)) {
       calendarGapProcedureIds.add(id);
       return finish;
@@ -470,12 +578,17 @@ function buildProjectTimeline({
   const unknownPostOperationProcedureIds = unknownPlanningDurationProcedureIds.filter(
     (id) => policy(id) === "POST_OPERATION",
   );
-  const incompleteDurationComponentProcedureIds = ids.filter(
+  const officialIncompleteDurationComponentProcedureIds = ids.filter(
     (id) =>
-      valueByProcedure.get(id) !== null &&
-      valueByProcedure.get(id) !== undefined &&
+      officialValueByProcedure.get(id) !== null &&
+      officialValueByProcedure.get(id) !== undefined &&
       (planningByProcedure.get(id)?.endToEndMissingComponents?.length ?? 0) > 0,
   );
+  const userOverrideIds = new Set(userDurationOverrideProcedureIds);
+  const incompleteDurationComponentProcedureIds =
+    officialIncompleteDurationComponentProcedureIds.filter(
+      (id) => !userOverrideIds.has(id),
+    );
   const incompleteOperationReadyDurationComponentProcedureIds =
     incompleteDurationComponentProcedureIds.filter(
       (id) => policy(id) !== "POST_OPERATION",
@@ -492,10 +605,23 @@ function buildProjectTimeline({
   );
 
   let phaseInversionCount = 0;
-  const preStart = new Map(ids.map((id) => [id, planningStartDay]));
-  const preFinish = new Map(ids.map((id) => [id, finishAfterDuration(id, planningStartDay)]));
+  const preStart = new Map(
+    ids.map((id) => [id, completedCheckpointAnchor(id) ?? planningStartDay]),
+  );
+  const preFinish = new Map(
+    ids.map((id) => {
+      const start = completedCheckpointAnchor(id) ?? planningStartDay;
+      return [id, finishAfterDuration(id, start)] as const;
+    }),
+  );
   for (const id of order) {
     if (policy(id) !== "PRE_CONSTRUCTION") continue;
+    const completedAnchor = completedCheckpointAnchor(id);
+    if (completedAnchor !== null) {
+      preStart.set(id, completedAnchor);
+      preFinish.set(id, completedAnchor);
+      continue;
+    }
     let start = planningStartDay;
     for (const edge of incomingByProcedure.get(id) ?? []) {
       if (policy(edge.from) !== "PRE_CONSTRUCTION") {
@@ -514,7 +640,9 @@ function buildProjectTimeline({
 
   const permitFinishBoundary = Math.max(
     planningStartDay,
-    ...preConstructionIds.map((id) => preFinish.get(id) ?? planningStartDay),
+    ...preConstructionIds
+      .filter((id) => !completedCheckpointByProcedure.has(id))
+      .map((id) => preFinish.get(id) ?? planningStartDay),
   );
   const adjustedConstructionStart = Math.max(plannedStartDay, permitFinishBoundary);
   const constructionFinishBoundary = adjustedConstructionStart + constructionCalendarDays;
@@ -524,6 +652,12 @@ function buildProjectTimeline({
   const earliestFinish = new Map<string, number>();
   for (const id of order) {
     if (policy(id) === "POST_OPERATION") continue;
+    const completedAnchor = completedCheckpointAnchor(id);
+    if (completedAnchor !== null) {
+      earliestStart.set(id, completedAnchor);
+      earliestFinish.set(id, completedAnchor);
+      continue;
+    }
     const itemPolicy = policy(id);
     let start =
       itemPolicy === "PRE_CONSTRUCTION"
@@ -554,13 +688,23 @@ function buildProjectTimeline({
   const operationReadyBoundary = Math.max(
     constructionFinishBoundary,
     ...ids
-      .filter((id) => policy(id) !== "POST_OPERATION")
+      .filter(
+        (id) =>
+          policy(id) !== "POST_OPERATION" &&
+          !completedCheckpointByProcedure.has(id),
+      )
       .map((id) => earliestFinish.get(id) ?? planningStartDay),
   );
   const postOperationProcedureIds = ids.filter((id) => policy(id) === "POST_OPERATION");
 
   for (const id of order) {
     if (policy(id) !== "POST_OPERATION") continue;
+    const completedAnchor = completedCheckpointAnchor(id);
+    if (completedAnchor !== null) {
+      earliestStart.set(id, completedAnchor);
+      earliestFinish.set(id, completedAnchor);
+      continue;
+    }
     let start = operationReadyBoundary;
     for (const edge of incomingByProcedure.get(id) ?? []) {
       const predecessorStart = earliestStart.get(edge.from);
@@ -573,12 +717,35 @@ function buildProjectTimeline({
     earliestFinish.set(id, finishAfterDuration(id, start));
   }
 
-  const postOperationBoundary = postOperationProcedureIds.length
+  const incompletePostOperationIds = postOperationProcedureIds.filter(
+    (id) => !completedCheckpointByProcedure.has(id),
+  );
+  const postOperationBoundary = incompletePostOperationIds.length
     ? Math.max(
         operationReadyBoundary,
-        ...postOperationProcedureIds.map((id) => earliestFinish.get(id) ?? operationReadyBoundary),
+        ...incompletePostOperationIds.map(
+          (id) => earliestFinish.get(id) ?? operationReadyBoundary,
+        ),
       )
     : null;
+
+  const completedLegalConflictEdges = edges.filter((edge) => {
+    if (
+      edge.strength !== "LEGAL_HARD" ||
+      !completedCheckpointByProcedure.has(edge.to) ||
+      completedCheckpointByProcedure.has(edge.from)
+    ) return false;
+    const checkpointAnchor = completedCheckpointAnchor(edge.to);
+    const predecessorFinish = earliestFinish.get(edge.from);
+    return checkpointAnchor !== null &&
+      predecessorFinish !== undefined &&
+      predecessorFinish > checkpointAnchor;
+  });
+  if (completedLegalConflictEdges.length) {
+    warnings.push(
+      `완료 이정표보다 늦게 계산되는 법적 선행절차 ${completedLegalConflictEdges.length}건이 있습니다. 완료일 또는 선행절차의 완료·의제 여부를 다시 확인하십시오.`,
+    );
+  }
 
   const nodeDrafts = order.map((procedureId) => {
     const start = earliestStart.get(procedureId) ?? planningStartDay;
@@ -588,10 +755,17 @@ function buildProjectTimeline({
     const overlapWithConstructionDays = Math.max(0, overlapFinish - overlapStart);
     const excludedFromOperationReady = policy(procedureId) === "POST_OPERATION";
     const planning = planningByProcedure.get(procedureId);
+    const usesUserDuration = userOverrideIds.has(procedureId);
+    const completedCheckpoint =
+      completedCheckpointByProcedure.get(procedureId) ?? null;
     return {
       procedureId,
       processingDuration: valueByProcedure.get(procedureId) ?? null,
-      processingUnit: planning?.unit ?? null,
+      processingUpperBound: planning?.upperBound ?? null,
+      processingUnit: unitByProcedure.get(procedureId) ?? null,
+      officialProcessingDuration: officialValueByProcedure.get(procedureId) ?? null,
+      officialProcessingUnit: planning?.unit ?? null,
+      durationSource: usesUserDuration ? "USER_EXPECTED" : "OFFICIAL",
       overlapPolicy: policy(procedureId),
       startOffsetDays: start - planningStartDay,
       finishOffsetDays: finish - planningStartDay,
@@ -601,12 +775,18 @@ function buildProjectTimeline({
       parallel: false,
       overlapsConstruction: overlapWithConstructionDays > 0,
       overlapWithConstructionDays,
-      extendsOperationReady: !excludedFromOperationReady && finish > constructionFinishBoundary,
+      extendsOperationReady:
+        !completedCheckpoint &&
+        !excludedFromOperationReady &&
+        finish > constructionFinishBoundary,
       excludedFromOperationReady,
       durationEvidenceType: planning?.evidenceType ?? "INSUFFICIENT_DATA",
       durationConfidence: planning?.confidence ?? "UNVERIFIED",
       durationSourceLabel: planning?.sourceLabel ?? null,
       durationAssumptions: planning?.assumptions ?? [],
+      durationPlanningBasis: planning?.planningBasis ?? null,
+      durationReferencePeriods: planning?.referencePeriods ?? [],
+      completedCheckpoint,
     } satisfies ProjectTimelineNode;
   });
 
@@ -629,8 +809,9 @@ function buildProjectTimeline({
     nodes
       .filter(
         (node) =>
-          node.overlapPolicy === "DURING_CONSTRUCTION" ||
-          node.overlapPolicy === "PRE_OPERATION",
+          !node.completedCheckpoint &&
+          (node.overlapPolicy === "DURING_CONSTRUCTION" ||
+            node.overlapPolicy === "PRE_OPERATION"),
       )
       .map((node) => [
         Math.max(earliestStart.get(node.procedureId) ?? planningStartDay, adjustedConstructionStart),
@@ -655,6 +836,16 @@ function buildProjectTimeline({
         "개는 신청인 준비·기관 심사·관계기관 협의·전체 경과 중 일부 기간이 없어, 표시 기간은 공식 처리기간만 반영한 일정 하한입니다.",
     );
   }
+  if (invalidUserDurationOverrideProcedureIds.length) {
+    warnings.push(
+      `형식이 올바르지 않은 사용자 예상 처리기간 ${invalidUserDurationOverrideProcedureIds.length}건은 반영하지 않았습니다.`,
+    );
+  }
+  if (userDurationOverrideProcedureIds.length) {
+    warnings.push(
+      `사용자 예상 처리기간 ${userDurationOverrideProcedureIds.length}건을 일정 계산에 반영했습니다. 이 값은 법정 처리기간이나 기관의 공식 평균이 아닙니다.`,
+    );
+  }
   if (calendarGapProcedureIds.size) {
     warnings.push("공휴일 달력 지원범위를 벗어난 " + calendarGapProcedureIds.size + "개 절차는 기간 미확인으로 처리했습니다.");
   }
@@ -667,14 +858,15 @@ function buildProjectTimeline({
   if (provisionalExcludedProcedureIds.length) {
     warnings.push("초안 제외규칙과 일치한 " + provisionalExcludedProcedureIds.length + "개 대체·비적용 경로는 일정에 넣지 않았습니다.");
   }
-  if (ids.some((id) => planningByProcedure.get(id)?.unit === "BUSINESS_DAY")) {
+  if (ids.some((id) => unitByProcedure.get(id) === "BUSINESS_DAY")) {
     warnings.push(
       "업무일 계산은 정기 공휴일과 대체공휴일을 반영했으며, 향후 지정될 임시공휴일·선거일은 포함하지 않았습니다.",
     );
   }
 
+  const unresolvedInvalidIds = invalidIds.filter((id) => !userOverrideIds.has(id));
   const structuralGap =
-    invalidIds.length > 0 ||
+    unresolvedInvalidIds.length > 0 ||
     calendarGapProcedureIds.size > 0 ||
     phaseInversionCount > 0;
   const hasUnknownOperationReadyDuration =
@@ -743,12 +935,18 @@ function buildProjectTimeline({
       complete:
         unknownPlanningDurationProcedureIds.length === 0 &&
         incompleteDurationComponentProcedureIds.length === 0 &&
-        invalidIds.length === 0 &&
+        unresolvedInvalidIds.length === 0 &&
         calendarGapProcedureIds.size === 0 &&
         phaseInversionCount === 0 &&
         conditionalProcedureIds.length === 0,
       unknownPlanningDurationProcedureIds,
+      officialUnknownPlanningDurationProcedureIds,
       incompleteDurationComponentProcedureIds,
+      officialIncompleteDurationComponentProcedureIds,
+      userDurationOverrideProcedureIds: userDurationOverrideProcedureIds.sort(),
+      calculationBasis: userDurationOverrideProcedureIds.length
+        ? "USER_EXPECTED"
+        : "OFFICIAL",
       conditionalProcedureIds,
       omittedConditionalProcedureIds,
       provisionalExcludedProcedureIds,
@@ -769,6 +967,7 @@ export function calculateSchedule({
   includePractical,
   constructionPlan,
   planningDurations = [],
+  userDurationOverrides = {},
 }: {
   decisions: ProcedureDecision[];
   edges: ProcedureEdge[];
@@ -778,6 +977,7 @@ export function calculateSchedule({
   includePractical: boolean;
   constructionPlan?: ConstructionPlan;
   planningDurations?: PlanningDuration[];
+  userDurationOverrides?: Record<string, UserDurationOverride>;
 }): ScheduleResult {
   const isDeterministicInclude = (decision: ProcedureDecision) =>
     decision.status === "APPLIES" ||
@@ -840,17 +1040,64 @@ export function calculateSchedule({
         (includePractical && edge.strength === "PRACTICAL"),
     )
     .sort((a, b) => a.id.localeCompare(b.id));
-  const activeEdges = selectedEdges.filter(
-    (edge) => edge.lagUnit === "BUSINESS_DAY",
-  );
-  // Keep the visible order and dependency waves faithful to every active
-  // legal/practical edge. Only the CPM arithmetic below is restricted to
-  // business-day-compatible edges, so calendar-day/month edges are not
-  // silently converted but still appear in the correct sequence.
-  const order = topologicalSort(ids, selectedEdges);
   const durationByProcedure = new Map(
     durations.map((estimate) => [estimate.procedureId, durationValue(estimate, scenario)]),
   );
+  if (scenario === "USER") {
+    for (const [procedureId, override] of Object.entries(userDurationOverrides)) {
+      if (
+        selected.has(procedureId) &&
+        isValidUserDurationOverride(override) &&
+        override.unit === "BUSINESS_DAY"
+      ) {
+        durationByProcedure.set(procedureId, override.value);
+      }
+    }
+  }
+  const completedCheckpointByProcedure = new Map<
+    string,
+    ScheduleCompletedCheckpoint
+  >();
+  for (const item of planningDurations) {
+    if (!selected.has(item.procedureId)) continue;
+    completedCheckpointByProcedure.delete(item.procedureId);
+    if (!item.completedCheckpoint || !isValidPlanningDuration(item)) continue;
+    if (
+      constructionPlan &&
+      item.completedCheckpoint.confirmedAsOfDate > constructionPlan.assessmentDate
+    ) continue;
+    completedCheckpointByProcedure.set(item.procedureId, {
+      procedureId: item.procedureId,
+      ...item.completedCheckpoint,
+    });
+  }
+  const completedCheckpoints = [...completedCheckpointByProcedure.values()].sort(
+    (left, right) => left.procedureId.localeCompare(right.procedureId),
+  );
+  const completedCheckpointIds = new Set(completedCheckpointByProcedure.keys());
+  const supersededPracticalEdgeIds = selectedEdges
+    .filter(
+      (edge) =>
+        edge.strength === "PRACTICAL" &&
+        completedCheckpointIds.has(edge.to) &&
+        !completedCheckpointIds.has(edge.from),
+    )
+    .map((edge) => edge.id);
+  const effectiveEdges = selectedEdges.filter(
+    (edge) => !supersededPracticalEdgeIds.includes(edge.id),
+  );
+  const activeEdges = effectiveEdges.filter(
+    (edge) => edge.lagUnit === "BUSINESS_DAY",
+  );
+  // Keep the visible order and dependency waves faithful to every active
+  // legal/practical edge. A user-confirmed completion checkpoint supersedes
+  // only an otherwise contradictory practical recommendation, never a hard
+  // legal dependency. Calendar/month edges remain visible but are not folded
+  // into business-day CPM arithmetic.
+  const order = topologicalSort(ids, effectiveEdges);
+  for (const id of completedCheckpointIds) {
+    durationByProcedure.set(id, 0);
+  }
   const unknownDurationProcedureIds = ids.filter(
     (id) => durationByProcedure.get(id) === null || durationByProcedure.get(id) === undefined,
   );
@@ -860,6 +1107,11 @@ export function calculateSchedule({
 
   for (const id of order) {
     const duration = numericDuration(id);
+    if (completedCheckpointIds.has(id)) {
+      earliestStart.set(id, 0);
+      earliestFinish.set(id, 0);
+      continue;
+    }
     const incoming = activeEdges.filter((edge) => edge.to === id);
     let start = 0;
     for (const edge of incoming) {
@@ -883,7 +1135,14 @@ export function calculateSchedule({
 
   for (const id of [...order].reverse()) {
     const duration = numericDuration(id);
-    const outgoing = activeEdges.filter((edge) => edge.from === id);
+    if (completedCheckpointIds.has(id)) {
+      latestStart.set(id, 0);
+      continue;
+    }
+    const outgoing = activeEdges.filter(
+      (edge) =>
+        edge.from === id && !completedCheckpointIds.has(edge.to),
+    );
     let latest = total - duration;
     if (outgoing.length) {
       latest = Math.min(
@@ -903,7 +1162,7 @@ export function calculateSchedule({
     latestStart.set(id, latest);
   }
 
-  const { wave, countByWave } = dependencyWaves(ids, selectedEdges, order);
+  const { wave, countByWave } = dependencyWaves(ids, effectiveEdges, order);
   const nodes = order.map((procedureId) => {
     const duration = durationByProcedure.get(procedureId) ?? null;
     const start = earliestStart.get(procedureId) ?? 0;
@@ -919,7 +1178,8 @@ export function calculateSchedule({
       latestFinish: latest + (duration ?? 0),
       slack,
       duration,
-      critical: Math.abs(slack) < 1e-9,
+      critical:
+        !completedCheckpointIds.has(procedureId) && Math.abs(slack) < 1e-9,
       wave: nodeWave,
       parallel: (countByWave.get(nodeWave) ?? 0) > 1,
     } satisfies ScheduleNode;
@@ -937,19 +1197,26 @@ export function calculateSchedule({
   if (!constructionPlan) {
     warnings.push("공사 일정이 없어 공식 업무일 기준의 절차 그래프만 계산했습니다.");
   }
+  if (supersededPracticalEdgeIds.length) {
+    warnings.push(
+      `사용자가 완료로 확인한 이정표와 충돌하는 실무 권장 선후행 ${supersededPracticalEdgeIds.length}건은 날짜 계산에서 제외했습니다. 해당 선행절차의 완료·의제 여부를 확인하십시오.`,
+    );
+  }
 
   let projectTimeline: ProjectTimelineResult | null = null;
   if (constructionPlan) {
     const built = buildProjectTimeline({
       ids,
-      edges: selectedEdges,
+      edges: effectiveEdges,
       order,
       scenario,
       constructionPlan,
       planningDurations,
+      completedCheckpoints,
       conditionalProcedureIds,
       omittedConditionalProcedureIds,
       provisionalExcludedProcedureIds,
+      userDurationOverrides,
     });
     projectTimeline = built.timeline;
     warnings.push(...built.warnings);
@@ -962,9 +1229,10 @@ export function calculateSchedule({
     complete: unknownDurationProcedureIds.length === 0,
     nodes,
     topologicalOrder: order,
-    activeEdgeIds: selectedEdges.map((edge) => edge.id),
+    activeEdgeIds: effectiveEdges.map((edge) => edge.id),
     criticalProcedureIds: nodes.filter((node) => node.critical).map((node) => node.procedureId),
     unknownDurationProcedureIds,
+    completedCheckpoints,
     warnings,
     projectTimeline,
   };

@@ -90,6 +90,7 @@ export const projectInputSchema = z.object({
   }),
   environment: z.object({
     airEmissionFacility: factSchema,
+    airTotalManagementBusinessTarget: factSchema,
     waterDischargeFacility: factSchema,
     noiseVibrationFacility: factSchema,
     wasteFacility: factSchema,
@@ -108,6 +109,7 @@ export const projectInputSchema = z.object({
     lpgSpecificUseFacility: factSchema,
     cityGasSpecificUseFacility: factSchema,
     psmCovered: factSchema,
+    psmCoversSameHazardPreventionScope: factSchema,
     fireSafetyManagerRequired: factSchema,
     hazardousMaterialsTank: factSchema,
     hazardousMaterialsPreventionRulesRequired: factSchema,
@@ -135,6 +137,7 @@ export const projectInputSchema = z.object({
   }),
   confirmation: z.object({
     forestRestorationObligation: factSchema,
+    supplementalPermitTargets: z.record(z.string(), factSchema),
     fireWorkSupervisionTarget: factSchema,
     firstFireSelfInspectionTarget: factSchema,
     highPressureGasBusinessStartTarget: factSchema,
@@ -367,6 +370,37 @@ export const durationRangeSchema = z.object({
   unit: z.enum(["BUSINESS_DAY", "CALENDAR_DAY", "MONTH"]),
 });
 
+export const durationReferencePeriodSchema = z.object({
+  id: z.string(),
+  kind: z.enum([
+    "NATIONWIDE_STATUTORY",
+    "NATIONWIDE_OFFICIAL_STANDARD",
+    "LOCAL_OFFICIAL_STANDARD",
+    "OFFICIAL_OPERATION_CAP",
+    "PLANNING_REFERENCE",
+    "OBSERVED_PRACTICE",
+    "LEGAL_DEADLINE",
+    "PROCESS_MILESTONE",
+  ]),
+  label: z.string(),
+  range: durationRangeSchema.nullable(),
+  jurisdiction: z.string().nullable(),
+  startsWhen: z.string(),
+  includes: z.array(z.enum([
+    "APPLICANT_PREPARATION",
+    "AUTHORITY_PROCESSING",
+    "INTERAGENCY_CONSULTATION",
+    "COMMITTEE_WAIT",
+    "SUPPLEMENT",
+    "RESULT_NOTICE",
+  ])),
+  citationIds: z.array(z.string()),
+  sampleSize: z.number().int().positive().nullable(),
+  observedFrom: isoDateSchema.nullable(),
+  observedTo: isoDateSchema.nullable(),
+  note: z.string(),
+});
+
 export const durationEstimateSchema = z.object({
   id: z.string(),
   procedureId: z.string(),
@@ -391,6 +425,16 @@ export const durationEstimateSchema = z.object({
   verifiedAt: z.string(),
   legalConfidence: z.enum(["HIGH", "MEDIUM", "LOW", "UNVERIFIED"]),
   estimateConfidence: z.enum(["HIGH", "MEDIUM", "LOW", "UNVERIFIED"]),
+  planningBasis: z.enum([
+    "DIRECT_OFFICIAL",
+    "INPUT_RESOLVED_OFFICIAL",
+    "UNRESOLVED_OFFICIAL_BRANCH",
+    "LOCAL_OFFICIAL_REFERENCE",
+    "OFFICIAL_CAP_ONLY",
+    "MILESTONE_ONLY",
+    "INSUFFICIENT_DATA",
+  ]).optional(),
+  referencePeriods: z.array(durationReferencePeriodSchema).optional(),
 });
 
 export type Fact = z.infer<typeof factSchema>;

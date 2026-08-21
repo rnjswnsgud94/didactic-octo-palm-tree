@@ -161,6 +161,107 @@ describe("catalog integrity", () => {
     }
   });
 
+  it("keeps official caps, local standards, and practical benchmarks auditable", () => {
+    const citations = new Map(catalog.citations.map((item) => [item.id, item]));
+    for (const duration of catalog.durations) {
+      for (const period of duration.referencePeriods ?? []) {
+        expect(period.citationIds.length, period.id).toBeGreaterThan(0);
+        for (const citationId of period.citationIds) {
+          expect(citations.get(citationId), `${period.id}:${citationId}`).toMatchObject({
+            role: "DURATION",
+          });
+        }
+        if (period.kind === "LOCAL_OFFICIAL_STANDARD") {
+          expect(period.jurisdiction?.trim().length, period.id).toBeGreaterThan(0);
+        }
+        if (period.kind === "PLANNING_REFERENCE" || period.kind === "OBSERVED_PRACTICE") {
+          expect(period.sampleSize, period.id).not.toBeNull();
+          expect(period.note, period.id).toMatch(/평균|중앙값|참고|실적/);
+        }
+      }
+    }
+
+    const power = catalog.durations.find(
+      (item) => item.procedureId === "power-grid-impact-assessment",
+    );
+    expect(power?.planningBasis).toBe("OFFICIAL_CAP_ONLY");
+    expect(power?.referencePeriods?.map((period) => period.range?.max)).toEqual(
+      expect.arrayContaining([3, 150]),
+    );
+
+    const landscapePlanning = catalog.durations
+      .find((item) => item.procedureId === "landscape-review")
+      ?.referencePeriods?.find((period) => period.kind === "PLANNING_REFERENCE");
+    expect(landscapePlanning?.range).toMatchObject({ min: 14, base: null, max: 30 });
+    expect(landscapePlanning?.note).toContain("평균·중앙값이 아니라");
+
+    const electricalInspection = catalog.durations.find(
+      (item) => item.procedureId === "electrical-pre-use-inspection",
+    );
+    expect(electricalInspection).toMatchObject({
+      elapsed: null,
+      authorityProcessing: null,
+      evidenceType: "OFFICIAL_AGENCY_MATERIAL",
+      planningBasis: "MILESTONE_ONLY",
+    });
+    expect(electricalInspection?.referencePeriods?.[0]).toMatchObject({
+      kind: "PROCESS_MILESTONE",
+      range: null,
+    });
+  });
+
+  it("uses corrected official service branches without padding them as practical averages", () => {
+    const duration = (procedureId: string) =>
+      catalog.durations.find((item) => item.procedureId === procedureId);
+
+    expect(duration("development-activity-permit")?.elapsed).toMatchObject({ min: 15, base: 15, max: 15 });
+    expect(duration("road-connection-permit")?.elapsed).toMatchObject({ min: 21, base: 21, max: 21 });
+    expect(duration("fire-facility-completion-inspection")?.elapsed).toMatchObject({ min: 3, base: 3, max: 3 });
+    expect(duration("hazardous-materials-facility-installation-permit")?.elapsed).toMatchObject({ min: 4, base: 5, max: 5 });
+    expect(duration("hazardous-materials-facility-completion-inspection")?.elapsed).toMatchObject({ min: 5, base: 5, max: 5 });
+    expect(duration("high-pressure-gas-manufacture-storage-permit-report")?.elapsed).toMatchObject({ min: 2, base: 5, max: 5 });
+    expect(duration("river-occupation-permit")?.elapsed).toMatchObject({ min: 5, base: 20, max: 60 });
+    expect(duration("river-occupation-permit")?.assumptions.join(" ")).toContain("상호배타적");
+  });
+
+  it("separates combined inspection paths and does not sum excluded fieldwork as elapsed time", () => {
+    const duration = (procedureId: string) =>
+      catalog.durations.find((item) => item.procedureId === procedureId);
+    const ids = new Set(catalog.procedures.map((item) => item.id));
+
+    for (const id of [
+      "soil-contamination-test-application",
+      "high-pressure-gas-technical-review",
+      "high-pressure-gas-intermediate-inspection",
+      "fire-supervision-result-report",
+    ]) expect(ids.has(id), id).toBe(true);
+
+    expect(duration("soil-contamination-facility-report")?.elapsed).toMatchObject({ min: 7, base: 7, max: 7, unit: "BUSINESS_DAY" });
+    expect(duration("soil-contamination-test-application")).toMatchObject({
+      authorityProcessing: { min: 7, base: 7, max: 7, unit: "BUSINESS_DAY" },
+      elapsed: null,
+      planningBasis: "INSUFFICIENT_DATA",
+    });
+    expect(duration("soil-contamination-test-application")?.statutoryPeriod).toContain("검사기간 제외");
+
+    expect(duration("high-pressure-gas-technical-review")?.elapsed).toMatchObject({ min: 7, base: 10, max: 20, unit: "BUSINESS_DAY" });
+    expect(duration("high-pressure-gas-intermediate-inspection")?.elapsed).toMatchObject({ min: 7, base: 7, max: 7, unit: "BUSINESS_DAY" });
+    expect(duration("high-pressure-gas-facility-inspection")?.elapsed).toMatchObject({ min: 7, base: 7, max: 7, unit: "BUSINESS_DAY" });
+
+    expect(duration("chemical-substance-confirmation")?.elapsed).toBeNull();
+    expect(duration("chemical-substance-confirmation")?.referencePeriods?.[0]).toMatchObject({
+      kind: "NATIONWIDE_OFFICIAL_STANDARD",
+      range: { min: 3, base: 3, max: 3, unit: "BUSINESS_DAY" },
+    });
+
+    expect(duration("heat-use-equipment-installation-inspection")?.elapsed).toBeNull();
+    expect(duration("heat-use-equipment-installation-inspection")?.referencePeriods).toHaveLength(2);
+    expect(duration("heat-use-equipment-installation-inspection")?.referencePeriods?.every((period) => period.range?.max === 7)).toBe(true);
+
+    expect(duration("groundwater-development-use-permit-report")?.elapsed).toMatchObject({ min: 7, base: 20, max: 30, unit: "BUSINESS_DAY" });
+    expect(duration("water-discharge-installation-permit")?.elapsed).toMatchObject({ min: 10, base: 10, max: 60, unit: "BUSINESS_DAY" });
+  });
+
   it("keeps the expanded construction and operation paths ordered and auditable", () => {
     const edges = new Map(catalog.edges.map((item) => [item.id, item]));
     expect(edges.get("edge-exp-building-to-safety-plan")?.to).toBe("construction-safety-management-plan-approval");
@@ -194,8 +295,8 @@ describe("catalog integrity", () => {
     const middleWater = catalog.durations.find(
       (item) => item.procedureId === "middle-water-installation-report",
     );
-    expect(middleWater?.evidenceType).toBe("STATUTE");
-    expect(middleWater?.authorityProcessing?.unit).toBe("CALENDAR_DAY");
+    expect(middleWater?.evidenceType).toBe("OFFICIAL_SERVICE_STANDARD");
+    expect(middleWater?.authorityProcessing?.unit).toBe("BUSINESS_DAY");
     expect(middleWater?.statutoryPeriod).toContain("제9조제4항");
     expect(middleWater?.statutoryPeriod).toContain("10일 이내");
     expect(middleWater?.assumptions.join(" ")).toContain("최소기간");

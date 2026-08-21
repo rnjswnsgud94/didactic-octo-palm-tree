@@ -20,11 +20,20 @@ import {
   type CardRect,
 } from "@/app/components/dashboard/connector-routing";
 import { StatusBadge } from "@/app/components/dashboard/StatusBadge";
+import { UserDurationEditor } from "@/app/components/dashboard/UserDurationEditor";
 import { catalog } from "@/lib/data/catalog";
 import type { ProcedureEdge } from "@/lib/domain/schemas";
 import type { ProcedureDecision } from "@/lib/engine/rule-engine";
-import type { ProjectTimelineNode, ScheduleResult } from "@/lib/engine/schedule";
-import { formatProcessingDuration } from "@/lib/format-duration";
+import type {
+  ProjectTimelineNode,
+  ScheduleCompletedCheckpoint,
+  ScheduleResult,
+  UserDurationOverride,
+} from "@/lib/engine/schedule";
+import {
+  formatCompletedCheckpoint,
+  formatTimelineProcessingDuration,
+} from "@/lib/format-duration";
 
 const lanes = Object.keys(laneLabels) as Array<keyof typeof laneLabels>;
 export const denseProcedureColumnThreshold = 10;
@@ -51,9 +60,13 @@ const emptyConnectorLayout: ConnectorLayout = {
 };
 
 
-function planningLabel(node: ProjectTimelineNode | undefined) {
+function planningLabel(
+  node: ProjectTimelineNode | undefined,
+  checkpoint: ScheduleCompletedCheckpoint | undefined,
+) {
+  if (checkpoint) return formatCompletedCheckpoint(checkpoint);
   if (!node) return "일정 제외";
-  const duration = formatProcessingDuration(node.processingDuration, node.processingUnit);
+  const duration = formatTimelineProcessingDuration(node);
   if (node.excludedFromOperationReady) return `가동 후 별도 · ${duration}`;
   if (node.overlapsConstruction) {
     return `${duration} · 공사와 ${node.overlapWithConstructionDays}일 병행`;
@@ -93,22 +106,43 @@ function flowGroupTitle(decisions: ProcedureDecision[]) {
   return stage ? stageGroupTitles[stage] : "절차 착수";
 }
 
-export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
+export function Swimlane({
+  decisions,
+  schedule,
+  selectedId,
+  userDurationOverrides = {},
+  onSelect,
+  onUserDurationOverrideChange = () => undefined,
+}: {
   decisions: ProcedureDecision[];
   schedule: ScheduleResult;
   selectedId: string | null;
+  userDurationOverrides?: Record<string, UserDurationOverride>;
   onSelect: (id: string) => void;
+  onUserDurationOverrideChange?: (
+    procedureId: string,
+    value: UserDurationOverride | null,
+  ) => void;
 }) {
   const [collapsedLanes, setCollapsedLanes] = useState<string[]>([]);
   const [connectorLayout, setConnectorLayout] = useState<ConnectorLayout>(emptyConnectorLayout);
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const cardRefs = useRef(new Map<string, HTMLButtonElement>());
+  const cardRefs = useRef(new Map<string, HTMLElement>());
   const connectorMarkerId = `dependency-arrow-${useId().replaceAll(":", "")}`;
   const timelineNodes = useMemo(
     () => new Map(
       (schedule.projectTimeline?.nodes ?? []).map((node) => [node.procedureId, node]),
     ),
     [schedule.projectTimeline],
+  );
+  const completedCheckpointByProcedure = useMemo(
+    () => new Map(
+      schedule.completedCheckpoints.map((checkpoint) => [
+        checkpoint.procedureId,
+        checkpoint,
+      ]),
+    ),
+    [schedule.completedCheckpoints],
   );
   const useDateOffsets = schedule.projectTimeline !== null;
   const scheduleNodes = useMemo(
@@ -134,15 +168,22 @@ export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
       )].sort((a, b) => a - b)
     : [...new Set(
         scheduledDecisions.map(
-          (decision) => scheduleNodes.get(decision.procedure.id)?.wave ?? 0,
+          (decision) =>
+            completedCheckpointByProcedure.has(decision.procedure.id)
+              ? 0
+              : scheduleNodes.get(decision.procedure.id)?.wave ?? 0,
         ),
       )].sort((a, b) => a - b);
   const activeEdges = useMemo(
     () => {
       const activeEdgeIds = new Set(schedule.activeEdgeIds);
-      return catalog.edges.filter((edge) => activeEdgeIds.has(edge.id));
+      return catalog.edges.filter(
+        (edge) =>
+          activeEdgeIds.has(edge.id) &&
+          !completedCheckpointByProcedure.has(edge.to),
+      );
     },
-    [schedule.activeEdgeIds],
+    [completedCheckpointByProcedure, schedule.activeEdgeIds],
   );
   const decisionNames = new Map(
     decisions.map((decision) => [decision.procedure.id, decision.procedure.name]),
@@ -157,7 +198,9 @@ export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
   function offsetOf(decision: ProcedureDecision) {
     return useDateOffsets
       ? timelineNodes.get(decision.procedure.id)?.startOffsetDays ?? 0
-      : scheduleNodes.get(decision.procedure.id)?.wave ?? 0;
+      : completedCheckpointByProcedure.has(decision.procedure.id)
+        ? 0
+        : scheduleNodes.get(decision.procedure.id)?.wave ?? 0;
   }
 
   const decisionsByOffset = new Map(
@@ -320,14 +363,16 @@ export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
               <defs>
                 <marker
                   id={connectorMarkerId}
-                  viewBox="0 0 8 8"
-                  refX="7"
-                  refY="4"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
+                  markerUnits="userSpaceOnUse"
+                  viewBox="-1 -5 12 10"
+                  refX="9"
+                  refY="0"
+                  markerWidth="12"
+                  markerHeight="10"
+                  orient="auto"
+                  overflow="visible"
                 >
-                  <path d="M 0 0 L 8 4 L 0 8 z" />
+                  <path d="M 0 -3.5 L 9 0 L 0 3.5 Z" />
                 </marker>
               </defs>
               {connectorLayout.paths.map((connector) => (
@@ -347,12 +392,15 @@ export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
             const groupDecisions = decisionsByOffset.get(offset) ?? [];
             const sample = groupDecisions[0];
             const node = sample ? timelineNodes.get(sample.procedure.id) : undefined;
+            const checkpoint = sample
+              ? completedCheckpointByProcedure.get(sample.procedure.id)
+              : undefined;
             const count = groupDecisions.length;
             return (
               <div className="stage-header flow-header" key={offset}>
                 <span>{String(index + 1).padStart(2, "0")}</span>
                 <strong>{flowGroupTitle(groupDecisions)}</strong>
-                <small>{useDateOffsets ? `${dateText(node?.startDate)} · 시작 후 ${offset}일` : "선후행 기준"} · {count > 1 ? `${count}개 병렬` : "1개 절차"}</small>
+                <small>{checkpoint ? `${dateText(checkpoint.completedDate ?? checkpoint.confirmedAsOfDate)} · 완료 이정표` : useDateOffsets ? `${dateText(node?.startDate)} · 시작 후 ${offset}일` : "선후행 기준"} · {count > 1 ? `${count}개 절차` : "1개 절차"}</small>
               </div>
             );
           })}
@@ -384,38 +432,54 @@ export function Swimlane({ decisions, schedule, selectedId, onSelect }: {
                   >
                     {cells.map((decision) => {
                       const timelineNode = timelineNodes.get(decision.procedure.id);
+                      const completedCheckpoint = completedCheckpointByProcedure.get(
+                        decision.procedure.id,
+                      );
                       const incoming = predecessors(decision.procedure.id);
                       return (
-                        <button
+                        <article
                           ref={(node) => {
                             if (node) cardRefs.current.set(decision.procedure.id, node);
                             else cardRefs.current.delete(decision.procedure.id);
                           }}
-                          type="button"
                           key={decision.procedure.id}
-                          className={`procedure-card status-card-${isInputMatchedRoadmapInclusion(decision) ? "roadmap_included" : decision.status.toLowerCase()} ${timelineNode?.extendsOperationReady ? "is-critical" : ""} ${timelineNode?.overlapsConstruction ? "is-overlap" : ""} ${selectedId === decision.procedure.id ? "is-selected" : ""}`}
-                          aria-label={`${decision.procedure.name} 상세 보기`}
-                          aria-pressed={selectedId === decision.procedure.id}
-                          onClick={() => onSelect(decision.procedure.id)}
+                          className={`procedure-card status-card-${isInputMatchedRoadmapInclusion(decision) ? "roadmap_included" : decision.status.toLowerCase()} ${completedCheckpoint ? "is-completed" : ""} ${timelineNode?.extendsOperationReady ? "is-critical" : ""} ${timelineNode?.overlapsConstruction ? "is-overlap" : ""} ${selectedId === decision.procedure.id ? "is-selected" : ""}`}
                         >
-                          <span className="procedure-card-topline"><StatusBadge status={decision.status} isDeemed={decision.isDeemed} provisionalEffect={decision.provisionalEffect} missingInputs={decision.missingInputs} conflictRuleIds={decision.conflictRuleIds} needsLegalReview={decision.needsLegalReview} compact /><span>{stageLabels[decision.procedure.stage]}</span></span>
-                          <strong>{decision.procedure.name}</strong>
-                          {decision.specialLawImpacts?.length ? <span className="special-law-chip">{decision.specialLawImpacts[0].effectLabel} · {decision.specialLawImpacts[0].statusLabel}</span> : null}
-                          <span className="procedure-meta">{planningLabel(timelineNode)}{parallelCount > 1 ? <em>병렬</em> : null}</span>
-                          {incoming.length ? (
-                            <span className="procedure-route">
-                              <b>← 선행절차</b>
-                              <span className="procedure-route-list">
-                                {incoming.slice(0, 3).map((item) => (
-                                  <span className={`route-chip route-${item.strength.toLowerCase()}`} key={`${item.name}-${item.strength}`}>
-                                    <em>{strengthLabel(item.strength)}</em>{item.name}
-                                  </span>
-                                ))}
-                                {incoming.length > 3 ? <span className="route-more">외 {incoming.length - 3}개</span> : null}
+                          <button
+                            type="button"
+                            className="procedure-card-main"
+                            aria-label={`${decision.procedure.name} 상세 보기`}
+                            aria-pressed={selectedId === decision.procedure.id}
+                            onClick={() => onSelect(decision.procedure.id)}
+                          >
+                            <span className="procedure-card-topline"><StatusBadge status={decision.status} isDeemed={decision.isDeemed} provisionalEffect={decision.provisionalEffect} missingInputs={decision.missingInputs} conflictRuleIds={decision.conflictRuleIds} needsLegalReview={decision.needsLegalReview} compact /><span>{stageLabels[decision.procedure.stage]}</span></span>
+                            <strong>{decision.procedure.name}</strong>
+                            {decision.specialLawImpacts?.length ? <span className="special-law-chip">{decision.specialLawImpacts[0].effectLabel} · {decision.specialLawImpacts[0].statusLabel}</span> : null}
+                            <span className="procedure-meta">{planningLabel(timelineNode, completedCheckpoint)}{!completedCheckpoint && parallelCount > 1 ? <em>병렬</em> : null}</span>
+                            {completedCheckpoint ? (
+                              <span className="procedure-route route-start"><b>완료 확인</b> 잔여 일정 계산에서 제외</span>
+                            ) : incoming.length ? (
+                              <span className="procedure-route">
+                                <b>← 선행절차</b>
+                                <span className="procedure-route-list">
+                                  {incoming.slice(0, 3).map((item) => (
+                                    <span className={`route-chip route-${item.strength.toLowerCase()}`} key={`${item.name}-${item.strength}`}>
+                                      <em>{strengthLabel(item.strength)}</em>{item.name}
+                                    </span>
+                                  ))}
+                                  {incoming.length > 3 ? <span className="route-more">외 {incoming.length - 3}개</span> : null}
+                                </span>
                               </span>
-                            </span>
-                          ) : <span className="procedure-route route-start"><b>시작 가능</b> 직접 선행절차 없음</span>}
-                        </button>
+                            ) : <span className="procedure-route route-start"><b>시작 가능</b> 직접 선행절차 없음</span>}
+                          </button>
+                          <UserDurationEditor
+                            procedureId={decision.procedure.id}
+                            procedureName={decision.procedure.name}
+                            value={userDurationOverrides[decision.procedure.id]}
+                            completed={Boolean(completedCheckpoint)}
+                            onChange={onUserDurationOverrideChange}
+                          />
+                        </article>
                       );
                     })}
                   </div>

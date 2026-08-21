@@ -25,6 +25,11 @@ import {
   regionalSpecialZoneDeemedProcedureIds,
   semiconductorClusterPlanDeemedProcedureIds,
 } from "@/lib/data/special-law-processes";
+import {
+  supplementalPermitTargetDescriptions,
+  supplementalPermitTargetIds,
+  type SupplementalPermitTargetId,
+} from "@/lib/data/supplemental-permit-targets";
 import { nonCapitalRegions } from "@/lib/regions";
 import { listSupportedMunicipalities } from "@/lib/regions/local-ordinances";
 
@@ -133,18 +138,22 @@ function TriState({
   onChange,
   yesLabel = "있음",
   noLabel = "없음",
+  unknownLabel = "모름",
+  ariaLabel,
 }: {
   value: boolean | null;
   onChange: (value: boolean | null) => void;
   yesLabel?: string;
   noLabel?: string;
+  unknownLabel?: string;
+  ariaLabel?: string;
 }) {
   return (
-    <div className="segmented" role="group">
+    <div className="segmented" role="group" aria-label={ariaLabel}>
       {[
         { value: true, label: yesLabel },
         { value: false, label: noLabel },
-        { value: null, label: "모름" },
+        { value: null, label: unknownLabel },
       ].map((option) => (
         <button
           type="button"
@@ -281,6 +290,37 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
         ? selected.filter((item) => item !== procedureId)
         : [...selected, procedureId],
     );
+  }
+
+  function supplementalPermitDecision(
+    procedureId: SupplementalPermitTargetId,
+  ) {
+    if (answers.supplementalPermitTargetIds.includes(procedureId)) return true;
+    if (answers.supplementalPermitReviewedIds.includes(procedureId)) return false;
+    return null;
+  }
+
+  function setSupplementalPermitDecision(
+    procedureId: SupplementalPermitTargetId,
+    value: boolean | null,
+  ) {
+    const reviewed = answers.supplementalPermitReviewedIds.filter(
+      (item) => item !== procedureId,
+    );
+    const selected = answers.supplementalPermitTargetIds.filter(
+      (item) => item !== procedureId,
+    );
+    onChange(
+      "supplementalPermitReviewedIds",
+      value === null ? reviewed : [...reviewed, procedureId],
+    );
+    onChange(
+      "supplementalPermitTargetIds",
+      value === true ? [...selected, procedureId] : selected,
+    );
+    if (procedureId === "hazard-prevention-plan" && value !== true) {
+      onChange("psmCoversSameHazardPreventionScope", null);
+    }
   }
 
   return (
@@ -929,8 +969,27 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
         {activeStep === 2 ? (
           <>
             <Question label="대기배출시설 해당 여부" hint="시설 종류·규모를 관계 법령의 배출시설 분류표와 대조한 결과를 입력하세요.">
-              <TriState value={answers.airEmissionFacility} onChange={(value) => onChange("airEmissionFacility", value)} />
+              <TriState
+                value={answers.airEmissionFacility}
+                onChange={(value) => {
+                  onChange("airEmissionFacility", value);
+                  if (value !== true) onChange("airTotalManagementBusinessTarget", null);
+                }}
+              />
             </Question>
+            {answers.airEmissionFacility === true ? (
+              <Question
+                label="대기 총량관리사업장 설치허가 대상 여부"
+                hint="사업지가 법정 대기관리권역 안에 있고, 질소산화물·황산화물·먼지의 연간 배출량이 시행령 기준 이상인지 검토한 결과를 입력합니다."
+              >
+                <TriState
+                  value={answers.airTotalManagementBusinessTarget}
+                  yesLabel="대상"
+                  noLabel="비대상"
+                  onChange={(value) => onChange("airTotalManagementBusinessTarget", value)}
+                />
+              </Question>
+            ) : null}
             <Question label="폐수배출시설 해당 여부">
               <TriState value={answers.waterDischargeFacility} onChange={(value) => onChange("waterDischargeFacility", value)} />
             </Question>
@@ -954,6 +1013,41 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
             <Question label="통합환경허가 대상 여부" hint="대상 업종과 대기·수질 1·2종 등 규모를 검토한 결과를 입력합니다.">
               <TriState value={answers.integratedEnvironmentalPermitTarget} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("integratedEnvironmentalPermitTarget", value)} />
             </Question>
+            <details className="wizard-optional-section supplemental-permit-review">
+              <summary>
+                <strong>공사·환경 법정 임계값 정밀검토</strong>
+                <span>{answers.supplementalPermitReviewedIds.length}/{supplementalPermitTargetIds.length} 검토 · {answers.supplementalPermitTargetIds.length}개 대상</span>
+              </summary>
+              <div className="wizard-optional-body">
+                <p className="supplemental-permit-intro">단순 업종·신축·전력·용수만으로 확정할 수 없는 절차입니다. 법정 시설·수량·공사기준을 대조한 항목만 대상 또는 비대상으로 표시하고, 아직 보지 않은 항목은 미확인으로 남겨 주세요.</p>
+                <div
+                  className="supplemental-permit-decision-list"
+                  role="group"
+                  aria-label="공사·환경 법정 임계값 검토 결과"
+                >
+                  {supplementalPermitTargetIds.map((procedureId) => {
+                    const procedureName = procedureNameById.get(procedureId) ?? procedureId;
+                    return (
+                      <div className="supplemental-permit-decision-row" key={procedureId}>
+                        <span>
+                          <strong>{procedureName}</strong>
+                          <small>{supplementalPermitTargetDescriptions[procedureId]}</small>
+                        </span>
+                        <TriState
+                          value={supplementalPermitDecision(procedureId)}
+                          yesLabel="대상"
+                          noLabel="비대상"
+                          unknownLabel="미확인"
+                          ariaLabel={`${procedureName} 대상 여부`}
+                          onChange={(value) => setSupplementalPermitDecision(procedureId, value)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <small>검토서·산출표·관할기관 회신을 보관하고 사업조건이 바뀌면 다시 확인하세요.</small>
+              </div>
+            </details>
             <Question label="화학물질 취급 여부">
               <TriState
                 value={answers.chemicalsHandled}
@@ -1036,9 +1130,29 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                     value={answers.psmCovered}
                     yesLabel="대상"
                     noLabel="비대상"
-                    onChange={(value) => onChange("psmCovered", value)}
+                    onChange={(value) => {
+                      onChange("psmCovered", value);
+                      if (value !== true) {
+                        onChange("psmCoversSameHazardPreventionScope", null);
+                      }
+                    }}
                   />
                 </Question>
+                {answers.psmCovered === true
+                  && answers.supplementalPermitTargetIds.includes("hazard-prevention-plan") ? (
+                    <Question
+                      label="PSM이 동일 유해·위험설비를 포함하는지"
+                      hint="공정안전보고서 제출범위와 유해위험방지계획서 대상 설비를 대조한 결과를 입력합니다. 산업안전보건법 제42조제3항의 의제는 같은 유해·위험설비에만 적용됩니다."
+                    >
+                      <TriState
+                        value={answers.psmCoversSameHazardPreventionScope}
+                        yesLabel="동일 설비 포함"
+                        noLabel="별도 설비·범위"
+                        unknownLabel="미확인"
+                        onChange={(value) => onChange("psmCoversSameHazardPreventionScope", value)}
+                      />
+                    </Question>
+                  ) : null}
                 <Question label="소방안전관리자 선임 대상 여부"><TriState value={answers.fireSafetyManagerRequired} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("fireSafetyManagerRequired", value)} /></Question>
                 <Question label="검사대상 열사용기자재 설치 여부"><TriState value={answers.heatUseEquipment} onChange={(value) => onChange("heatUseEquipment", value)} /></Question>
                 <Question label="유해·위험기계 기구 안전검사 대상 여부"><TriState value={answers.hazardousMachineryInspectionRequired} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("hazardousMachineryInspectionRequired", value)} /></Question>
@@ -1177,7 +1291,7 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                   </p>
                 )
               ) : (
-                <p className="question-hint">두 값을 모두 입력하면 최소기간과 통상기간을 자동으로 비교할 수 있습니다.</p>
+                <p className="question-hint">두 값을 모두 입력하면 공식 최단 경로와 공식 기준 경로를 자동으로 비교할 수 있습니다.</p>
               )}
             </Question>
             <div className="inline-notice info">

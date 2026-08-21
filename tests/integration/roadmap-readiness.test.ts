@@ -59,6 +59,24 @@ describe("roadmap readiness scenarios", () => {
         "factory-completion-report-complex",
       ),
     );
+    expect(
+      evaluation.schedules.TYPICAL.projectTimeline?.nodes.find(
+        (node) => node.procedureId === "industrial-complex-occupancy-contract",
+      ),
+    ).toMatchObject({
+      processingDuration: 0,
+      startDate: "2026-08-21",
+      finishDate: "2026-08-21",
+      completedCheckpoint: {
+        label: "산업단지 입주계약 체결 완료",
+        completedDate: null,
+        confirmedAsOfDate: "2026-08-21",
+      },
+    });
+    expect(
+      evaluation.schedules.TYPICAL.projectTimeline
+        ?.unknownPlanningDurationProcedureIds,
+    ).not.toContain("industrial-complex-occupancy-contract");
   });
 
   it("does not deem factory approval merely because a site is inside an industrial complex", () => {
@@ -75,6 +93,18 @@ describe("roadmap readiness scenarios", () => {
 
     expect(decision(evaluation, "industrial-complex-occupancy-contract").status).toBe("APPLIES");
     expect(decision(evaluation, "factory-establishment-approval").isDeemed).toBe(false);
+    expect(
+      evaluation.schedules.TYPICAL.projectTimeline
+        ?.unknownPlanningDurationProcedureIds,
+    ).not.toContain("industrial-complex-occupancy-contract");
+    expect(
+      evaluation.schedules.TYPICAL.projectTimeline?.nodes.find(
+        (node) => node.procedureId === "industrial-complex-occupancy-contract",
+      ),
+    ).toMatchObject({
+      processingDuration: 5,
+      processingUnit: "BUSINESS_DAY",
+    });
   });
 
   it("uses an industrial-complex plan only for permits documented and consulted in the approved plan", () => {
@@ -108,6 +138,20 @@ describe("roadmap readiness scenarios", () => {
     expect(
       decision(evaluation, "building-permit").specialLawImpacts?.[0].statutoryCap,
     ).toContain("6개월");
+    expect(
+      evaluation.schedules.TYPICAL.projectTimeline?.nodes.find(
+        (node) => node.procedureId === "industrial-complex-plan-approval",
+      ),
+    ).toMatchObject({
+      processingDuration: 0,
+      startDate: "2026-08-20",
+      finishDate: "2026-08-20",
+      completedCheckpoint: {
+        label: "계획 승인·고시 완료",
+        completedDate: "2026-08-20",
+        confirmedAsOfDate: "2026-08-21",
+      },
+    });
   });
 
   it("keeps the industrial-complex plan application, consultation, and approval phases mutually exclusive before gazette evidence", () => {
@@ -224,6 +268,42 @@ describe("roadmap readiness scenarios", () => {
     expect(decision(evaluation, "air-emission-installation-permit").provisionalEffect).toBe("INCLUDE");
     expect(decision(evaluation, "water-discharge-installation-permit").provisionalEffect).toBe("INCLUDE");
     expect(decision(evaluation, "fire-facility-completion-inspection").provisionalEffect).toBe("INCLUDE");
+  });
+
+  it("keeps a completed post-effective AI one-stop result as a zero-remaining checkpoint", () => {
+    const evaluation = evaluateProject(
+      scenario({
+        assessmentDate: "2027-04-01",
+        industryCategory: "AI_DATA_CENTER",
+        insideIndustrialComplex: false,
+        aiDataCenterActFacilityConfirmed: true,
+        aiDataCenterOneStopStatus: "COMPLETED",
+        appliedSpecialLawIds: ["AIDC_ONE_STOP"],
+      }),
+    );
+
+    expect(decision(evaluation, "ai-data-center-one-stop-result")).toMatchObject({
+      status: "APPLIES",
+      provisionalEffect: "INCLUDE",
+    });
+    expect(
+      evaluation.schedules.TYPICAL.projectTimeline?.nodes.find(
+        (node) => node.procedureId === "ai-data-center-one-stop-result",
+      ),
+    ).toMatchObject({
+      processingDuration: 0,
+      startDate: "2027-04-01",
+      finishDate: "2027-04-01",
+      completedCheckpoint: {
+        label: "AI 데이터센터 일괄처리 결과통지 완료",
+        completedDate: null,
+        confirmedAsOfDate: "2027-04-01",
+      },
+    });
+    expect(
+      evaluation.schedules.TYPICAL.projectTimeline
+        ?.unknownPlanningDurationProcedureIds,
+    ).not.toContain("ai-data-center-one-stop-result");
   });
 
   it("never reports a total duration while active permits still have no reviewed duration", () => {
