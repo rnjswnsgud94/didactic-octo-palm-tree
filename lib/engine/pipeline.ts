@@ -1,6 +1,10 @@
 import { catalog, type ScenarioAnswers } from "@/lib/data/catalog";
 import { buildPlanningDurations } from "@/lib/data/planning-durations";
 import {
+  filterFastTrackTargetProcedureIds,
+  filterPlanDeemedProcedureIds,
+} from "@/lib/data/special-law-processes";
+import {
   evaluateSelectedSpecialLaws,
   specialLawImpactsForProcedure,
 } from "@/lib/data/special-laws";
@@ -20,7 +24,40 @@ export function evaluateProject(
     includePractical: true,
   },
 ) {
-  const input = scenarioAnswersToProjectInput(answers);
+  const evaluatedAnswers: ScenarioAnswers = {
+    ...answers,
+    advancedStrategicIndustryFastTrackPermitIds:
+      filterFastTrackTargetProcedureIds(
+        "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+        answers.advancedStrategicIndustryFastTrackPermitIds,
+        catalog.procedures,
+      ),
+    semiconductorClusterFastTrackPermitIds:
+      filterFastTrackTargetProcedureIds(
+        "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
+        answers.semiconductorClusterFastTrackPermitIds,
+        catalog.procedures,
+      ),
+    semiconductorClusterPlanIncludedPermitIds:
+      filterPlanDeemedProcedureIds(
+        "SEMICONDUCTOR_CLUSTER_PLAN_DEEMING",
+        answers.semiconductorClusterPlanIncludedPermitIds,
+      ),
+    industrialComplexPlanIncludedPermitIds:
+      filterPlanDeemedProcedureIds(
+        "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL",
+        answers.industrialComplexPlanIncludedPermitIds,
+      ),
+    regionalSpecialZonePlanIncludedPermitIds:
+      filterPlanDeemedProcedureIds(
+        "REGIONAL_SPECIAL_ZONE_PLAN_DEEMING",
+        answers.regionalSpecialZonePlanIncludedPermitIds,
+      ),
+  };
+  const input = scenarioAnswersToProjectInput(
+    evaluatedAnswers,
+    catalog.procedures,
+  );
   const baseDecisions = resolveAllProcedures(
     [...catalog.procedures],
     [...catalog.rules],
@@ -30,15 +67,15 @@ export function evaluateProject(
   const decisions = baseDecisions.map((decision) => ({
     ...decision,
     specialLawImpacts: specialLawImpactsForProcedure(
-      answers,
-      decision.procedure.id,
+      evaluatedAnswers,
+      decision.procedure,
     ),
   }));
-  const specialLawEvaluations = evaluateSelectedSpecialLaws(answers);
+  const specialLawEvaluations = evaluateSelectedSpecialLaws(evaluatedAnswers);
   const planningDurations = buildPlanningDurations(
     catalog.procedures,
     catalog.durations,
-    answers,
+    evaluatedAnswers,
   );
   const schedules = Object.fromEntries(
     (["MIN", "TYPICAL"] as DurationScenario[]).map((scenario) => [
@@ -51,9 +88,9 @@ export function evaluateProject(
         includeConditional: options.includeConditional,
         includePractical: options.includePractical,
         constructionPlan: {
-          assessmentDate: answers.assessmentDate,
-          plannedStartDate: answers.plannedConstructionStartDate,
-          plannedEndDate: answers.plannedConstructionEndDate,
+          assessmentDate: evaluatedAnswers.assessmentDate,
+          plannedStartDate: evaluatedAnswers.plannedConstructionStartDate,
+          plannedEndDate: evaluatedAnswers.plannedConstructionEndDate,
         },
         planningDurations,
       }),

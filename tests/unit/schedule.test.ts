@@ -69,6 +69,7 @@ type PlanningSpec = {
   unit: PlanningDuration["unit"];
   overlapPolicy: PlanningDuration["overlapPolicy"];
   releasePolicy?: PlanningDuration["releasePolicy"];
+  endToEndMissingComponents?: string[];
 };
 
 function planning(values: Record<string, PlanningSpec>): PlanningDuration[] {
@@ -89,6 +90,7 @@ function planning(values: Record<string, PlanningSpec>): PlanningDuration[] {
       sourceLabel: known ? "테스트용 공식 처리기간" : null,
       assumptions: [],
       reviewedAt: known ? "2026-01-01" : null,
+      endToEndMissingComponents: value.endToEndMissingComponents,
     } satisfies PlanningDuration;
   });
 }
@@ -155,6 +157,27 @@ describe("business-day DAG and critical path", () => {
 
     expect(calculateSchedule({ ...common, includePractical: true }).total).toBe(8);
     expect(calculateSchedule({ ...common, includePractical: false }).total).toBe(5);
+  });
+
+  it("keeps calendar-day legal edges in the visible order without converting their lag to business days", () => {
+    const result = calculateSchedule({
+      decisions: decisions(["later-permit", "minister-request"]),
+      edges: [
+        edge("request-before-permit", "minister-request", "later-permit", {
+          lag: 40,
+          lagUnit: "CALENDAR_DAY",
+        }),
+      ],
+      durations: durations({ "later-permit": 5, "minister-request": 1 }),
+      scenario: "MIN",
+      includeConditional: true,
+      includePractical: true,
+    });
+
+    expect(result.topologicalOrder).toEqual(["minister-request", "later-permit"]);
+    expect(result.nodes.find((node) => node.procedureId === "minister-request")?.wave).toBe(0);
+    expect(result.nodes.find((node) => node.procedureId === "later-permit")?.wave).toBe(1);
+    expect(result.total).toBe(5);
   });
 
   it("activates a conditioned edge only when its rule matched", () => {
@@ -523,6 +546,38 @@ describe("automatic integrated construction timeline", () => {
       unknownPlanningDurationProcedureIds: ["unknown"],
     });
     expect(result.projectTimeline?.warnings.join(" ")).toContain("일정 하한");
+  });
+
+  it("keeps a known processing period as a floor when preparation or consultation is missing", () => {
+    const result = calculateSchedule({
+      decisions: decisions(["permit"]),
+      edges: [],
+      durations: durations({ permit: 5 }),
+      scenario: "MIN",
+      includeConditional: true,
+      includePractical: true,
+      constructionPlan,
+      planningDurations: planning({
+        permit: {
+          minimum: 5,
+          unit: "BUSINESS_DAY",
+          overlapPolicy: "PRE_CONSTRUCTION",
+          endToEndMissingComponents: ["신청인 준비", "관계기관 협의"],
+        },
+      }),
+    });
+
+    expect(result.projectTimeline).toMatchObject({
+      durationStatus: "MINIMUM_ONLY",
+      totalCalendarDays: null,
+      operationReadyDate: null,
+      permitLeadCalendarDays: null,
+      incompleteDurationComponentProcedureIds: ["permit"],
+    });
+    expect(result.projectTimeline?.minimumKnownCalendarDays).toBeGreaterThan(0);
+    expect(result.projectTimeline?.warnings.join(" ")).toContain(
+      "신청인 준비·기관 심사·관계기관 협의·전체 경과",
+    );
   });
 
   it("does not calculate beyond the reviewed business-calendar coverage", () => {

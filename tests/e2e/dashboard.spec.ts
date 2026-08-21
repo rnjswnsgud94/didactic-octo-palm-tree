@@ -1,5 +1,48 @@
 import { expect, test } from "@playwright/test";
 
+test("desktop result summary uses the available width without cramped copy", async ({ page }) => {
+  await page.setViewportSize({ width: 1450, height: 900 });
+  await page.goto("/");
+
+  const summary = page.getByLabel("판정 요약");
+  const durationCard = summary.locator(".summary-schedule");
+  const statusCards = summary.locator(".summary-action");
+  await expect(durationCard).toBeVisible();
+  await expect(statusCards).toHaveCount(3);
+
+  const geometry = await summary.evaluate((element) => {
+    const summaryRect = element.getBoundingClientRect();
+    const duration = element.querySelector<HTMLElement>(".summary-schedule");
+    const cards = [...element.querySelectorAll<HTMLElement>(".summary-action")];
+    const descriptions = [
+      ...element.querySelectorAll<HTMLElement>(".summary-card-description"),
+    ];
+    if (!duration || cards.length !== 3 || descriptions.length !== 3) return null;
+
+    return {
+      summaryWidth: summaryRect.width,
+      durationWidth: duration.getBoundingClientRect().width,
+      cardTops: cards.map((card) => card.getBoundingClientRect().top),
+      descriptionWidthRatios: descriptions.map((description, index) =>
+        description.getBoundingClientRect().width /
+        cards[index].getBoundingClientRect().width,
+      ),
+      descriptionLineHeights: descriptions.map((description) =>
+        Number.parseFloat(getComputedStyle(description).lineHeight),
+      ),
+      hasHorizontalOverflow:
+        document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry!.durationWidth / geometry!.summaryWidth).toBeGreaterThan(0.95);
+  expect(Math.max(...geometry!.cardTops) - Math.min(...geometry!.cardTops)).toBeLessThan(2);
+  expect(Math.min(...geometry!.descriptionWidthRatios)).toBeGreaterThan(0.78);
+  expect(Math.min(...geometry!.descriptionLineHeights)).toBeGreaterThanOrEqual(19);
+  expect(geometry!.hasHorizontalOverflow).toBe(false);
+});
+
 test("wizard changes the route and detail links are official", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "지역투자 인허가 로드맵" })).toBeVisible();

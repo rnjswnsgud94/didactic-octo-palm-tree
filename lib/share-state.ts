@@ -1,15 +1,37 @@
 import { scenarioAnswerSchema, type ScenarioAnswers } from "@/lib/data/catalog";
 import { isSupportedNonCapitalProvince } from "@/lib/regions";
 
+export const MAX_SHARE_STATE_LENGTH = 8_000;
+
+export class ShareStateTooLongError extends RangeError {
+  constructor(readonly actualLength: number) {
+    super(`공유 주소 상태가 ${actualLength}자로 ${MAX_SHARE_STATE_LENGTH}자 한도를 초과했습니다.`);
+    this.name = "ShareStateTooLongError";
+  }
+}
+
 const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["assessmentDate", "d"],
   ["plannedConstructionStartDate", "cs"],
   ["plannedConstructionEndDate", "ce"],
+  ["equipmentInstallationCompletionDate", "eic"],
+  ["commissioningStartDate", "cms"],
   ["investmentType", "it"],
   ["province", "pr"],
   ["city", "ct"],
+  ["siteAddress", "addr"],
+  ["siteZoning", "zone"],
+  ["siteRestrictedFactors", "rf"],
   ["insideIndustrialComplex", "ic"],
+  ["industrialComplexName", "icn"],
+  ["industrialComplexIdentifier", "ici"],
+  ["industrialComplexManagingAuthority", "icm"],
+  ["industrialComplexOccupancyContractStatus", "ocs"],
   ["industryCategory", "ind"],
+  ["ksicCode", "ksic"],
+  ["products", "prod"],
+  ["coreProcesses", "proc"],
+  ["existingApprovalIds", "eai"],
   ["buildingAction", "ba"],
   ["mechanicalEquipmentActTarget", "mea"],
   ["existingAreaM2", "ex"],
@@ -25,6 +47,39 @@ const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["aiDataCenterActFacilityConfirmed", "aic"],
   ["aiDataCenterOneStopStatus", "aos"],
   ["appliedSpecialLawIds", "sl"],
+  ["advancedStrategicIndustryFastTrackConfirmed", "asf"],
+  ["advancedStrategicIndustryApplicantRoleConfirmed", "asr"],
+  ["advancedStrategicIndustryDelayRiskConfirmed", "asd"],
+  ["advancedStrategicIndustryCommitteeResolved", "asc"],
+  ["advancedStrategicIndustryMinisterRequestDate", "asm"],
+  ["advancedStrategicIndustryFastTrackPermitIds", "aspi"],
+  ["semiconductorClusterFastTrackConfirmed", "scf"],
+  ["semiconductorClusterApplicantRoleConfirmed", "scr"],
+  ["semiconductorClusterDelayRiskConfirmed", "scd"],
+  ["semiconductorClusterCommitteeResolved", "scc"],
+  ["semiconductorClusterMinisterRequestDate", "scm"],
+  ["semiconductorClusterFastTrackPermitIds", "scpi"],
+  ["semiconductorClusterPlanDeemingConfirmed", "scp"],
+  ["semiconductorClusterPlanDocumentsIncluded", "spd"],
+  ["semiconductorClusterPlanConsultationCompleted", "spc"],
+  ["semiconductorClusterPlanApprovalPublished", "spp"],
+  ["semiconductorClusterPlanApprovalPublishedDate", "spad"],
+  ["semiconductorClusterPlanApprovalNoticeReference", "spar"],
+  ["semiconductorClusterPlanIncludedPermitIds", "sppi"],
+  ["industrialComplexPlanSpecialCaseConfirmed", "icp"],
+  ["industrialComplexPlanDocumentsIncluded", "icd"],
+  ["industrialComplexPlanConsultationCompleted", "icc"],
+  ["industrialComplexPlanApprovalPublished", "ipa"],
+  ["industrialComplexPlanApprovalPublishedDate", "ipad"],
+  ["industrialComplexPlanApprovalNoticeReference", "ipar"],
+  ["industrialComplexPlanIncludedPermitIds", "icpi"],
+  ["regionalSpecialZonePlanDeemingConfirmed", "rsz"],
+  ["regionalSpecialZonePlanDocumentsIncluded", "rsd"],
+  ["regionalSpecialZonePlanConsultationCompleted", "rsc"],
+  ["regionalSpecialZonePlanApprovalPublished", "rpa"],
+  ["regionalSpecialZonePlanApprovalPublishedDate", "rpad"],
+  ["regionalSpecialZonePlanApprovalNoticeReference", "rpar"],
+  ["regionalSpecialZonePlanIncludedPermitIds", "rspi"],
   ["permitCoordination", "pc"],
   ["airEmissionFacility", "air"],
   ["waterDischargeFacility", "wat"],
@@ -35,11 +90,14 @@ const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["hazardousChemicalBusiness", "hcb"],
   ["hazardousMaterials", "haz"],
   ["highPressureGas", "hpg"],
+  ["highPressureGasBusinessStartTarget", "hbs"],
   ["specificHighPressureGasUse", "shg"],
   ["lpgSpecificUseFacility", "lpg"],
   ["cityGasSpecificUseFacility", "cgs"],
   ["psmCovered", "psm"],
   ["fireFacilityWork", "fire"],
+  ["fireWorkSupervisionTarget", "fws"],
+  ["firstFireSelfInspectionTarget", "ffi"],
   ["privateElectricalFacilityWork", "pef"],
   ["energyUsePlanRequired", "eup"],
   ["groundwaterDevelopment", "gw"],
@@ -65,6 +123,7 @@ const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["hazardousMachineryInspectionRequired", "hmi"],
   ["safetyManagerRequired", "smr"],
   ["healthManagerRequired", "hmr"],
+  ["forestRestorationObligation", "fro"],
   ["powerIncreaseMw", "pow"],
   ["waterDemandM3Day", "sup"],
   ["wastewaterM3Day", "ww"],
@@ -77,6 +136,65 @@ const version8OnlyFields = new Set<keyof ScenarioAnswers>([
   "aiDataCenterActFacilityConfirmed",
   "aiDataCenterOneStopStatus",
   "appliedSpecialLawIds",
+]);
+
+const version9OnlyFields = new Set<keyof ScenarioAnswers>([
+  "advancedStrategicIndustryFastTrackConfirmed",
+  "semiconductorClusterFastTrackConfirmed",
+  "industrialComplexPlanSpecialCaseConfirmed",
+  "regionalSpecialZonePlanDeemingConfirmed",
+]);
+
+const version10OnlyFields = new Set<keyof ScenarioAnswers>([
+  "equipmentInstallationCompletionDate",
+  "commissioningStartDate",
+  "siteAddress",
+  "siteZoning",
+  "siteRestrictedFactors",
+  "industrialComplexName",
+  "industrialComplexIdentifier",
+  "industrialComplexManagingAuthority",
+  "industrialComplexOccupancyContractStatus",
+  "ksicCode",
+  "products",
+  "coreProcesses",
+  "existingApprovalIds",
+  "industrialComplexPlanDocumentsIncluded",
+  "industrialComplexPlanConsultationCompleted",
+  "industrialComplexPlanIncludedPermitIds",
+  "regionalSpecialZonePlanDocumentsIncluded",
+  "regionalSpecialZonePlanConsultationCompleted",
+  "regionalSpecialZonePlanIncludedPermitIds",
+  "highPressureGasBusinessStartTarget",
+  "fireWorkSupervisionTarget",
+  "firstFireSelfInspectionTarget",
+  "forestRestorationObligation",
+  "advancedStrategicIndustryApplicantRoleConfirmed",
+  "advancedStrategicIndustryDelayRiskConfirmed",
+  "advancedStrategicIndustryCommitteeResolved",
+  "advancedStrategicIndustryMinisterRequestDate",
+  "advancedStrategicIndustryFastTrackPermitIds",
+  "semiconductorClusterApplicantRoleConfirmed",
+  "semiconductorClusterDelayRiskConfirmed",
+  "semiconductorClusterCommitteeResolved",
+  "semiconductorClusterMinisterRequestDate",
+  "semiconductorClusterFastTrackPermitIds",
+  "semiconductorClusterPlanDeemingConfirmed",
+  "semiconductorClusterPlanDocumentsIncluded",
+  "semiconductorClusterPlanConsultationCompleted",
+  "semiconductorClusterPlanIncludedPermitIds",
+]);
+
+const version11OnlyFields = new Set<keyof ScenarioAnswers>([
+  "semiconductorClusterPlanApprovalPublished",
+  "semiconductorClusterPlanApprovalPublishedDate",
+  "semiconductorClusterPlanApprovalNoticeReference",
+  "industrialComplexPlanApprovalPublished",
+  "industrialComplexPlanApprovalPublishedDate",
+  "industrialComplexPlanApprovalNoticeReference",
+  "regionalSpecialZonePlanApprovalPublished",
+  "regionalSpecialZonePlanApprovalPublishedDate",
+  "regionalSpecialZonePlanApprovalNoticeReference",
 ]);
 
 const version2Fields: Array<[keyof ScenarioAnswers, string]> = [
@@ -124,6 +242,22 @@ const version3Fields: Array<[keyof ScenarioAnswers, string]> = [
   ["healthManagerRequired", "hmr"],
 ];
 
+const textValueLimits: Partial<Record<keyof ScenarioAnswers, number>> = {
+  siteAddress: 200,
+  siteZoning: 120,
+  siteRestrictedFactors: 500,
+  industrialComplexName: 120,
+  industrialComplexIdentifier: 80,
+  industrialComplexManagingAuthority: 120,
+  ksicCode: 20,
+  products: 500,
+  coreProcesses: 500,
+  existingApprovalIds: 500,
+  semiconductorClusterPlanApprovalNoticeReference: 300,
+  industrialComplexPlanApprovalNoticeReference: 300,
+  regionalSpecialZonePlanApprovalNoticeReference: 300,
+};
+
 function encodeValue(value: ScenarioAnswers[keyof ScenarioAnswers]) {
   if (Array.isArray(value)) return value.join(".");
   if (value === null) return "u";
@@ -137,8 +271,15 @@ function decodeValue(
   value: string,
 ): string | number | boolean | string[] | null {
   if (value === "u") return null;
-  if (key === "appliedSpecialLawIds") {
-    return value ? value.split(".").filter(Boolean).slice(0, 10) : [];
+  if ([
+    "appliedSpecialLawIds",
+    "industrialComplexPlanIncludedPermitIds",
+    "regionalSpecialZonePlanIncludedPermitIds",
+    "semiconductorClusterPlanIncludedPermitIds",
+    "advancedStrategicIndustryFastTrackPermitIds",
+    "semiconductorClusterFastTrackPermitIds",
+  ].includes(key)) {
+    return value ? value.split(".").filter(Boolean).slice(0, 40) : [];
   }
   if (
     [
@@ -153,17 +294,40 @@ function decodeValue(
       "buildingCommitteeReviewRequired",
       "gridImpactAssessmentRequired",
       "aiDataCenterActFacilityConfirmed",
+      "advancedStrategicIndustryFastTrackConfirmed",
+      "advancedStrategicIndustryApplicantRoleConfirmed",
+      "advancedStrategicIndustryDelayRiskConfirmed",
+      "advancedStrategicIndustryCommitteeResolved",
+      "semiconductorClusterFastTrackConfirmed",
+      "semiconductorClusterApplicantRoleConfirmed",
+      "semiconductorClusterDelayRiskConfirmed",
+      "semiconductorClusterCommitteeResolved",
+      "semiconductorClusterPlanDeemingConfirmed",
+      "semiconductorClusterPlanDocumentsIncluded",
+      "semiconductorClusterPlanConsultationCompleted",
+      "semiconductorClusterPlanApprovalPublished",
+      "industrialComplexPlanSpecialCaseConfirmed",
+      "industrialComplexPlanDocumentsIncluded",
+      "industrialComplexPlanConsultationCompleted",
+      "industrialComplexPlanApprovalPublished",
+      "regionalSpecialZonePlanDeemingConfirmed",
+      "regionalSpecialZonePlanDocumentsIncluded",
+      "regionalSpecialZonePlanConsultationCompleted",
+      "regionalSpecialZonePlanApprovalPublished",
       "integratedEnvironmentalPermitTarget",
       "chemicalsHandled",
       "chemicalManufactureOrImport",
       "hazardousChemicalBusiness",
       "hazardousMaterials",
       "highPressureGas",
+      "highPressureGasBusinessStartTarget",
       "specificHighPressureGasUse",
       "lpgSpecificUseFacility",
       "cityGasSpecificUseFacility",
       "psmCovered",
       "fireFacilityWork",
+      "fireWorkSupervisionTarget",
+      "firstFireSelfInspectionTarget",
       "privateElectricalFacilityWork",
       "energyUsePlanRequired",
       "groundwaterDevelopment",
@@ -186,6 +350,7 @@ function decodeValue(
       "hazardousMachineryInspectionRequired",
       "safetyManagerRequired",
       "healthManagerRequired",
+      "forestRestorationObligation",
     ].includes(key)
   ) {
     if (value === "1") return true;
@@ -207,7 +372,7 @@ function decodeValue(
       ? number
       : null;
   }
-  return value.slice(0, 80);
+  return value.slice(0, textValueLimits[key] ?? 80);
 }
 
 export function encodeShareState(
@@ -215,31 +380,36 @@ export function encodeShareState(
   tab: string,
 ) {
   const params = new URLSearchParams();
-  params.set("v", "8");
+  params.set("v", "11");
   for (const [key, shortKey] of keys) {
     params.set(shortKey, encodeValue(answers[key]));
   }
   params.set("tab", tab);
   params.sort();
-  return params.toString();
+  const encoded = params.toString();
+  if (encoded.length > MAX_SHARE_STATE_LENGTH) {
+    throw new ShareStateTooLongError(encoded.length);
+  }
+  return encoded;
 }
 
 export function decodeShareState(
   search: string,
   fallback: ScenarioAnswers,
 ): { answers: ScenarioAnswers; tab?: string; warning?: string } {
-  if (search.length > 3_000) {
+  const encodedLength = search.startsWith("?") ? search.length - 1 : search.length;
+  if (encodedLength > MAX_SHARE_STATE_LENGTH) {
     return { answers: fallback, warning: "공유 주소가 너무 길어 기본값을 사용했습니다." };
   }
   const params = new URLSearchParams(search);
   if (!params.has("v")) return { answers: fallback };
   const version = params.get("v");
-  if (!["1", "2", "3", "4", "5", "6", "7", "8"].includes(version ?? "")) {
+  if (!["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"].includes(version ?? "")) {
     return { answers: fallback, warning: "지원하지 않는 공유 주소 버전입니다." };
   }
   const warnings: string[] = [];
   const candidate: Record<string, unknown> = { ...fallback };
-  if (version !== "8") {
+  if (!["8", "9", "10", "11"].includes(version ?? "")) {
     candidate.gridImpactAssessmentRequired = null;
     candidate.aiDataCenterActFacilityConfirmed = null;
     candidate.landscapeReviewRequired = null;
@@ -247,6 +417,20 @@ export function decodeShareState(
     candidate.aiDataCenterOneStopStatus = "NOT_APPLIED";
     candidate.appliedSpecialLawIds = [];
     warnings.push("예전 공유 주소에는 AI 데이터센터 특례 조건이 없어 미확인·미선택 상태로 복원했습니다.");
+  }
+  if (!["9", "10", "11"].includes(version ?? "")) {
+    for (const key of version9OnlyFields) candidate[key] = null;
+    warnings.push("예전 공유 주소에는 업종·지역·산업단지 특별법 확인값이 없어 미확인 상태로 복원했습니다.");
+  }
+  if (!["10", "11"].includes(version ?? "")) {
+    for (const key of version10OnlyFields) candidate[key] = fallback[key];
+    warnings.push("예전 공유 주소에는 산단 계약·의제 증빙·세부 사업정보가 없어 기본값으로 복원했습니다.");
+  }
+  if (version !== "11") {
+    for (const key of version11OnlyFields) {
+      candidate[key] = key.endsWith("NoticeReference") ? "" : null;
+    }
+    warnings.push("예전 공유 주소에는 계획 승인·고시 완료 증거가 없어 미확인 상태로 복원했습니다.");
   }
   if (version === "1") {
     const missingNewFields = version2Fields.filter(([, shortKey]) => !params.has(shortKey));
@@ -262,12 +446,15 @@ export function decodeShareState(
   for (const [key, shortKey] of keys) {
     const value = params.get(shortKey);
     if (value === null) continue;
-    if (version !== "8" && version8OnlyFields.has(key)) continue;
-    if (!["6", "7", "8"].includes(version ?? "") && key === "plannedConstructionStartDate" && /^\d{4}-\d{2}$/.test(value)) {
+    if (!["8", "9", "10", "11"].includes(version ?? "") && version8OnlyFields.has(key)) continue;
+    if (!["9", "10", "11"].includes(version ?? "") && version9OnlyFields.has(key)) continue;
+    if (!["10", "11"].includes(version ?? "") && version10OnlyFields.has(key)) continue;
+    if (version !== "11" && version11OnlyFields.has(key)) continue;
+    if (!["6", "7", "8", "9", "10", "11"].includes(version ?? "") && key === "plannedConstructionStartDate" && /^\d{4}-\d{2}$/.test(value)) {
       candidate[key] = `${value}-01`;
       continue;
     }
-    if (!["6", "7", "8"].includes(version ?? "") && key === "plannedConstructionEndDate" && /^\d{4}-\d{2}$/.test(value)) {
+    if (!["6", "7", "8", "9", "10", "11"].includes(version ?? "") && key === "plannedConstructionEndDate" && /^\d{4}-\d{2}$/.test(value)) {
       const [year, month] = value.split("-").map(Number);
       const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
       candidate[key] = end;
@@ -275,7 +462,7 @@ export function decodeShareState(
     }
     candidate[key] = decodeValue(key, value);
   }
-  if (!["6", "7", "8"].includes(version ?? "") && (params.has("cs") || params.has("ce"))) {
+  if (!["6", "7", "8", "9", "10", "11"].includes(version ?? "") && (params.has("cs") || params.has("ce"))) {
     warnings.push("예전 공유 주소의 월 단위 공사 일정을 해당 월의 첫날과 마지막 날로 변환했습니다.");
   }
   const parsed = scenarioAnswerSchema.safeParse(candidate);

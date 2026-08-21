@@ -1,5 +1,5 @@
 import { inputLabel } from "@/app/components/dashboard/constants";
-import type { ScenarioAnswers } from "@/lib/data/catalog";
+import { catalog, type ScenarioAnswers } from "@/lib/data/catalog";
 import { getIndustryProfile } from "@/lib/data/industry-profiles";
 import { getSpecialLawDefinition } from "@/lib/data/special-laws";
 import { getOfficialLocalOrdinanceLinks } from "@/lib/regions/local-ordinances";
@@ -27,8 +27,30 @@ export const projectInputSections: readonly InputSection[] = [
       { key: "assessmentDate" },
       { key: "province" },
       { key: "city" },
+      { key: "siteAddress" },
+      { key: "siteZoning" },
+      { key: "siteRestrictedFactors" },
       { key: "insideIndustrialComplex" },
+      { key: "industrialComplexName" },
+      { key: "industrialComplexIdentifier" },
+      { key: "industrialComplexManagingAuthority" },
+      { key: "industrialComplexOccupancyContractStatus" },
+      { key: "industrialComplexPlanSpecialCaseConfirmed" },
+      { key: "industrialComplexPlanDocumentsIncluded" },
+      { key: "industrialComplexPlanConsultationCompleted" },
+      { key: "industrialComplexPlanApprovalPublished" },
+      { key: "industrialComplexPlanApprovalPublishedDate" },
+      { key: "industrialComplexPlanApprovalNoticeReference" },
+      { key: "industrialComplexPlanIncludedPermitIds" },
+      { key: "regionalSpecialZonePlanDeemingConfirmed" },
+      { key: "regionalSpecialZonePlanDocumentsIncluded" },
+      { key: "regionalSpecialZonePlanConsultationCompleted" },
+      { key: "regionalSpecialZonePlanApprovalPublished" },
+      { key: "regionalSpecialZonePlanApprovalPublishedDate" },
+      { key: "regionalSpecialZonePlanApprovalNoticeReference" },
+      { key: "regionalSpecialZonePlanIncludedPermitIds" },
       { key: "landCategory" },
+      { key: "forestRestorationObligation" },
       { key: "demolitionRequired" },
       { key: "roadConnectionRequired" },
       { key: "trafficImpactAssessmentRequired" },
@@ -48,6 +70,10 @@ export const projectInputSections: readonly InputSection[] = [
     fields: [
       { key: "investmentType" },
       { key: "industryCategory" },
+      { key: "ksicCode" },
+      { key: "products" },
+      { key: "coreProcesses" },
+      { key: "existingApprovalIds" },
       { key: "buildingAction" },
       { key: "buildingCommitteeReviewRequired" },
       { key: "mechanicalEquipmentActTarget" },
@@ -58,6 +84,25 @@ export const projectInputSections: readonly InputSection[] = [
       { key: "aiDataCenterActFacilityConfirmed" },
       { key: "aiDataCenterOneStopStatus" },
       { key: "appliedSpecialLawIds" },
+      { key: "advancedStrategicIndustryFastTrackConfirmed" },
+      { key: "advancedStrategicIndustryApplicantRoleConfirmed" },
+      { key: "advancedStrategicIndustryDelayRiskConfirmed" },
+      { key: "advancedStrategicIndustryCommitteeResolved" },
+      { key: "advancedStrategicIndustryMinisterRequestDate" },
+      { key: "advancedStrategicIndustryFastTrackPermitIds" },
+      { key: "semiconductorClusterFastTrackConfirmed" },
+      { key: "semiconductorClusterApplicantRoleConfirmed" },
+      { key: "semiconductorClusterDelayRiskConfirmed" },
+      { key: "semiconductorClusterCommitteeResolved" },
+      { key: "semiconductorClusterMinisterRequestDate" },
+      { key: "semiconductorClusterFastTrackPermitIds" },
+      { key: "semiconductorClusterPlanDeemingConfirmed" },
+      { key: "semiconductorClusterPlanDocumentsIncluded" },
+      { key: "semiconductorClusterPlanConsultationCompleted" },
+      { key: "semiconductorClusterPlanApprovalPublished" },
+      { key: "semiconductorClusterPlanApprovalPublishedDate" },
+      { key: "semiconductorClusterPlanApprovalNoticeReference" },
+      { key: "semiconductorClusterPlanIncludedPermitIds" },
     ],
   },
   {
@@ -93,11 +138,14 @@ export const projectInputSections: readonly InputSection[] = [
       { key: "hazardousMaterialsTank" },
       { key: "hazardousMaterialsPreventionRulesRequired" },
       { key: "highPressureGas" },
+      { key: "highPressureGasBusinessStartTarget" },
       { key: "specificHighPressureGasUse" },
       { key: "lpgSpecificUseFacility" },
       { key: "cityGasSpecificUseFacility" },
       { key: "psmCovered" },
       { key: "fireFacilityWork" },
+      { key: "fireWorkSupervisionTarget" },
+      { key: "firstFireSelfInspectionTarget" },
       { key: "fireSafetyManagerRequired" },
       { key: "heatUseEquipment" },
       { key: "hazardousMachineryInspectionRequired" },
@@ -111,6 +159,8 @@ export const projectInputSections: readonly InputSection[] = [
     fields: [
       { key: "plannedConstructionStartDate" },
       { key: "plannedConstructionEndDate" },
+      { key: "equipmentInstallationCompletionDate" },
+      { key: "commissioningStartDate" },
       { key: "safetyManagementPlanRequired" },
       { key: "specificWorkReportRequired" },
       { key: "asbestosPresent" },
@@ -124,6 +174,12 @@ const valueLabels: Record<string, Record<string, string>> = {
     PLANNED: "신청 예정",
     IN_PROGRESS: "심사 중",
     COMPLETED: "일괄처리 완료",
+  },
+  industrialComplexOccupancyContractStatus: {
+    NOT_APPLIED: "미신청",
+    PLANNED: "신청 예정",
+    IN_PROGRESS: "협의·심사 중",
+    COMPLETED: "계약 체결 완료",
   },
   investmentType: {
     NEW: "신설",
@@ -212,6 +268,13 @@ export function formatProjectInputValue(
     if (!value.length) return "선택 없음";
     return value
       .map((id) => getSpecialLawDefinition(String(id) as Parameters<typeof getSpecialLawDefinition>[0])?.shortLabel ?? String(id))
+      .join(" · ");
+  }
+
+  if (key.endsWith("PermitIds") && Array.isArray(value)) {
+    if (!value.length) return "선택 없음";
+    return value
+      .map((id) => catalog.procedures.find((procedure) => procedure.id === id)?.name ?? String(id))
       .join(" · ");
   }
 

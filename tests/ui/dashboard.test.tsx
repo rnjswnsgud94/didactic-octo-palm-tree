@@ -60,7 +60,27 @@ describe("dashboard UI", () => {
     expect(screen.queryByText(/검증 시나리오|사용자 설정|조건 조정됨/)).not.toBeInTheDocument();
     expect(screen.getByLabelText("시·도")).toHaveValue("");
     expect(screen.queryByText("청주시")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /총 소요기간 산정 불가 계산 경로 열기/ })).toHaveTextContent("산정 불가");
+    expect(screen.getByRole("button", { name: /사업 일정 산정 불가 계산 경로 열기/ })).toHaveTextContent("산정 불가");
+  });
+
+  it("keeps each result-summary description on its own full-width row", () => {
+    render(<DashboardClient />);
+
+    const statusCards = [...document.querySelectorAll<HTMLElement>(".summary-action")];
+    expect(statusCards).toHaveLength(3);
+    for (const card of statusCards) {
+      expect(card.querySelector(":scope > .summary-card-heading")).not.toBeNull();
+      const description = card.querySelector<HTMLElement>(":scope > .summary-card-description");
+      expect(description).not.toBeNull();
+      expect(card).toHaveAttribute("aria-describedby", description!.id);
+      expect(card.querySelector(":scope > .summary-card-link")).not.toBeNull();
+    }
+    const durationTrigger = document.querySelector<HTMLElement>(".duration-summary-trigger");
+    expect(durationTrigger).toHaveAttribute(
+      "aria-describedby",
+      "duration-summary-description duration-summary-detail",
+    );
+    expect(document.querySelector(".duration-summary-result")).not.toBeNull();
   });
 
   it("reflects every edited Project Input value directly in the summary", () => {
@@ -90,7 +110,7 @@ describe("dashboard UI", () => {
     expect(assessmentDate).toHaveValue(original);
   });
 
-  it("reflects the entered daily construction dates in the total-duration result", () => {
+  it("labels an incomplete duration as a known lower bound and names the missing components", () => {
     render(<DashboardClient />);
     fireEvent.click(screen.getByRole("button", { name: /공사 일정/ }));
 
@@ -100,11 +120,14 @@ describe("dashboard UI", () => {
     fireEvent.change(start, { target: { value: "2027-06-15" } });
     fireEvent.change(end, { target: { value: "2030-05-20" } });
 
-    const scheduleCard = screen.getByRole("button", { name: /총 소요기간 .* 계산 경로 열기/ });
+    const scheduleCard = screen.getByRole("button", { name: /확인된 일정 하한 .* 계산 경로 열기/ });
     expect(scheduleCard).not.toBeNull();
     expect(scheduleCard).toHaveTextContent(/(?:년|개월|일)/);
     expect(scheduleCard).toHaveTextContent("총 소요기간");
-    expect(screen.queryByText("확인된 일정 하한")).not.toBeInTheDocument();
+    expect(scheduleCard).toHaveAccessibleName(/확인된 일정 하한/);
+    expect(scheduleCard).toHaveTextContent("확인된 일정 하한");
+    expect(scheduleCard).toHaveTextContent("총 소요기간이 아닙니다");
+    expect(scheduleCard).toHaveTextContent(/누락 구성요소 · 처리기간 미확인 인허가 \d+개/);
     expect(screen.getByText(/공사 [\d,]+일/)).toBeInTheDocument();
   });
 
@@ -133,19 +156,20 @@ describe("dashboard UI", () => {
 
   it("opens the total-duration result as a simplified six-stage graphic and restores focus", async () => {
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=8"));
+    await waitFor(() => expect(window.location.search).toContain("v=11"));
     fireEvent.click(screen.getByRole("button", { name: /공사 일정/ }));
     fireEvent.change(screen.getByLabelText("착공 예정일"), { target: { value: "2027-01-01" } });
     fireEvent.change(screen.getByLabelText("준공 예정일"), { target: { value: "2028-12-31" } });
 
-    const trigger = screen.getByRole("button", { name: /총 소요기간 .* 계산 경로 열기/ });
+    const trigger = screen.getByRole("button", { name: /확인된 일정 하한 .* 계산 경로 열기/ });
     await waitFor(() => expect(trigger).not.toHaveTextContent("산정 불가"));
     expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
     expect(trigger).toHaveAttribute("aria-controls", "total-duration-dialog");
     fireEvent.click(trigger);
 
-    const dialog = await screen.findByRole("dialog", { name: "총 소요기간 계산 경로" });
+    const dialog = await screen.findByRole("dialog", { name: "확인된 일정 하한 계산 경로" });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(within(dialog).getByRole("region", { name: "확인된 일정 하한 주요 구간" })).toBeInTheDocument();
     const graphic = within(dialog).getByRole("list", { name: "전체 절차 6단계 그래픽" });
     expect(within(graphic).getAllByRole("listitem")).toHaveLength(6);
     expect(within(dialog).getByText("건설공사")).toBeInTheDocument();
@@ -155,14 +179,14 @@ describe("dashboard UI", () => {
     expect(procedureIds.length).toBeGreaterThan(0);
     expect(new Set(procedureIds).size).toBe(procedureIds.length);
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "총 소요기간 닫기" }));
-    expect(screen.queryByRole("dialog", { name: "총 소요기간 계산 경로" })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "확인된 일정 하한 닫기" }));
+    expect(screen.queryByRole("dialog", { name: "확인된 일정 하한 계산 경로" })).not.toBeInTheDocument();
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("explains the missing dates inside the total-duration dialog", async () => {
     render(<DashboardClient />);
-    const trigger = screen.getByRole("button", { name: /총 소요기간 산정 불가 계산 경로 열기/ });
+    const trigger = screen.getByRole("button", { name: /사업 일정 산정 불가 계산 경로 열기/ });
     fireEvent.click(trigger);
     const dialog = await screen.findByRole("dialog", { name: "총 소요기간 계산 경로" });
     expect(within(dialog).getByText("공사 시작일과 준공일을 입력해 주세요.")).toBeInTheDocument();
@@ -172,8 +196,8 @@ describe("dashboard UI", () => {
     render(<DashboardClient />);
     const summary = screen.getByLabelText("판정 요약");
     const labels = [
-      "필수적으로 거쳐야 하는 절차",
-      "대상 여부 확인이 필요한 절차",
+      "확인된 필수 절차",
+      "잠정 포함·대상 확인 절차",
       "거칠 필요가 없는 절차",
     ];
 
@@ -187,7 +211,7 @@ describe("dashboard UI", () => {
     }
 
     const trigger = within(summary).getByRole("button", {
-      name: /^대상 여부 확인이 필요한 절차 \d+개 목록 열기$/,
+      name: /^잠정 포함·대상 확인 절차 \d+개 목록 열기$/,
     });
     const expectedCount = Number(
       trigger.getAttribute("aria-label")?.match(/(\d+)개/)?.[1],
@@ -196,7 +220,7 @@ describe("dashboard UI", () => {
 
     fireEvent.click(trigger);
     const dialog = await screen.findByRole("dialog", {
-      name: new RegExp(`대상 여부 확인이 필요한 절차 ${expectedCount}개`),
+      name: new RegExp(`잠정 포함·대상 확인 절차 ${expectedCount}개`),
     });
 
     expect(trigger).toHaveAttribute("aria-expanded", "true");
@@ -207,12 +231,12 @@ describe("dashboard UI", () => {
   it("searches and closes a status-list dialog", async () => {
     render(<DashboardClient />);
     const trigger = screen.getByRole("button", {
-      name: /^대상 여부 확인이 필요한 절차 \d+개 목록 열기$/,
+      name: /^잠정 포함·대상 확인 절차 \d+개 목록 열기$/,
     });
     fireEvent.click(trigger);
 
     const dialog = await screen.findByRole("dialog", {
-      name: /대상 여부 확인이 필요한 절차 \d+개/,
+      name: /잠정 포함·대상 확인 절차 \d+개/,
     });
     const search = within(dialog).getByRole("searchbox", {
       name: "목록에서 절차 또는 기관 검색",
@@ -229,13 +253,13 @@ describe("dashboard UI", () => {
 
   it("restores edited inputs from the share URL without a scenario id", async () => {
     const first = render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=8"));
+    await waitFor(() => expect(window.location.search).toContain("v=11"));
     fireEvent.click(screen.getByRole("button", { name: "증설" }));
 
     await waitFor(() => {
       expect(window.location.search).toContain("it=EXPANSION");
-      expect(window.location.search).toContain("v=8");
-      expect(window.location.search).not.toContain("sc=");
+      expect(window.location.search).toContain("v=11");
+      expect(new URLSearchParams(window.location.search).has("sc")).toBe(false);
     });
     first.unmount();
 
@@ -352,7 +376,7 @@ describe("dashboard UI", () => {
     );
 
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=8"));
+    await waitFor(() => expect(window.location.search).toContain("v=11"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "충청남도" },
     });
@@ -405,7 +429,7 @@ describe("dashboard UI", () => {
     );
 
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=8"));
+    await waitFor(() => expect(window.location.search).toContain("v=11"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "전북특별자치도" },
     });
@@ -441,7 +465,7 @@ describe("dashboard UI", () => {
     );
 
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=8"));
+    await waitFor(() => expect(window.location.search).toContain("v=11"));
     fireEvent.change(screen.getByLabelText("시·도"), {
       target: { value: "대전광역시" },
     });
@@ -475,15 +499,62 @@ describe("dashboard UI", () => {
     expect(document.querySelector('[data-input-key="chemicalsHandled"]')).toHaveTextContent("아니오");
   });
 
+  it("automatically surfaces other special-law candidates and activates only a confirmed route", async () => {
+    render(<DashboardClient />);
+    await waitFor(() => expect(window.location.search).toContain("v=11"));
+    fireEvent.change(screen.getByLabelText("시·도"), {
+      target: { value: "충청남도" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "산단 안" }));
+    fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
+      target: { value: "SEMICONDUCTOR_ELECTRONICS" },
+    });
+
+    const candidateList = document.querySelector<HTMLElement>(".special-law-candidate-list");
+    expect(candidateList).not.toBeNull();
+    expect(within(candidateList!).getByText("국가첨단전략산업 신속처리")).toBeInTheDocument();
+    expect(within(candidateList!).getByText("산업단지계획 통합승인·의제")).toBeInTheDocument();
+    expect(within(candidateList!).getByText("지역특화발전특구계획 의제")).toBeInTheDocument();
+    const semiconductorCandidate = within(candidateList!)
+      .getByText("반도체클러스터 신속처리")
+      .closest<HTMLElement>("article");
+    expect(semiconductorCandidate).not.toBeNull();
+    fireEvent.click(within(semiconductorCandidate!).getByRole("button", {
+      name: "법정요건 확인",
+    }));
+    const roleEvidence = within(semiconductorCandidate!).getByText("법정 사업시행자·신청자 지위").closest("label");
+    const delayEvidence = within(semiconductorCandidate!).getByText("인허가 지연·현저한 지장 우려").closest("label");
+    const committeeEvidence = within(semiconductorCandidate!).getByText("위원회 심의·의결 완료").closest("label");
+    fireEvent.click(within(roleEvidence!).getAllByRole("button")[0]);
+    fireEvent.click(within(delayEvidence!).getAllByRole("button")[0]);
+    fireEvent.click(within(committeeEvidence!).getAllByRole("button")[0]);
+    fireEvent.change(within(semiconductorCandidate!).getByLabelText("산업통상부장관의 인허가권자 요청일"), {
+      target: { value: "2026-08-15" },
+    });
+    fireEvent.click(within(semiconductorCandidate!).getByRole("checkbox", { name: "건축허가·신고 경로 확인" }));
+
+    const summary = screen
+      .getByRole("heading", { name: "특별법 간소화·면제 점검" })
+      .closest<HTMLElement>("section");
+    const activeCard = within(summary!).getByRole("heading", {
+      name: "반도체클러스터 신속처리",
+    }).closest<HTMLElement>("article");
+    expect(activeCard).toHaveTextContent("요건 확인");
+    expect(activeCard).toHaveTextContent("요청목록에 포함되지 않은 개별 인허가에는 적용되지 않습니다");
+    expect(document.querySelector('[data-input-key="semiconductorClusterFastTrackConfirmed"]')).toHaveTextContent("예");
+    await waitFor(() => expect(window.location.search).toContain("scf=1"));
+    expect(window.location.search).toContain("scpi=building-permit");
+  });
+
   it("adds AI data centers and carries selected special-law treatment into the result", async () => {
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=8"));
+    await waitFor(() => expect(window.location.search).toContain("v=11"));
     fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
       target: { value: "AI_DATA_CENTER" },
     });
 
     expect(screen.getAllByRole("option", { name: "AI 데이터센터" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "AI 데이터센터 특별법 적용" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "특별법 간소화·면제 점검" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "요건 확인" }));
     const oneStop = screen.getByRole("checkbox", { name: /인허가 일괄처리/ });
     fireEvent.click(oneStop);
@@ -494,10 +565,11 @@ describe("dashboard UI", () => {
     expect(oneStop).toBeChecked();
     expect(screen.getByText("선택 반영")).toBeInTheDocument();
     expect(screen.getByText(/일괄처리는 면제가 아니며/)).toBeInTheDocument();
+    expect(screen.getByText(/이 화면이 해당 문서의 원본·발행기관·의제목록 진위를 대신 검증하지 않습니다/)).toBeInTheDocument();
     expect(screen.getAllByText(/기한 종료 다음 날/).length).toBeGreaterThan(0);
     expect(screen.getByText(/시설 규모 산정 특례 또는 입지 특례/)).toBeInTheDocument();
     await waitFor(() => {
-      expect(window.location.search).toContain("v=8");
+      expect(window.location.search).toContain("v=11");
       expect(window.location.search).toContain("sl=AIDC_ONE_STOP");
       expect(window.location.search).toContain("aic=1");
       expect(window.location.search).toContain("aos=PLANNED");
@@ -506,7 +578,7 @@ describe("dashboard UI", () => {
 
   it("clears hidden AI-only special-law values when switching to another industry", async () => {
     render(<DashboardClient />);
-    await waitFor(() => expect(window.location.search).toContain("v=8"));
+    await waitFor(() => expect(window.location.search).toContain("v=11"));
     fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
       target: { value: "AI_DATA_CENTER" },
     });
@@ -516,14 +588,14 @@ describe("dashboard UI", () => {
     fireEvent.change(screen.getByLabelText("인허가 일괄처리 진행상태"), {
       target: { value: "COMPLETED" },
     });
-    expect(screen.getByRole("heading", { name: "AI 데이터센터 특별법 적용" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "특별법 간소화·면제 점검" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
       target: { value: "SEMICONDUCTOR_ELECTRONICS" },
     });
 
     expect(screen.queryByRole("checkbox", { name: /인허가 일괄처리/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "AI 데이터센터 특별법 적용" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "인허가 일괄처리" })).not.toBeInTheDocument();
     expect(document.querySelector('[data-input-key="appliedSpecialLawIds"]')).toHaveTextContent("선택 없음");
     expect(document.querySelector('[data-input-key="aiDataCenterOneStopStatus"]')).toHaveTextContent("선택 없음");
     await waitFor(() => {
@@ -548,8 +620,12 @@ describe("dashboard UI", () => {
     expect(within(phaseRoute).getByText("가동 이후")).toBeInTheDocument();
   });
 
-  it("switches to the procedure, law, schedule, and review tabs", () => {
+  it("switches to the action, procedure, law, schedule, and review tabs", () => {
     render(<DashboardClient />);
+    fireEvent.click(screen.getByRole("tab", { name: /실행 계획/ }));
+    expect(screen.getByRole("heading", { name: "다음 행동과 담당·접수 순서" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "실행계획 근거 완성도" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "CSV 내보내기" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /전체 절차/ }));
     expect(screen.getByRole("table")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /법령 근거/ }));

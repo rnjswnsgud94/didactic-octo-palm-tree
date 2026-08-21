@@ -59,6 +59,13 @@ export function TotalDurationDialog({
         (id) => !timeline.postOperationProcedureIds.includes(id),
       ).length
     : 0;
+  const incompleteActiveCount = timeline
+    ? timeline.incompleteDurationComponentProcedureIds.filter(
+        (id) => !timeline.postOperationProcedureIds.includes(id),
+      ).length
+    : 0;
+  const isMinimumOnly = timeline?.durationStatus === "MINIMUM_ONLY";
+  const resultLabel = isMinimumOnly ? "확인된 일정 하한 계산 경로" : "총 소요기간 계산 경로";
 
   return (
     <dialog
@@ -81,23 +88,25 @@ export function TotalDurationDialog({
           <div>
             <span>사업 전체 일정</span>
             <h2 id="total-duration-dialog-title" ref={headingRef} tabIndex={-1}>
-              총 소요기간 계산 경로
+              {resultLabel}
             </h2>
             <p id="total-duration-dialog-description">
-              착공 전 인허가, 공사와 병행하는 절차, 준공·가동 준비 절차를 6단계로 묶었습니다.
+              {isMinimumOnly
+                ? "처리기간 근거가 있는 절차와 공사기간만 6단계로 묶었습니다. 기간 미확인 절차가 남아 총 소요기간으로 볼 수 없습니다."
+                : "착공 전 인허가, 공사와 병행하는 절차, 준공·가동 준비 절차를 6단계로 묶었습니다."}
             </p>
           </div>
-          <button type="button" className="dialog-close" onClick={onClose} aria-label="총 소요기간 닫기">×</button>
+          <button type="button" className="dialog-close" onClick={onClose} aria-label={`${isMinimumOnly ? "확인된 일정 하한" : "총 소요기간"} 닫기`}>×</button>
         </header>
 
         {!timeline ? (
           <div className="duration-flow-empty">
             <strong>공사 시작일과 준공일을 입력해 주세요.</strong>
-            <span>두 날짜가 입력되면 인허가 선행기간과 공사기간을 합쳐 총 소요기간을 계산합니다.</span>
+              <span>두 날짜가 입력되면 확인된 인허가 선행기간과 공사기간을 연결하고, 기간이 비어 있으면 일정 하한으로 표시합니다.</span>
           </div>
         ) : (
           <div className="duration-flow-body">
-            <section className="duration-route-summary" aria-label="총 소요기간 주요 구간">
+            <section className="duration-route-summary" aria-label={`${isMinimumOnly ? "확인된 일정 하한" : "총 소요기간"} 주요 구간`}>
               <div><span>검토 시작</span><strong>{timeline.projectStartDate}</strong></div>
               <i aria-hidden="true">→</i>
               <div><span>착공 전 인허가</span><strong>{timeline.permitLeadCalendarDays ?? timeline.plannedPreConstructionCalendarDays}일</strong></div>
@@ -111,7 +120,7 @@ export function TotalDurationDialog({
               <strong>{formatCalendarPeriod(timeline.projectStartDate, completionDate!)}</strong>
               <span>
                 {timeline.durationStatus === "MINIMUM_ONLY"
-                  ? `현재 공식 처리기간이 확인된 절차를 기준으로 합산했습니다. 기간 미확인 ${unknownActiveCount}개는 숫자에 포함되지 않습니다.`
+                  ? `총 소요기간이 아닙니다. 현재 확인된 공식 처리기간과 공사기간만 합산했습니다. 처리기간 자체가 미확인인 절차 ${unknownActiveCount}개와 신청준비·심사·협의 기간 구성이 미확인인 절차 ${incompleteActiveCount}개가 남아 있습니다.`
                   : schedule.scenario === "MIN"
                     ? "각 절차의 확인된 최소 처리기간을 적용했습니다."
                     : "각 절차의 확인된 통상 처리기간을 적용했습니다."}

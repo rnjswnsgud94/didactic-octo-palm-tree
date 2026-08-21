@@ -22,6 +22,10 @@ function durationRangeLabel(range: (typeof catalog.durations)[number]["elapsed"]
   return `최소 ${range.min ?? "?"} · 통상 ${range.base ?? "?"} · 상한 ${range.max ?? "?"} ${unit}`;
 }
 
+function authorityNeedsConfirmation(authority: string) {
+  return /관할|관계기관|개별 인허가|지정권자|관리기관|입력한/.test(authority);
+}
+
 const verificationLabels: Record<string, string> = {
   AI_ASSISTED_DRAFT: "공식자료 대조 초안",
   INTERNAL_REVIEWED: "내부 검토 완료",
@@ -105,7 +109,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
         <dl className="detail-grid">
           <div><dt>수행 단계</dt><dd>{stageLabels[procedure.stage]}</dd></div>
           <div><dt>주관 구분</dt><dd>{laneLabels[procedure.lane]}</dd></div>
-          <div><dt>접수 기관</dt><dd>{procedure.receivingAuthority}</dd></div>
+          <div><dt>접수 기관</dt><dd>{procedure.receivingAuthority}{authorityNeedsConfirmation(procedure.receivingAuthority) ? <small>사업지 주소·위임사무 기준으로 최종 부서 확인 필요</small> : null}</dd></div>
           <div><dt>법정 결정권자</dt><dd>{procedure.statutoryDecisionMaker}</dd></div>
           <div><dt>신청·수행 주체</dt><dd>{procedure.applicant}</dd></div>
           <div><dt>협의 주체</dt><dd>{procedure.consultationAuthorities.length ? procedure.consultationAuthorities.join(", ") : "별도 협의 주체 없음"}</dd></div>
@@ -121,7 +125,13 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
             const other = catalog.procedures.find((item) => item.id === otherId)?.name ?? otherId;
             const direction = edge.from === procedure.id ? "후속" : "선행";
             const relation = edge.relation === "FINISH_TO_START" ? "완료 후 시작" : edge.relation === "START_TO_START" ? "병행 시작" : "완료 연계";
-            const strength = edge.strength === "LEGAL_HARD" ? "법적" : edge.strength === "PRACTICAL" ? "실무" : "권고";
+            const strength = edge.strength === "LEGAL_HARD"
+              ? edge.citationIds.length
+                ? "법정 근거 연결"
+                : "근거 미연결 선행"
+              : edge.strength === "PRACTICAL"
+                ? "실무"
+                : "권고";
             return <li key={edge.id}><strong>{direction} · {strength}</strong> — {other} ({relation}{edge.lag ? ` + ${edge.lag} ${lagUnitLabels[edge.lagUnit]}` : ""})</li>;
           })}</ul> : <p>현재 카탈로그에 직접 연결된 선후행 관계가 없습니다.</p>}
         </section>
@@ -148,7 +158,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
                 <article key={`${impact.lawId}-${impact.effect}`}>
                   <div><strong>{impact.effectLabel}</strong><span className={`impact-status status-${impact.status.toLowerCase()}`}>{impact.statusLabel}</span></div>
                   <p>{impact.description}</p>
-                  {impact.statutoryCap ? <small><b>법정 처리상한</b> {impact.statutoryCap}</small> : null}
+                  {impact.statutoryCap ? <small><b>법정 처리기한·조건</b> {impact.statutoryCap}</small> : null}
                   <a href={impact.officialUrl} target="_blank" rel="noreferrer">{impact.lawTitle} {impact.article} ↗</a>
                 </article>
               ))}

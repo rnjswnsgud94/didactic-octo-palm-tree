@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { ScenarioAnswers } from "@/lib/data/catalog";
+import { catalog, type ScenarioAnswers } from "@/lib/data/catalog";
 import {
   applyIndustryProfile,
   getIndustryProfile,
@@ -14,9 +14,17 @@ import {
 import {
   AI_DATA_CENTER_INDUSTRY_ID,
   AI_DATA_CENTER_SPECIAL_ACT_EFFECTIVE_DATE,
-  specialLawDefinitions,
-  type SpecialLawId,
+  getAiDataCenterSpecialLawDefinitions,
+  getAutomaticSpecialLawDefinitions,
+  type AiDataCenterSpecialLawId,
+  type AutomaticSpecialLawQualificationKey,
 } from "@/lib/data/special-laws";
+import {
+  getFastTrackTargetProcedureIds,
+  industrialComplexPlanDeemedProcedureIds,
+  regionalSpecialZoneDeemedProcedureIds,
+  semiconductorClusterPlanDeemedProcedureIds,
+} from "@/lib/data/special-law-processes";
 import { nonCapitalRegions } from "@/lib/regions";
 import { listSupportedMunicipalities } from "@/lib/regions/local-ordinances";
 
@@ -34,6 +42,28 @@ const steps = [
   { title: "인프라", hint: "전력·용수·폐수" },
   { title: "공사 일정", hint: "착공·준공 예정일" },
 ];
+
+const procedureNameById = new Map(
+  catalog.procedures.map((procedure) => [procedure.id, procedure.name]),
+);
+const sortedFastTrackTargetProcedureIds = {
+  ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK: getFastTrackTargetProcedureIds(
+    "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+    catalog.procedures,
+  ),
+  SEMICONDUCTOR_CLUSTER_FAST_TRACK: getFastTrackTargetProcedureIds(
+    "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
+    catalog.procedures,
+  ),
+} as const;
+for (const procedureIds of Object.values(sortedFastTrackTargetProcedureIds)) {
+  procedureIds.sort((left, right) =>
+    (procedureNameById.get(left) ?? left).localeCompare(
+      procedureNameById.get(right) ?? right,
+      "ko",
+    ),
+  );
+}
 
 function calendarDayDistance(start: string, end: string) {
   const startDay = Date.parse(`${start}T00:00:00.000Z`);
@@ -168,6 +198,8 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
   const assessmentDateIsValid = isValidAssessmentDate(answers.assessmentDate);
   const selectedIndustryProfile = getIndustryProfile(answers.industryCategory);
   const municipalities = listSupportedMunicipalities(answers.province);
+  const aiDataCenterSpecialLaws = getAiDataCenterSpecialLawDefinitions();
+  const automaticSpecialLawCandidates = getAutomaticSpecialLawDefinitions(answers);
   const visibleAssessmentDateError = assessmentDateIsValid
     ? assessmentDateError
     : "평가 기준일을 올바른 날짜로 입력해 주세요.";
@@ -189,9 +221,32 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
         onChange("appliedSpecialLawIds", []);
       }
     }
+    if (!["SEMICONDUCTOR_ELECTRONICS", "SECONDARY_BATTERY_CHEMICAL", "PHARMACEUTICAL_BIO"].includes(industryCategory)) {
+      onChange("advancedStrategicIndustryFastTrackConfirmed", null);
+      onChange("advancedStrategicIndustryApplicantRoleConfirmed", null);
+      onChange("advancedStrategicIndustryDelayRiskConfirmed", null);
+      onChange("advancedStrategicIndustryCommitteeResolved", null);
+      onChange("advancedStrategicIndustryMinisterRequestDate", null);
+      onChange("advancedStrategicIndustryFastTrackPermitIds", []);
+    }
+    if (industryCategory !== "SEMICONDUCTOR_ELECTRONICS") {
+      onChange("semiconductorClusterFastTrackConfirmed", null);
+      onChange("semiconductorClusterApplicantRoleConfirmed", null);
+      onChange("semiconductorClusterDelayRiskConfirmed", null);
+      onChange("semiconductorClusterCommitteeResolved", null);
+      onChange("semiconductorClusterMinisterRequestDate", null);
+      onChange("semiconductorClusterFastTrackPermitIds", []);
+      onChange("semiconductorClusterPlanDeemingConfirmed", null);
+      onChange("semiconductorClusterPlanDocumentsIncluded", null);
+      onChange("semiconductorClusterPlanConsultationCompleted", null);
+      onChange("semiconductorClusterPlanApprovalPublished", null);
+      onChange("semiconductorClusterPlanApprovalPublishedDate", null);
+      onChange("semiconductorClusterPlanApprovalNoticeReference", "");
+      onChange("semiconductorClusterPlanIncludedPermitIds", []);
+    }
   }
 
-  function toggleSpecialLaw(id: SpecialLawId) {
+  function toggleSpecialLaw(id: AiDataCenterSpecialLawId) {
     const selected = answers.appliedSpecialLawIds.includes(id);
     onChange(
       "appliedSpecialLawIds",
@@ -205,6 +260,24 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
         selected ? "NOT_APPLIED" : "PLANNED",
       );
     }
+  }
+
+  function toggleDeemedPermit(
+    key:
+      | "industrialComplexPlanIncludedPermitIds"
+      | "semiconductorClusterPlanIncludedPermitIds"
+      | "regionalSpecialZonePlanIncludedPermitIds"
+      | "advancedStrategicIndustryFastTrackPermitIds"
+      | "semiconductorClusterFastTrackPermitIds",
+    procedureId: string,
+  ) {
+    const selected = answers[key];
+    onChange(
+      key,
+      selected.includes(procedureId)
+        ? selected.filter((item) => item !== procedureId)
+        : [...selected, procedureId],
+    );
   }
 
   return (
@@ -284,6 +357,13 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                     onChange={(event) => {
                       onChange("province", event.target.value);
                       onChange("city", "");
+                      onChange("regionalSpecialZonePlanDeemingConfirmed", null);
+                      onChange("regionalSpecialZonePlanDocumentsIncluded", null);
+                      onChange("regionalSpecialZonePlanConsultationCompleted", null);
+                      onChange("regionalSpecialZonePlanApprovalPublished", null);
+                      onChange("regionalSpecialZonePlanApprovalPublishedDate", null);
+                      onChange("regionalSpecialZonePlanApprovalNoticeReference", "");
+                      onChange("regionalSpecialZonePlanIncludedPermitIds", []);
                     }}
                   >
                     <option value="">시·도 선택</option>
@@ -307,14 +387,57 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                 </label>
               </div>
             </Question>
+            <Question label="사업 부지·입지규제 원자료" hint="주소와 용도지역·지구, 토지이용규제 확인 결과를 기록합니다. 입력값만으로 자동 판정하지 않고 접수기관 확인표에 사용합니다.">
+              <div className="stacked-fields">
+                <label>
+                  <span>도로명·지번 주소</span>
+                  <input className="text-input" value={answers.siteAddress} maxLength={200} placeholder="예: ○○군 ○○읍 ○○리 123" onChange={(event) => onChange("siteAddress", event.target.value)} />
+                </label>
+                <label>
+                  <span>용도지역·용도지구</span>
+                  <input className="text-input" value={answers.siteZoning} maxLength={120} placeholder="토지이용계획확인서 기준" onChange={(event) => onChange("siteZoning", event.target.value)} />
+                </label>
+                <label>
+                  <span>확인된 입지규제</span>
+                  <textarea value={answers.siteRestrictedFactors} maxLength={500} placeholder="쉼표 또는 줄바꿈으로 구분" onChange={(event) => onChange("siteRestrictedFactors", event.target.value)} />
+                </label>
+              </div>
+            </Question>
             <Question label="산업단지 안에 있습니까?">
               <TriState
                 value={answers.insideIndustrialComplex}
                 yesLabel="산단 안"
                 noLabel="개별입지"
-                onChange={(value) => onChange("insideIndustrialComplex", value)}
+                onChange={(value) => {
+                  onChange("insideIndustrialComplex", value);
+                  if (value !== true) {
+                    onChange("industrialComplexName", "");
+                    onChange("industrialComplexIdentifier", "");
+                    onChange("industrialComplexManagingAuthority", "");
+                    onChange("industrialComplexOccupancyContractStatus", "NOT_APPLIED");
+                  }
+                }}
               />
             </Question>
+            {answers.insideIndustrialComplex === true ? (
+              <Question label="산업단지 입주계약 원자료" hint="산업단지 소재만으로 공장설립승인이 의제되지 않습니다. 실제 관리기관과 입주계약·변경계약 진행상태를 입력하세요.">
+                <div className="stacked-fields">
+                  <label><span>산업단지명</span><input className="text-input" value={answers.industrialComplexName} maxLength={120} onChange={(event) => onChange("industrialComplexName", event.target.value)} /></label>
+                  <label><span>산업단지 식별자·관리번호</span><input className="text-input" value={answers.industrialComplexIdentifier} maxLength={80} placeholder="관리기관 또는 지정고시 기준" onChange={(event) => onChange("industrialComplexIdentifier", event.target.value)} /></label>
+                  <label><span>관리기관</span><input className="text-input" value={answers.industrialComplexManagingAuthority} maxLength={120} placeholder="예: 한국산업단지공단 ○○지역본부" onChange={(event) => onChange("industrialComplexManagingAuthority", event.target.value)} /></label>
+                  <label>
+                    <span>입주계약·변경계약 상태</span>
+                    <select value={answers.industrialComplexOccupancyContractStatus} onChange={(event) => onChange("industrialComplexOccupancyContractStatus", event.target.value as ScenarioAnswers["industrialComplexOccupancyContractStatus"])}>
+                      <option value="NOT_APPLIED">미신청</option>
+                      <option value="PLANNED">신청 예정</option>
+                      <option value="IN_PROGRESS">협의·심사 중</option>
+                      <option value="COMPLETED">계약 체결 완료</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="inline-notice warning"><strong>의제 범위</strong><span>실제 계약이 체결된 경우에만 공장설립승인을 받은 것으로 봅니다. 환경·건축·안전 인허가가 함께 면제되는 것은 아닙니다.</span></div>
+              </Question>
+            ) : null}
             <Question
               label="업종·주요 공정"
               hint="제조업 분류와 AI 데이터센터를 투자 검토용으로 묶었습니다. 업종 선택은 확인할 항목을 추천할 뿐 개별 인허가를 자동 확정하지 않습니다."
@@ -354,6 +477,14 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                 </div>
               ) : null}
             </Question>
+            <Question label="업종·제품·공정 원자료" hint="업종 프로필은 추천용입니다. 사업자등록·산단 관리기본계획·공정설계 기준의 실제 값을 입력하세요.">
+              <div className="stacked-fields">
+                <label><span>KSIC 코드</span><input className="text-input" value={answers.ksicCode} maxLength={20} placeholder="예: 26111" onChange={(event) => onChange("ksicCode", event.target.value)} /></label>
+                <label><span>생산품·서비스</span><textarea value={answers.products} maxLength={500} placeholder="쉼표 또는 줄바꿈으로 구분" onChange={(event) => onChange("products", event.target.value)} /></label>
+                <label><span>핵심 공정·설비</span><textarea value={answers.coreProcesses} maxLength={500} placeholder="예: 혼합, 코팅, 건조, 조립" onChange={(event) => onChange("coreProcesses", event.target.value)} /></label>
+                <label><span>기존 허가·신고 식별자</span><textarea value={answers.existingApprovalIds} maxLength={500} placeholder="증설·변경이면 기존 승인번호를 기록" onChange={(event) => onChange("existingApprovalIds", event.target.value)} /></label>
+              </div>
+            </Question>
             {answers.industryCategory === AI_DATA_CENTER_INDUSTRY_ID ? (
               <>
                 <Question
@@ -372,14 +503,15 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                   hint="특별법상 시설 인정요건과 개별 특례요건을 관계기관·전문가에게 확인한 경우에만 선택하세요. 결과에는 면제, 일괄처리, 시설 규모 산정 특례 또는 입지 특례를 구분해 표시합니다."
                 >
                   <div className="special-law-picker">
-                    {specialLawDefinitions.map((law) => {
-                      const selected = answers.appliedSpecialLawIds.includes(law.id);
+                    {aiDataCenterSpecialLaws.map((law) => {
+                      const lawId = law.id as AiDataCenterSpecialLawId;
+                      const selected = answers.appliedSpecialLawIds.includes(lawId);
                       return (
                         <label className={selected ? "is-selected" : ""} key={law.id}>
                           <input
                             type="checkbox"
                             checked={selected}
-                            onChange={() => toggleSpecialLaw(law.id)}
+                            onChange={() => toggleSpecialLaw(lawId)}
                           />
                           <span>
                             <strong>{law.shortLabel}</strong>
@@ -415,6 +547,246 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                   </div>
                 </Question>
               </>
+            ) : null}
+            {automaticSpecialLawCandidates.length ? (
+              <Question
+                label="자동 점검된 기타 특별법 후보"
+                hint="현재 업종·지역·산업단지 입력으로 검토할 법률만 자동 표시합니다. 단순 소재·업종만으로는 특례를 확정하지 않으며, 아래 법정요건을 확인한 경우에만 관련 절차에 표시합니다."
+              >
+                <div className="special-law-candidate-list">
+                  {automaticSpecialLawCandidates.map((law) => {
+                    const qualificationKey = law.qualificationKey;
+                    if (!qualificationKey) return null;
+                    const typedKey = qualificationKey as AutomaticSpecialLawQualificationKey;
+                    const isIndustrialPlan = law.id === "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL";
+                    const isRegionalPlan = law.id === "REGIONAL_SPECIAL_ZONE_PLAN_DEEMING";
+                    const isSemiconductorPlan = law.id === "SEMICONDUCTOR_CLUSTER_PLAN_DEEMING";
+                    const isAdvancedFastTrack = law.id === "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK";
+                    const isSemiconductorFastTrack = law.id === "SEMICONDUCTOR_CLUSTER_FAST_TRACK";
+                    const fastTrackPermitIds = isAdvancedFastTrack
+                      ? sortedFastTrackTargetProcedureIds.ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK
+                      : sortedFastTrackTargetProcedureIds.SEMICONDUCTOR_CLUSTER_FAST_TRACK;
+                    const deemedPermitIds = isIndustrialPlan
+                      ? industrialComplexPlanDeemedProcedureIds
+                      : isSemiconductorPlan
+                        ? semiconductorClusterPlanDeemedProcedureIds
+                      : isRegionalPlan
+                        ? regionalSpecialZoneDeemedProcedureIds
+                        : [];
+                    const selectedPermitKey = isIndustrialPlan
+                      ? "industrialComplexPlanIncludedPermitIds" as const
+                      : isSemiconductorPlan
+                        ? "semiconductorClusterPlanIncludedPermitIds" as const
+                      : "regionalSpecialZonePlanIncludedPermitIds" as const;
+                    const planApprovalPublishedKey = isIndustrialPlan
+                      ? "industrialComplexPlanApprovalPublished" as const
+                      : isSemiconductorPlan
+                        ? "semiconductorClusterPlanApprovalPublished" as const
+                        : "regionalSpecialZonePlanApprovalPublished" as const;
+                    const planApprovalPublishedDateKey = isIndustrialPlan
+                      ? "industrialComplexPlanApprovalPublishedDate" as const
+                      : isSemiconductorPlan
+                        ? "semiconductorClusterPlanApprovalPublishedDate" as const
+                        : "regionalSpecialZonePlanApprovalPublishedDate" as const;
+                    const planApprovalNoticeReferenceKey = isIndustrialPlan
+                      ? "industrialComplexPlanApprovalNoticeReference" as const
+                      : isSemiconductorPlan
+                        ? "semiconductorClusterPlanApprovalNoticeReference" as const
+                        : "regionalSpecialZonePlanApprovalNoticeReference" as const;
+                    const planDocumentsIncluded = isIndustrialPlan
+                      ? answers.industrialComplexPlanDocumentsIncluded
+                      : isSemiconductorPlan
+                        ? answers.semiconductorClusterPlanDocumentsIncluded
+                        : answers.regionalSpecialZonePlanDocumentsIncluded;
+                    const planConsultationCompleted = isIndustrialPlan
+                      ? answers.industrialComplexPlanConsultationCompleted
+                      : isSemiconductorPlan
+                        ? answers.semiconductorClusterPlanConsultationCompleted
+                        : answers.regionalSpecialZonePlanConsultationCompleted;
+                    return (
+                      <article className="special-law-candidate" key={law.id}>
+                        <header>
+                          <div>
+                            <span>{law.scopeLabel}</span>
+                            <strong>{law.shortLabel}</strong>
+                          </div>
+                          <a href={law.officialUrl} target="_blank" rel="noreferrer">
+                            공식 법령 ↗
+                          </a>
+                        </header>
+                        <p>{law.conditionNote}</p>
+                        <TriState
+                          value={answers[typedKey]}
+                          yesLabel="법정요건 확인"
+                          noLabel="미해당"
+                          onChange={(value) => {
+                            onChange(typedKey, value);
+                            if (isIndustrialPlan && value !== true) {
+                              onChange("industrialComplexPlanDocumentsIncluded", null);
+                              onChange("industrialComplexPlanConsultationCompleted", null);
+                              onChange("industrialComplexPlanApprovalPublished", null);
+                              onChange("industrialComplexPlanApprovalPublishedDate", null);
+                              onChange("industrialComplexPlanApprovalNoticeReference", "");
+                              onChange("industrialComplexPlanIncludedPermitIds", []);
+                            }
+                            if (isRegionalPlan && value !== true) {
+                              onChange("regionalSpecialZonePlanDocumentsIncluded", null);
+                              onChange("regionalSpecialZonePlanConsultationCompleted", null);
+                              onChange("regionalSpecialZonePlanApprovalPublished", null);
+                              onChange("regionalSpecialZonePlanApprovalPublishedDate", null);
+                              onChange("regionalSpecialZonePlanApprovalNoticeReference", "");
+                              onChange("regionalSpecialZonePlanIncludedPermitIds", []);
+                            }
+                            if (isSemiconductorPlan && value !== true) {
+                              onChange("semiconductorClusterPlanDocumentsIncluded", null);
+                              onChange("semiconductorClusterPlanConsultationCompleted", null);
+                              onChange("semiconductorClusterPlanApprovalPublished", null);
+                              onChange("semiconductorClusterPlanApprovalPublishedDate", null);
+                              onChange("semiconductorClusterPlanApprovalNoticeReference", "");
+                              onChange("semiconductorClusterPlanIncludedPermitIds", []);
+                            }
+                            if (isAdvancedFastTrack && value !== true) {
+                              onChange("advancedStrategicIndustryApplicantRoleConfirmed", null);
+                              onChange("advancedStrategicIndustryDelayRiskConfirmed", null);
+                              onChange("advancedStrategicIndustryCommitteeResolved", null);
+                              onChange("advancedStrategicIndustryMinisterRequestDate", null);
+                              onChange("advancedStrategicIndustryFastTrackPermitIds", []);
+                            }
+                            if (isSemiconductorFastTrack && value !== true) {
+                              onChange("semiconductorClusterApplicantRoleConfirmed", null);
+                              onChange("semiconductorClusterDelayRiskConfirmed", null);
+                              onChange("semiconductorClusterCommitteeResolved", null);
+                              onChange("semiconductorClusterMinisterRequestDate", null);
+                              onChange("semiconductorClusterFastTrackPermitIds", []);
+                            }
+                          }}
+                        />
+                        {(isAdvancedFastTrack || isSemiconductorFastTrack) && answers[typedKey] === true ? (
+                          <div className="deeming-evidence-checklist fast-track-evidence-checklist">
+                            <strong>신속처리 법정 이벤트 확인</strong>
+                            <p>아래에는 각 법이 열거·인용한 범위에 속하는 인허가만 표시합니다. 증빙이 모두 있어야 신속처리 경로를 활성화하며, 60일은 일반 접수일부터의 자동승인 기한이 아닙니다.</p>
+                            <div className="stacked-fields compact-tristates">
+                              <label><span>법정 사업시행자·신청자 지위</span><TriState value={isAdvancedFastTrack ? answers.advancedStrategicIndustryApplicantRoleConfirmed : answers.semiconductorClusterApplicantRoleConfirmed} yesLabel="확인" noLabel="미해당" onChange={(value) => isAdvancedFastTrack ? onChange("advancedStrategicIndustryApplicantRoleConfirmed", value) : onChange("semiconductorClusterApplicantRoleConfirmed", value)} /></label>
+                              <label><span>인허가 지연·현저한 지장 우려</span><TriState value={isAdvancedFastTrack ? answers.advancedStrategicIndustryDelayRiskConfirmed : answers.semiconductorClusterDelayRiskConfirmed} yesLabel="증빙 있음" noLabel="미충족" onChange={(value) => isAdvancedFastTrack ? onChange("advancedStrategicIndustryDelayRiskConfirmed", value) : onChange("semiconductorClusterDelayRiskConfirmed", value)} /></label>
+                              <label><span>위원회 심의·의결 완료</span><TriState value={isAdvancedFastTrack ? answers.advancedStrategicIndustryCommitteeResolved : answers.semiconductorClusterCommitteeResolved} yesLabel="완료" noLabel="미완료" onChange={(value) => isAdvancedFastTrack ? onChange("advancedStrategicIndustryCommitteeResolved", value) : onChange("semiconductorClusterCommitteeResolved", value)} /></label>
+                              <label>
+                                <span>산업통상부장관의 인허가권자 요청일</span>
+                                <input className="text-input" type="date" min={law.effectiveFrom} max={answers.assessmentDate} value={(isAdvancedFastTrack ? answers.advancedStrategicIndustryMinisterRequestDate : answers.semiconductorClusterMinisterRequestDate) ?? ""} onChange={(event) => isAdvancedFastTrack ? onChange("advancedStrategicIndustryMinisterRequestDate", event.target.value || null) : onChange("semiconductorClusterMinisterRequestDate", event.target.value || null)} />
+                              </label>
+                            </div>
+                            <div className="deemed-permit-picker" role="group" aria-label={`${law.shortLabel} 실제 요청대상 인허가`}>
+                              {fastTrackPermitIds.map((procedureId) => {
+                                const key = isAdvancedFastTrack
+                                  ? "advancedStrategicIndustryFastTrackPermitIds" as const
+                                  : "semiconductorClusterFastTrackPermitIds" as const;
+                                return (
+                                  <label key={procedureId}>
+                                    <input
+                                      type="checkbox"
+                                      checked={answers[key].includes(procedureId)}
+                                      onChange={() => toggleDeemedPermit(key, procedureId)}
+                                    />
+                                    <span>{procedureNameById.get(procedureId) ?? procedureId}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <small>신청서·위원회 의결·장관 요청 공문과 위에서 선택한 실제 요청대상 목록을 함께 보관하세요. 선택하지 않은 인허가에는 신속처리를 표시하지 않습니다. 법정 효과는 ‘허가 승인’이 아니라 조건 충족 시 ‘처리 완료로 봄’입니다.</small>
+                          </div>
+                        ) : null}
+                        {(isIndustrialPlan || isSemiconductorPlan || isRegionalPlan) && answers[typedKey] === true ? (
+                          <div className="deeming-evidence-checklist">
+                            <strong>의제 증빙 체크</strong>
+                            <p>법정서류 포함, 관계기관 협의, 승인·고시 완료 증거와 실제 포함 인허가를 모두 확인해야 해당 항목만 별도신청 대신 의제로 표시합니다.</p>
+                            <div className="stacked-fields compact-tristates">
+                              <label>
+                                <span>인허가별 법정서류가 상위 계획에 포함됨</span>
+                                <TriState
+                                  value={planDocumentsIncluded}
+                                  yesLabel="확인"
+                                  noLabel="미포함"
+                                  onChange={(value) => isIndustrialPlan ? onChange("industrialComplexPlanDocumentsIncluded", value) : isSemiconductorPlan ? onChange("semiconductorClusterPlanDocumentsIncluded", value) : onChange("regionalSpecialZonePlanDocumentsIncluded", value)}
+                                />
+                              </label>
+                              <label>
+                                <span>해당 인허가 관계기관 협의·승인 완료</span>
+                                <TriState
+                                  value={planConsultationCompleted}
+                                  yesLabel="완료"
+                                  noLabel="미완료"
+                                  onChange={(value) => isIndustrialPlan ? onChange("industrialComplexPlanConsultationCompleted", value) : isSemiconductorPlan ? onChange("semiconductorClusterPlanConsultationCompleted", value) : onChange("regionalSpecialZonePlanConsultationCompleted", value)}
+                                />
+                              </label>
+                              {planDocumentsIncluded === true && planConsultationCompleted === true ? (
+                                <label>
+                                  <span>상위 계획 승인·고시 완료</span>
+                                  <TriState
+                                    value={answers[planApprovalPublishedKey]}
+                                    yesLabel="완료"
+                                    noLabel="미완료"
+                                    onChange={(value) => {
+                                      onChange(planApprovalPublishedKey, value);
+                                      if (value !== true) {
+                                        onChange(planApprovalPublishedDateKey, null);
+                                        onChange(planApprovalNoticeReferenceKey, "");
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              ) : null}
+                            </div>
+                            {answers[planApprovalPublishedKey] === true ? (
+                              <div className="stacked-fields">
+                                <label>
+                                  <span>승인·고시일</span>
+                                  <input
+                                    className="text-input"
+                                    type="date"
+                                    min={law.effectiveFrom}
+                                    max={answers.assessmentDate}
+                                    value={answers[planApprovalPublishedDateKey] ?? ""}
+                                    onChange={(event) => onChange(planApprovalPublishedDateKey, event.target.value || null)}
+                                  />
+                                </label>
+                                <label>
+                                  <span>고시문 번호 또는 공식 URL</span>
+                                  <input
+                                    className="text-input"
+                                    type="text"
+                                    maxLength={300}
+                                    placeholder="예: 국토교통부고시 제0000-000호 또는 공식 고시 URL"
+                                    value={answers[planApprovalNoticeReferenceKey]}
+                                    onChange={(event) => onChange(planApprovalNoticeReferenceKey, event.target.value)}
+                                  />
+                                </label>
+                              </div>
+                            ) : null}
+                            <div className="deemed-permit-picker" role="group" aria-label={`${law.shortLabel} 실제 의제대상 인허가`}>
+                              {deemedPermitIds.map((procedureId) => (
+                                <label key={procedureId}>
+                                  <input
+                                    type="checkbox"
+                                    checked={answers[selectedPermitKey].includes(procedureId)}
+                                    onChange={() => toggleDeemedPermit(selectedPermitKey, procedureId)}
+                                  />
+                                  <span>{procedureNameById.get(procedureId) ?? procedureId}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {isIndustrialPlan ? <small>6개월 기한은 일반 입주기업의 인허가 전체기간이 아니라 민간기업등이 산업단지 지정·개발 주체로서 제출한 산업단지계획 승인신청에 한정됩니다.</small> : null}
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+                <div className="inline-notice warning">
+                  <strong>면제와 의제는 다릅니다</strong>
+                  <span>
+                    신속처리는 요청·법정기한 경과 후의 처리완료 의제이고, 계획승인 의제는 서류 포함·관계기관 협의와 실제 승인·고시 완료 증거를 전제로 합니다. 확인값을 선택해도 총 소요기간을 자동으로 줄이지 않습니다.
+                  </span>
+                </div>
+              </Question>
             ) : null}
           </>
         ) : null}
@@ -484,6 +856,11 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                 <option value="UNKNOWN">미확인</option>
               </select>
             </Question>
+            {answers.landCategory === "FOREST" ? (
+              <Question label="산지 복구의무 확인" hint="산지전용 허가조건에서 복구의무·면제와 복구설계 승인 제외 여부를 확인한 결과입니다.">
+                <TriState value={answers.forestRestorationObligation} yesLabel="복구의무 있음" noLabel="면제·제외 확인" onChange={(value) => onChange("forestRestorationObligation", value)} />
+              </Question>
+            ) : null}
             <Question label="기존 건축물 해체 여부">
               <TriState value={answers.demolitionRequired} onChange={(value) => onChange("demolitionRequired", value)} />
             </Question>
@@ -614,6 +991,11 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
             <Question label="허가·신고 대상 고압가스 여부">
               <TriState value={answers.highPressureGas} onChange={(value) => onChange("highPressureGas", value)} />
             </Question>
+            {answers.highPressureGas === true ? (
+              <Question label="고압가스 사업·저장소 개시신고 대상 확인" hint="단순 특정고압가스 사용경로와 구분해, 고압가스 사업자·저장소 경로의 개시신고 대상인지 관할기관에 확인한 값을 입력합니다.">
+                <TriState value={answers.highPressureGasBusinessStartTarget} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("highPressureGasBusinessStartTarget", value)} />
+              </Question>
+            ) : null}
             <Question label="특정고압가스 사용신고 대상 여부" hint="가스 종류와 저장·사용 규모를 검토한 결과를 입력합니다.">
               <TriState value={answers.specificHighPressureGasUse} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("specificHighPressureGasUse", value)} />
             </Question>
@@ -658,6 +1040,14 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
             <Question label="소방시설공사 대상 여부">
               <TriState value={answers.fireFacilityWork} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("fireFacilityWork", value)} />
             </Question>
+            {answers.fireFacilityWork === true ? (
+              <Question label="소방공사 후속절차 확인" hint="소방시설 종류·공사범위와 대상물 규모를 관할 소방기관에 확인한 결과를 입력합니다.">
+                <div className="stacked-fields compact-tristates">
+                  <label><span>소방공사 감리자 지정신고 대상</span><TriState value={answers.fireWorkSupervisionTarget} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("fireWorkSupervisionTarget", value)} /></label>
+                  <label><span>최초 자체점검·결과보고 대상</span><TriState value={answers.firstFireSelfInspectionTarget} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("firstFireSelfInspectionTarget", value)} /></label>
+                </div>
+              </Question>
+            ) : null}
             <Question label="자가용전기설비 공사·사용전검사 대상 여부" hint="수전전압·설비용량·공사종류를 검토한 결과를 입력합니다.">
               <TriState value={answers.privateElectricalFacilityWork} yesLabel="대상" noLabel="비대상" onChange={(value) => onChange("privateElectricalFacilityWork", value)} />
             </Question>
@@ -719,6 +1109,16 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
                   />
                 </label>
               </div>
+              <div className="two-column-fields construction-date-fields milestone-date-fields">
+                <label>
+                  <span>주요 설비 설치완료 예정일</span>
+                  <input className="text-input" type="date" min={answers.plannedConstructionStartDate ?? "2025-01-01"} max={answers.plannedConstructionEndDate ?? "2040-12-31"} value={answers.equipmentInstallationCompletionDate ?? ""} onChange={(event) => onChange("equipmentInstallationCompletionDate", event.target.value || null)} />
+                </label>
+                <label>
+                  <span>시운전 시작 예정일</span>
+                  <input className="text-input" type="date" min={answers.equipmentInstallationCompletionDate ?? answers.plannedConstructionStartDate ?? "2025-01-01"} max="2040-12-31" value={answers.commissioningStartDate ?? ""} onChange={(event) => onChange("commissioningStartDate", event.target.value || null)} />
+                </label>
+              </div>
               {answers.plannedConstructionStartDate && answers.plannedConstructionEndDate ? (
                 calendarDayDistance(
                   answers.plannedConstructionStartDate,
@@ -735,6 +1135,7 @@ export function Wizard({ answers, activeStep, onStepChange, onChange }: Props) {
               ) : (
                 <p className="question-hint">두 값을 모두 입력하면 최소기간과 통상기간을 자동으로 비교할 수 있습니다.</p>
               )}
+              <p className="question-hint">설비 설치·시운전 이정표는 사용전검사·가동개시 절차의 목표일 관리에 사용하며, 근거 없는 준비기간을 총기간에 임의 합산하지 않습니다.</p>
             </Question>
             <div className="inline-notice info">
               <strong>자동 일정 계산</strong>

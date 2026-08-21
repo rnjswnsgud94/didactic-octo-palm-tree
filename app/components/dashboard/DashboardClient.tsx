@@ -11,7 +11,7 @@ import {
   type ProcedureCategory,
 } from "@/app/components/dashboard/constants";
 import { DashboardTabIcon } from "@/app/components/dashboard/DashboardTabIcon";
-import { GapsView, LegalView, ProcedureList, ScheduleView } from "@/app/components/dashboard/DashboardViews";
+import { ActionPlanView, GapsView, LegalView, ProcedureList, ScheduleView } from "@/app/components/dashboard/DashboardViews";
 import { LocalJurisdictionLinks, LocalOrdinancePanel } from "@/app/components/dashboard/LocalOrdinancePanel";
 import { ProcedureDrawer } from "@/app/components/dashboard/ProcedureDrawer";
 import { StatusSummaryDialog } from "@/app/components/dashboard/StatusSummaryDialog";
@@ -24,17 +24,30 @@ import { catalog, type ScenarioAnswers } from "@/lib/data/catalog";
 import { evaluateProject } from "@/lib/engine/pipeline";
 import type { DurationScenario } from "@/lib/engine/schedule";
 import { formatCalendarPeriod } from "@/lib/format-duration";
-import { decodeShareState, encodeShareState } from "@/lib/share-state";
+import { decodeShareState, encodeShareState, ShareStateTooLongError } from "@/lib/share-state";
 
 const defaultAnswers: ScenarioAnswers = {
   assessmentDate: catalog.coverage.assessmentDefault,
   plannedConstructionStartDate: null,
   plannedConstructionEndDate: null,
+  equipmentInstallationCompletionDate: null,
+  commissioningStartDate: null,
   investmentType: "UNKNOWN",
   province: "",
   city: "",
+  siteAddress: "",
+  siteZoning: "",
+  siteRestrictedFactors: "",
   insideIndustrialComplex: null,
+  industrialComplexName: "",
+  industrialComplexIdentifier: "",
+  industrialComplexManagingAuthority: "",
+  industrialComplexOccupancyContractStatus: "NOT_APPLIED",
   industryCategory: "UNKNOWN",
+  ksicCode: "",
+  products: "",
+  coreProcesses: "",
+  existingApprovalIds: "",
   buildingAction: "UNKNOWN",
   mechanicalEquipmentActTarget: null,
   existingAreaM2: null,
@@ -50,6 +63,39 @@ const defaultAnswers: ScenarioAnswers = {
   aiDataCenterActFacilityConfirmed: null,
   aiDataCenterOneStopStatus: "NOT_APPLIED",
   appliedSpecialLawIds: [],
+  advancedStrategicIndustryFastTrackConfirmed: null,
+  advancedStrategicIndustryApplicantRoleConfirmed: null,
+  advancedStrategicIndustryDelayRiskConfirmed: null,
+  advancedStrategicIndustryCommitteeResolved: null,
+  advancedStrategicIndustryMinisterRequestDate: null,
+  advancedStrategicIndustryFastTrackPermitIds: [],
+  semiconductorClusterFastTrackConfirmed: null,
+  semiconductorClusterApplicantRoleConfirmed: null,
+  semiconductorClusterDelayRiskConfirmed: null,
+  semiconductorClusterCommitteeResolved: null,
+  semiconductorClusterMinisterRequestDate: null,
+  semiconductorClusterFastTrackPermitIds: [],
+  semiconductorClusterPlanDeemingConfirmed: null,
+  semiconductorClusterPlanDocumentsIncluded: null,
+  semiconductorClusterPlanConsultationCompleted: null,
+  semiconductorClusterPlanApprovalPublished: null,
+  semiconductorClusterPlanApprovalPublishedDate: null,
+  semiconductorClusterPlanApprovalNoticeReference: "",
+  semiconductorClusterPlanIncludedPermitIds: [],
+  industrialComplexPlanSpecialCaseConfirmed: null,
+  industrialComplexPlanDocumentsIncluded: null,
+  industrialComplexPlanConsultationCompleted: null,
+  industrialComplexPlanApprovalPublished: null,
+  industrialComplexPlanApprovalPublishedDate: null,
+  industrialComplexPlanApprovalNoticeReference: "",
+  industrialComplexPlanIncludedPermitIds: [],
+  regionalSpecialZonePlanDeemingConfirmed: null,
+  regionalSpecialZonePlanDocumentsIncluded: null,
+  regionalSpecialZonePlanConsultationCompleted: null,
+  regionalSpecialZonePlanApprovalPublished: null,
+  regionalSpecialZonePlanApprovalPublishedDate: null,
+  regionalSpecialZonePlanApprovalNoticeReference: "",
+  regionalSpecialZonePlanIncludedPermitIds: [],
   permitCoordination: null,
   airEmissionFacility: null,
   waterDischargeFacility: null,
@@ -60,11 +106,14 @@ const defaultAnswers: ScenarioAnswers = {
   hazardousChemicalBusiness: null,
   hazardousMaterials: null,
   highPressureGas: null,
+  highPressureGasBusinessStartTarget: null,
   specificHighPressureGasUse: null,
   lpgSpecificUseFacility: null,
   cityGasSpecificUseFacility: null,
   psmCovered: null,
   fireFacilityWork: null,
+  fireWorkSupervisionTarget: null,
+  firstFireSelfInspectionTarget: null,
   privateElectricalFacilityWork: null,
   energyUsePlanRequired: null,
   groundwaterDevelopment: null,
@@ -90,6 +139,7 @@ const defaultAnswers: ScenarioAnswers = {
   hazardousMachineryInspectionRequired: null,
   safetyManagerRequired: null,
   healthManagerRequired: null,
+  forestRestorationObligation: null,
   powerIncreaseMw: null,
   waterDemandM3Day: null,
   wastewaterM3Day: null,
@@ -143,8 +193,12 @@ export function DashboardClient() {
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      const query = encodeShareState(answers, activeTab);
-      window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
+      try {
+        const query = encodeShareState(answers, activeTab);
+        window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
+      } catch (error) {
+        if (!(error instanceof ShareStateTooLongError)) throw error;
+      }
     }, 180);
     return () => window.clearTimeout(timeout);
   }, [answers, activeTab]);
@@ -152,17 +206,59 @@ export function DashboardClient() {
   const evaluation = useMemo(() => evaluateProject(answers, { includeConditional, includePractical }), [answers, includeConditional, includePractical]);
   const schedule = evaluation.schedules[durationScenario];
   const timeline = schedule.projectTimeline;
+  const unknownOperationReadyDurationCount = timeline
+    ? timeline.unknownPlanningDurationProcedureIds.filter(
+        (id) => !timeline.postOperationProcedureIds.includes(id),
+      ).length
+    : 0;
+  const omittedOperationReadyProcedureCount = timeline
+    ? timeline.omittedConditionalProcedureIds.filter(
+        (id) => !timeline.postOperationProcedureIds.includes(id),
+      ).length
+    : 0;
+  const incompleteDurationComponentCount = timeline
+    ? timeline.incompleteDurationComponentProcedureIds.filter(
+        (id) => !timeline.postOperationProcedureIds.includes(id),
+      ).length
+    : 0;
+  const minimumOnlyMissingComponents = [
+    unknownOperationReadyDurationCount
+      ? `처리기간 미확인 인허가 ${unknownOperationReadyDurationCount}개`
+      : null,
+    omittedOperationReadyProcedureCount
+      ? `일정에서 제외한 대상확인 절차 ${omittedOperationReadyProcedureCount}개`
+      : null,
+    incompleteDurationComponentCount
+      ? `신청준비·심사·협의 기간 구성 미확인 ${incompleteDurationComponentCount}개`
+      : null,
+  ].filter((item): item is string => item !== null);
   const durationSummary = !timeline
-    ? { value: "산정 불가", detail: "공사 일정 미입력" }
+    ? {
+        value: "산정 불가",
+        detail: "착공 예정일·준공 예정일 미입력",
+        description: "공사 일정과 공식 처리기간을 함께 계산합니다.",
+        isMinimumOnly: false,
+      }
     : timeline.durationStatus === "MINIMUM_ONLY"
       ? {
           value: formatCalendarPeriod(timeline.projectStartDate, timeline.minimumKnownCompletionDate),
-          detail: `확인된 처리기간 기준 · 기간 미확인 ${timeline.unknownPlanningDurationProcedureIds.filter((id) => !timeline.postOperationProcedureIds.includes(id)).length}개 별도`,
+          detail: `누락 구성요소 · ${minimumOnlyMissingComponents.join(" · ") || "일정 구조 검증 항목"}`,
+          description: "공식 처리기간이 확인된 절차만 합산한 값으로, 총 소요기간이 아닙니다.",
+          isMinimumOnly: true,
         }
       : {
           value: formatCalendarPeriod(timeline.projectStartDate, timeline.operationReadyDate ?? timeline.minimumKnownCompletionDate),
           detail: durationScenario === "MIN" ? "공식 최단 처리경로" : "공식 표준 처리경로",
+          description: durationScenario === "MIN"
+            ? "가장 빠른 공식 처리경로를 기준으로 산정합니다."
+            : "확인된 공식 처리기간의 통상 경로를 기준으로 산정합니다.",
+          isMinimumOnly: false,
         };
+  const durationHeading = !timeline
+    ? "사업 일정"
+    : durationSummary.isMinimumOnly
+      ? "확인된 일정 하한"
+      : "총 소요기간";
   const domains = useMemo(() => [...new Set(evaluation.decisions.map((decision) => decision.procedure.domain))].sort(), [evaluation.decisions]);
   const decisionsByCategory = useMemo(
     () => Object.fromEntries(
@@ -195,7 +291,15 @@ export function DashboardClient() {
   }
 
   async function copyShareLink() {
-    const link = `${window.location.origin}${window.location.pathname}?${encodeShareState(answers, activeTab)}`;
+    let link: string;
+    try {
+      link = `${window.location.origin}${window.location.pathname}?${encodeShareState(answers, activeTab)}`;
+    } catch (error) {
+      if (!(error instanceof ShareStateTooLongError)) throw error;
+      setShareMessage("입력 내용이 많아 공유 링크를 만들 수 없습니다. 긴 설명이나 선택 항목을 줄여 주세요.");
+      window.setTimeout(() => setShareMessage(""), 3600);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(link);
       setShareMessage("현재 조건의 공유 링크를 복사했습니다.");
@@ -266,12 +370,22 @@ export function DashboardClient() {
                 aria-haspopup="dialog"
                 aria-controls="total-duration-dialog"
                 aria-expanded={isDurationDialogOpen}
-                aria-label={`총 소요기간 ${durationSummary.value} 계산 경로 열기`}
+                aria-label={`${durationHeading} ${durationSummary.value} 계산 경로 열기`}
+                aria-describedby="duration-summary-description duration-summary-detail"
                 onClick={() => setIsDurationDialogOpen(true)}
               >
-                <span className="summary-card-copy"><b>총 소요기간</b><small>{durationScenario === "MIN" ? "가장 빠른 공식 처리경로" : "공식 표준 처리경로"}</small></span>
-                <strong>{durationSummary.value}<small>{durationSummary.detail}</small></strong>
-                <em>계산 경로 보기</em>
+                <span className="summary-card-copy">
+                  <span className="duration-summary-title">
+                    <b>{durationHeading}</b>
+                    {durationSummary.isMinimumOnly ? <span className="duration-summary-badge">총 소요기간 아님</span> : null}
+                  </span>
+                  <small id="duration-summary-description">{durationSummary.description}</small>
+                </span>
+                <span className={`duration-summary-result${durationSummary.isMinimumOnly ? " is-minimum-only" : ""}`}>
+                  <strong>{durationSummary.value}</strong>
+                  <small id="duration-summary-detail">{durationSummary.detail}</small>
+                </span>
+                <span className="summary-card-link">계산 경로 보기 <span aria-hidden="true">→</span></span>
               </button>
               <div className="summary-scenario-row">
                 <span>소요기간 기준</span>
@@ -290,11 +404,15 @@ export function DashboardClient() {
                 aria-controls="status-summary-dialog"
                 aria-expanded={selectedSummaryCategory === category}
                 aria-label={`${procedureCategorySummaries[category].label} ${decisionsByCategory[category].length}개 목록 열기`}
+                aria-describedby={`summary-${category}-description`}
                 onClick={() => setSelectedSummaryCategory(category)}
               >
-                <span className="summary-card-copy"><b>{procedureCategorySummaries[category].label}</b><small>{procedureCategorySummaries[category].description}</small></span>
-                <strong>{decisionsByCategory[category].length}<small>개</small></strong>
-                <em>목록 보기</em>
+                <span className="summary-card-heading">
+                  <b>{procedureCategorySummaries[category].label}</b>
+                  <span className="summary-count"><strong>{decisionsByCategory[category].length}</strong><small>개</small></span>
+                </span>
+                <small id={`summary-${category}-description`} className="summary-card-description">{procedureCategorySummaries[category].description}</small>
+                <span className="summary-card-link">목록 보기 <span aria-hidden="true">→</span></span>
               </button>
             ))}
           </div>
@@ -325,8 +443,9 @@ export function DashboardClient() {
 
           <div id="dashboard-result-panel" className="view-panel" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
             {activeTab === "SWIMLANE" ? <Swimlane decisions={filteredDecisions} schedule={schedule} selectedId={selectedId} onSelect={setSelectedId} /> : null}
+            {activeTab === "ACTION" ? <ActionPlanView decisions={evaluation.decisions} schedule={schedule} answers={answers} onSelect={setSelectedId} /> : null}
             {activeTab === "LIST" ? <ProcedureList decisions={filteredDecisions} schedule={schedule} onSelect={setSelectedId} /> : null}
-            {activeTab === "SCHEDULE" ? <ScheduleView schedule={schedule} /> : null}
+            {activeTab === "SCHEDULE" ? <ScheduleView schedule={schedule} answers={answers} /> : null}
             {activeTab === "LEGAL" ? <LegalView decisions={evaluation.decisions.filter((decision) => procedureCategoryForDecision(decision) !== "NOT_REQUIRED" || decision.specialLawImpacts?.length)} onSelect={setSelectedId} /> : null}
             {activeTab === "GAPS" ? <GapsView decisions={evaluation.decisions} /> : null}
           </div>

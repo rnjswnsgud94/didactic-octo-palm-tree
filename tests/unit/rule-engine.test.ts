@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import { procedureCategoryForDecision } from "@/app/components/dashboard/constants";
 import { catalog } from "@/lib/data/catalog";
-import { scenarioAnswersToProjectInput } from "@/lib/domain/project-input";
+import {
+  scenarioAnswersToProjectInput as convertScenarioAnswersToProjectInput,
+} from "@/lib/domain/project-input";
 import { resolveAllProcedures, resolveProcedure } from "@/lib/engine/rule-engine";
+
+function scenarioAnswersToProjectInput(
+  answers: Parameters<typeof convertScenarioAnswersToProjectInput>[0],
+) {
+  return convertScenarioAnswersToProjectInput(answers, catalog.procedures);
+}
 
 function decide(answers = catalog.scenarios[0].answers) {
   const reviewedProcedures = catalog.procedures.map((procedure) => ({
@@ -25,12 +34,58 @@ function decision(decisions: ReturnType<typeof decide>, id: string) {
 }
 
 describe("deterministic four-state rules", () => {
-  it("does not expose a non-permit contract on the industrial-complex path", () => {
+  it("surfaces the industrial-complex occupancy contract without duplicating factory approval", () => {
     const decisions = decide(catalog.scenarios[0].answers);
-    expect(status(decisions, "industrial-complex-occupancy-contract")).toBeUndefined();
+    expect(status(decisions, "industrial-complex-occupancy-contract")).toBe("NEEDS_MORE_INFO");
     expect(status(decisions, "factory-establishment-approval")).toBe("DOES_NOT_APPLY");
     expect(status(decisions, "factory-completion-report-complex")).toBe("APPLIES");
     expect(status(decisions, "factory-completion-report-offsite")).toBe("DOES_NOT_APPLY");
+  });
+
+  it("marks factory approval deemed only when the winning exclusion is the completed occupancy contract", () => {
+    const completedOccupancy = {
+      ...catalog.scenarios[0].answers,
+      industrialComplexName: "테스트산업단지",
+      industrialComplexIdentifier: "TEST-COMPLEX-1",
+      industrialComplexManagingAuthority: "테스트 산업단지 관리기관",
+      industrialComplexOccupancyContractStatus: "COMPLETED" as const,
+    };
+    const completedDecisions = decide(completedOccupancy);
+    expect(
+      decision(completedDecisions, "industrial-complex-occupancy-contract"),
+    ).toMatchObject({ status: "APPLIES", isDeemed: false });
+    expect(
+      decision(completedDecisions, "factory-establishment-approval"),
+    ).toMatchObject({
+      status: "DOES_NOT_APPLY",
+      matchedRuleIds: ["rule-factory-approval-deemed-by-occupancy"],
+      isDeemed: true,
+    });
+
+    const plannedDecisions = decide({
+      ...completedOccupancy,
+      industrialComplexOccupancyContractStatus: "PLANNED",
+    });
+    expect(
+      decision(plannedDecisions, "industrial-complex-occupancy-contract")?.status,
+    ).toBe("APPLIES");
+    expect(
+      decision(plannedDecisions, "factory-establishment-approval")?.isDeemed,
+    ).toBe(false);
+
+    const aiDataCenterDecisions = decide({
+      ...completedOccupancy,
+      assessmentDate: "2027-03-10",
+      industryCategory: "AI_DATA_CENTER",
+      aiDataCenterActFacilityConfirmed: true,
+    });
+    expect(
+      decision(aiDataCenterDecisions, "factory-establishment-approval"),
+    ).toMatchObject({
+      status: "DOES_NOT_APPLY",
+      matchedRuleIds: ["rule-aidc-exclude-factory-establishment-approval"],
+      isDeemed: false,
+    });
   });
 
   it.each([
@@ -74,6 +129,184 @@ describe("deterministic four-state rules", () => {
     expect(decision(decisions, "noise-vibration-facility-report")?.isDeemed).toBe(false);
   });
 
+  it("keeps factually inapplicable land, air, and water paths out of REQUIRED", () => {
+    const decisions = decide({
+      ...catalog.scenarios[2].answers,
+      landCategory: "OTHER",
+      airEmissionFacility: false,
+      waterDischargeFacility: false,
+      integratedEnvironmentalPermitTarget: false,
+    });
+
+    for (const id of [
+      "farmland-conversion-permit",
+      "forestland-conversion-permit",
+      "air-emission-installation-permit",
+      "water-discharge-installation-permit",
+      "air-facility-operation-start-report",
+      "water-facility-operation-start-report",
+    ]) {
+      const result = decision(decisions, id)!;
+      expect(result.status, id).toBe("DOES_NOT_APPLY");
+      expect(result.matchedRuleIds, id).toEqual([]);
+      expect(result.isDeemed, id).toBe(false);
+      expect(procedureCategoryForDecision(result), id).toBe("NOT_REQUIRED");
+    }
+  });
+
+  it("requires a confirmed, fully supported upper procedure before deeming a lower path", () => {
+    const procedureIds = new Set([
+      "integrated-environmental-operation-start-report",
+      "air-facility-operation-start-report",
+    ]);
+    const ruleIds = new Set([
+      "rule-exp-integrated-environmental-operation-start-report",
+      "rule-exp-air-facility-operation-start-report",
+      "rule-exp-air-operation-integrated-exclusion",
+    ]);
+    const procedures = catalog.procedures
+      .filter((procedure) => procedureIds.has(procedure.id))
+      .map((procedure) => ({
+        ...procedure,
+        verificationStatus: "INTERNAL_REVIEWED" as const,
+      }));
+    const baseRules = catalog.rules
+      .filter((rule) => ruleIds.has(rule.id))
+      .map((rule) => ({ ...rule, status: "INTERNAL_REVIEWED" as const }));
+    const input = scenarioAnswersToProjectInput({
+      ...catalog.scenarios[2].answers,
+      integratedEnvironmentalPermitTarget: true,
+      airEmissionFacility: true,
+    });
+    const resolve = (rules: Parameters<typeof resolveAllProcedures>[1]) =>
+      resolveAllProcedures(procedures, rules, input, "test");
+    const parentRuleId = "rule-exp-integrated-environmental-operation-start-report";
+
+    const draftParent = resolve(
+      baseRules.map((rule) =>
+        rule.id === parentRuleId
+          ? { ...rule, status: "DRAFT" as const }
+          : rule,
+      ),
+    );
+    expect(
+      decision(draftParent, "integrated-environmental-operation-start-report")?.status,
+    ).toBe("POSSIBLY_APPLIES");
+    expect(decision(draftParent, "air-facility-operation-start-report")?.isDeemed).toBe(false);
+    expect(
+      procedureCategoryForDecision(
+        decision(draftParent, "air-facility-operation-start-report")!,
+      ),
+    ).not.toBe("REQUIRED");
+
+    const missingSupportParent = resolve(
+      baseRules.map((rule) =>
+        rule.id === parentRuleId
+          ? {
+              ...rule,
+              requiredInputs: [
+                ...rule.requiredInputs,
+                "industry.coreProcesses",
+                "confirmation.industrialComplexPlanConsultationCompleted",
+              ],
+            }
+          : rule,
+      ),
+    );
+    expect(
+      decision(
+        missingSupportParent,
+        "integrated-environmental-operation-start-report",
+      ),
+    ).toMatchObject({
+      status: "NEEDS_MORE_INFO",
+      missingInputs: [
+        "confirmation.industrialComplexPlanConsultationCompleted",
+        "industry.coreProcesses",
+      ],
+      isDeemed: false,
+    });
+    expect(
+      procedureCategoryForDecision(
+        decision(missingSupportParent, "air-facility-operation-start-report")!,
+      ),
+    ).not.toBe("REQUIRED");
+
+    const confirmedParent = resolve(baseRules);
+    const confirmedChild = decision(
+      confirmedParent,
+      "air-facility-operation-start-report",
+    )!;
+    expect(confirmedChild).toMatchObject({
+      status: "DOES_NOT_APPLY",
+      isDeemed: true,
+    });
+    expect(procedureCategoryForDecision(confirmedChild)).toBe("REQUIRED");
+  });
+
+  it("does not treat a true condition as applicable while a required input is unknown", () => {
+    const procedure = {
+      ...catalog.procedures.find((item) => item.id === "farmland-conversion-permit")!,
+      verificationStatus: "INTERNAL_REVIEWED" as const,
+    };
+    const baseRule = catalog.rules.find(
+      (item) => item.id === "rule-exp-farmland-conversion-permit",
+    )!;
+    const rule = {
+      ...baseRule,
+      status: "INTERNAL_REVIEWED" as const,
+    };
+    const input = scenarioAnswersToProjectInput({
+      ...catalog.scenarios[2].answers,
+      landCategory: "FARMLAND",
+    });
+
+    const unresolved = resolveProcedure(procedure, [rule], input, "test");
+
+    expect(unresolved.traces[0]).toMatchObject({
+      status: "NEEDS_MORE_INFO",
+      passedConditions: ["site.landCategory = FARMLAND"],
+      missingInputs: ["site.restrictedFactors"],
+    });
+    expect(unresolved).toMatchObject({
+      status: "NEEDS_MORE_INFO",
+      matchedRuleIds: [],
+      provisionalEffect: null,
+      missingInputs: ["site.restrictedFactors"],
+    });
+  });
+
+  it("keeps a false condition excluded even when another required input is unknown", () => {
+    const procedure = {
+      ...catalog.procedures.find((item) => item.id === "farmland-conversion-permit")!,
+      verificationStatus: "INTERNAL_REVIEWED" as const,
+    };
+    const baseRule = catalog.rules.find(
+      (item) => item.id === "rule-exp-farmland-conversion-permit",
+    )!;
+    const rule = {
+      ...baseRule,
+      status: "INTERNAL_REVIEWED" as const,
+    };
+    const input = scenarioAnswersToProjectInput({
+      ...catalog.scenarios[2].answers,
+      landCategory: "OTHER",
+    });
+
+    const excluded = resolveProcedure(procedure, [rule], input, "test");
+
+    expect(excluded.traces[0]).toMatchObject({
+      status: "DOES_NOT_APPLY",
+      missingInputs: ["site.restrictedFactors"],
+    });
+    expect(excluded).toMatchObject({
+      status: "DOES_NOT_APPLY",
+      matchedRuleIds: [],
+      provisionalEffect: "EXCLUDE",
+      missingInputs: [],
+    });
+  });
+
   it("uses explicit facility facts instead of industry or demand proxies", () => {
     const base = catalog.scenarios[1].answers;
     const excluded = decide({
@@ -94,10 +327,10 @@ describe("deterministic four-state rules", () => {
       privateElectricalFacilityWork: true,
       specificHighPressureGasUse: true,
     });
-    expect(status(included, "chemical-substance-confirmation")).toBe("APPLIES");
+    expect(status(included, "chemical-substance-confirmation")).toBe("NEEDS_MORE_INFO");
     expect(status(included, "private-electrical-facility-construction-plan")).toBe("APPLIES");
     expect(status(included, "electrical-pre-use-inspection")).toBe("APPLIES");
-    expect(status(included, "specific-high-pressure-gas-use-report")).toBe("APPLIES");
+    expect(status(included, "specific-high-pressure-gas-use-report")).toBe("NEEDS_MORE_INFO");
   });
 
   it("registers expanded exclusion rules on their procedures", () => {
@@ -113,11 +346,16 @@ describe("deterministic four-state rules", () => {
       integratedEnvironmentalPermitTarget: false,
     };
     const decisions = decide(answers);
-    expect(status(decisions, "farmland-conversion-permit")).toBe("APPLIES");
-    expect(status(decisions, "small-environmental-impact-assessment")).toBe("APPLIES");
-    expect(status(decisions, "hazardous-chemical-business-permit")).toBe("APPLIES");
-    expect(status(decisions, "hazardous-materials-facility-installation-permit")).toBe("APPLIES");
-    expect(status(decisions, "high-pressure-gas-manufacture-storage-permit-report")).toBe("APPLIES");
+    for (const id of [
+      "farmland-conversion-permit",
+      "small-environmental-impact-assessment",
+      "hazardous-chemical-business-permit",
+      "hazardous-materials-facility-installation-permit",
+      "high-pressure-gas-manufacture-storage-permit-report",
+    ]) {
+      expect(status(decisions, id), id).toBe("NEEDS_MORE_INFO");
+      expect(decision(decisions, id)?.missingInputs.length, id).toBeGreaterThan(0);
+    }
   });
 
   it("requires authority confirmation for added paths whose broad inputs are insufficient", () => {

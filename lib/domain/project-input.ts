@@ -1,5 +1,9 @@
-import type { Fact, ProjectInput } from "@/lib/domain/schemas";
+import type { Fact, Procedure, ProjectInput } from "@/lib/domain/schemas";
 import type { ScenarioAnswers } from "@/lib/data/catalog";
+import {
+  filterFastTrackTargetProcedureIds,
+  filterPlanDeemedProcedureIds,
+} from "@/lib/data/special-law-processes";
 
 export function known(value: NonNullable<Fact["value"]>, unit?: string): Fact {
   return {
@@ -30,8 +34,173 @@ function choiceFact(value: string): Fact {
   return !normalized || normalized === "UNKNOWN" ? unknown() : known(normalized);
 }
 
-export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): ProjectInput {
+function planSpecialLawTokens({
+  lawId,
+  effectiveFrom,
+  assessmentDate,
+  qualificationConfirmed,
+  documentsIncluded,
+  consultationCompleted,
+  approvalPublished,
+  approvalPublishedDate,
+  approvalNoticeReference,
+  includedPermitIds,
+}: {
+  lawId: string;
+  effectiveFrom: string;
+  assessmentDate: string;
+  qualificationConfirmed: boolean | null;
+  documentsIncluded: boolean | null;
+  consultationCompleted: boolean | null;
+  approvalPublished: boolean | null;
+  approvalPublishedDate: string | null;
+  approvalNoticeReference: string;
+  includedPermitIds: readonly string[];
+}) {
+  if (qualificationConfirmed !== true) return [];
+
+  const phase =
+    documentsIncluded !== true
+      ? "APPLICATION"
+      : consultationCompleted !== true
+        ? "CONSULTATION"
+        : "APPROVAL";
+  const approvalEvidenceConfirmed =
+    documentsIncluded === true &&
+    consultationCompleted === true &&
+    approvalPublished === true &&
+    approvalPublishedDate !== null &&
+    approvalPublishedDate >= effectiveFrom &&
+    approvalPublishedDate <= assessmentDate &&
+    approvalNoticeReference.trim().length > 0 &&
+    includedPermitIds.length > 0;
+
+  return [
+    `${lawId}:PHASE:${phase}`,
+    ...(approvalEvidenceConfirmed
+      ? [
+          lawId,
+          `${lawId}:APPROVAL_PUBLISHED`,
+          ...includedPermitIds.map(
+            (procedureId) => `${lawId}:${procedureId}`,
+          ),
+        ]
+      : []),
+  ];
+}
+
+export function scenarioAnswersToProjectInput(
+  answers: ScenarioAnswers,
+  fastTrackTargetProcedures: readonly Pick<
+    Procedure,
+    "id" | "actionType" | "domain"
+  >[],
+): ProjectInput {
   const inside = nullableFact(answers.insideIndustrialComplex);
+  const advancedStrategicIndustryFastTrackPermitIds =
+    filterFastTrackTargetProcedureIds(
+      "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+      answers.advancedStrategicIndustryFastTrackPermitIds,
+      fastTrackTargetProcedures,
+    );
+  const semiconductorClusterFastTrackPermitIds =
+    filterFastTrackTargetProcedureIds(
+      "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
+      answers.semiconductorClusterFastTrackPermitIds,
+      fastTrackTargetProcedures,
+    );
+  const semiconductorClusterPlanIncludedPermitIds =
+    filterPlanDeemedProcedureIds(
+      "SEMICONDUCTOR_CLUSTER_PLAN_DEEMING",
+      answers.semiconductorClusterPlanIncludedPermitIds,
+    );
+  const industrialComplexPlanIncludedPermitIds =
+    filterPlanDeemedProcedureIds(
+      "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL",
+      answers.industrialComplexPlanIncludedPermitIds,
+    );
+  const regionalSpecialZonePlanIncludedPermitIds =
+    filterPlanDeemedProcedureIds(
+      "REGIONAL_SPECIAL_ZONE_PLAN_DEEMING",
+      answers.regionalSpecialZonePlanIncludedPermitIds,
+    );
+  const advancedStrategicIndustryFastTrackTokens =
+    answers.advancedStrategicIndustryFastTrackConfirmed === true &&
+    answers.advancedStrategicIndustryApplicantRoleConfirmed === true &&
+    answers.advancedStrategicIndustryDelayRiskConfirmed === true &&
+    answers.advancedStrategicIndustryCommitteeResolved === true &&
+    answers.advancedStrategicIndustryMinisterRequestDate !== null &&
+    answers.advancedStrategicIndustryMinisterRequestDate >= "2023-07-01" &&
+    answers.advancedStrategicIndustryMinisterRequestDate <= answers.assessmentDate &&
+    advancedStrategicIndustryFastTrackPermitIds.length > 0
+      ? [
+          "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+          ...advancedStrategicIndustryFastTrackPermitIds.map(
+            (procedureId) =>
+              `ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK:${procedureId}`,
+          ),
+        ]
+      : [];
+  const semiconductorClusterFastTrackTokens =
+    answers.semiconductorClusterFastTrackConfirmed === true &&
+    answers.semiconductorClusterApplicantRoleConfirmed === true &&
+    answers.semiconductorClusterDelayRiskConfirmed === true &&
+    answers.semiconductorClusterCommitteeResolved === true &&
+    answers.semiconductorClusterMinisterRequestDate !== null &&
+    answers.semiconductorClusterMinisterRequestDate >= "2026-08-11" &&
+    answers.semiconductorClusterMinisterRequestDate <= answers.assessmentDate &&
+    semiconductorClusterFastTrackPermitIds.length > 0
+      ? [
+          "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
+          ...semiconductorClusterFastTrackPermitIds.map(
+            (procedureId) =>
+              `SEMICONDUCTOR_CLUSTER_FAST_TRACK:${procedureId}`,
+          ),
+        ]
+      : [];
+  const semiconductorClusterPlanTokens = planSpecialLawTokens({
+    lawId: "SEMICONDUCTOR_CLUSTER_PLAN_DEEMING",
+    effectiveFrom: "2026-08-11",
+    assessmentDate: answers.assessmentDate,
+    qualificationConfirmed: answers.semiconductorClusterPlanDeemingConfirmed,
+    documentsIncluded: answers.semiconductorClusterPlanDocumentsIncluded,
+    consultationCompleted: answers.semiconductorClusterPlanConsultationCompleted,
+    approvalPublished: answers.semiconductorClusterPlanApprovalPublished,
+    approvalPublishedDate: answers.semiconductorClusterPlanApprovalPublishedDate,
+    approvalNoticeReference: answers.semiconductorClusterPlanApprovalNoticeReference,
+    includedPermitIds: semiconductorClusterPlanIncludedPermitIds,
+  });
+  const industrialComplexPlanTokens = planSpecialLawTokens({
+    lawId: "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL",
+    effectiveFrom: "2008-09-06",
+    assessmentDate: answers.assessmentDate,
+    qualificationConfirmed: answers.industrialComplexPlanSpecialCaseConfirmed,
+    documentsIncluded: answers.industrialComplexPlanDocumentsIncluded,
+    consultationCompleted: answers.industrialComplexPlanConsultationCompleted,
+    approvalPublished: answers.industrialComplexPlanApprovalPublished,
+    approvalPublishedDate: answers.industrialComplexPlanApprovalPublishedDate,
+    approvalNoticeReference: answers.industrialComplexPlanApprovalNoticeReference,
+    includedPermitIds: industrialComplexPlanIncludedPermitIds,
+  });
+  const regionalSpecialZonePlanTokens = planSpecialLawTokens({
+    lawId: "REGIONAL_SPECIAL_ZONE_PLAN_DEEMING",
+    effectiveFrom: "2019-04-17",
+    assessmentDate: answers.assessmentDate,
+    qualificationConfirmed: answers.regionalSpecialZonePlanDeemingConfirmed,
+    documentsIncluded: answers.regionalSpecialZonePlanDocumentsIncluded,
+    consultationCompleted: answers.regionalSpecialZonePlanConsultationCompleted,
+    approvalPublished: answers.regionalSpecialZonePlanApprovalPublished,
+    approvalPublishedDate: answers.regionalSpecialZonePlanApprovalPublishedDate,
+    approvalNoticeReference: answers.regionalSpecialZonePlanApprovalNoticeReference,
+    includedPermitIds: regionalSpecialZonePlanIncludedPermitIds,
+  });
+  const confirmedAutomaticSpecialLaws = [
+    ...advancedStrategicIndustryFastTrackTokens,
+    ...semiconductorClusterFastTrackTokens,
+    ...semiconductorClusterPlanTokens,
+    ...industrialComplexPlanTokens,
+    ...regionalSpecialZonePlanTokens,
+  ];
   return {
     assessmentDate: answers.assessmentDate,
     ...(answers.plannedConstructionStartDate
@@ -40,23 +209,49 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
     ...(answers.plannedConstructionEndDate
       ? { plannedCompletion: answers.plannedConstructionEndDate }
       : {}),
+    ...(answers.equipmentInstallationCompletionDate
+      ? { plannedEquipmentInstallationCompletion: answers.equipmentInstallationCompletionDate }
+      : {}),
+    ...(answers.commissioningStartDate
+      ? { plannedCommissioningStart: answers.commissioningStartDate }
+      : {}),
     investmentType: choiceFact(answers.investmentType),
     location: {
       province: choiceFact(answers.province),
       city: answers.city.trim() ? known(answers.city.trim()) : unknown(),
-      address: unknown(),
+      address: answers.siteAddress.trim() ? known(answers.siteAddress.trim()) : unknown(),
       capitalRegionControlArea: unknown(),
     },
     industrialComplex: {
       inside,
+      name:
+        answers.insideIndustrialComplex === true
+          ? answers.industrialComplexName.trim()
+            ? known(answers.industrialComplexName.trim())
+            : unknown()
+          : notApplicable(),
       type:
         answers.insideIndustrialComplex === true ? unknown() : notApplicable(),
       identifier:
-        answers.insideIndustrialComplex === true ? unknown() : notApplicable(),
+        answers.insideIndustrialComplex === true
+          ? answers.industrialComplexIdentifier.trim()
+            ? known(answers.industrialComplexIdentifier.trim())
+            : unknown()
+          : notApplicable(),
+      occupancyContractStatus:
+        answers.insideIndustrialComplex === true
+          ? known(answers.industrialComplexOccupancyContractStatus)
+          : notApplicable(),
       occupancyContractHeld:
-        answers.insideIndustrialComplex === true ? unknown() : notApplicable(),
+        answers.insideIndustrialComplex === true
+          ? known(answers.industrialComplexOccupancyContractStatus === "COMPLETED")
+          : notApplicable(),
       managingAuthority:
-        answers.insideIndustrialComplex === true ? unknown() : notApplicable(),
+        answers.insideIndustrialComplex === true
+          ? answers.industrialComplexManagingAuthority.trim()
+            ? known(answers.industrialComplexManagingAuthority.trim())
+            : unknown()
+          : notApplicable(),
     },
     industry: {
       category: choiceFact(answers.industryCategory),
@@ -64,16 +259,22 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
         answers.aiDataCenterActFacilityConfirmed,
       ),
       aiDataCenterOneStopStatus: known(answers.aiDataCenterOneStopStatus),
-      ksic: unknown(),
-      products: unknown(),
-      coreProcesses: unknown(),
+      ksic: answers.ksicCode.trim() ? known(answers.ksicCode.trim()) : unknown(),
+      products: answers.products.trim()
+        ? known(answers.products.split(/[,\n]/).map((item) => item.trim()).filter(Boolean))
+        : unknown(),
+      coreProcesses: answers.coreProcesses.trim()
+        ? known(answers.coreProcesses.split(/[,\n]/).map((item) => item.trim()).filter(Boolean))
+        : unknown(),
     },
     site: {
-      zoning: unknown(),
+      zoning: answers.siteZoning.trim() ? known(answers.siteZoning.trim()) : unknown(),
       landCategory: nullableFact(answers.landCategory),
       ownership: unknown(),
       developmentAreaM2: nullableFact(answers.totalAreaM2, "m2"),
-      restrictedFactors: unknown(),
+      restrictedFactors: answers.siteRestrictedFactors.trim()
+        ? known(answers.siteRestrictedFactors.split(/[,\n]/).map((item) => item.trim()).filter(Boolean))
+        : unknown(),
       demolitionRequired: nullableFact(answers.demolitionRequired),
       roadConnectionRequired: nullableFact(answers.roadConnectionRequired),
       trafficImpactAssessmentRequired: nullableFact(answers.trafficImpactAssessmentRequired),
@@ -142,13 +343,36 @@ export function scenarioAnswersToProjectInput(answers: ScenarioAnswers): Project
       safetyManagerRequired: nullableFact(answers.safetyManagerRequired),
       healthManagerRequired: nullableFact(answers.healthManagerRequired),
     },
+    confirmation: {
+      forestRestorationObligation: nullableFact(answers.forestRestorationObligation),
+      fireWorkSupervisionTarget: nullableFact(answers.fireWorkSupervisionTarget),
+      firstFireSelfInspectionTarget: nullableFact(answers.firstFireSelfInspectionTarget),
+      highPressureGasBusinessStartTarget: nullableFact(answers.highPressureGasBusinessStartTarget),
+      semiconductorClusterPlanDocumentsIncluded: nullableFact(answers.semiconductorClusterPlanDocumentsIncluded),
+      semiconductorClusterPlanConsultationCompleted: nullableFact(answers.semiconductorClusterPlanConsultationCompleted),
+      semiconductorClusterPlanApprovalPublished: nullableFact(answers.semiconductorClusterPlanApprovalPublished),
+      semiconductorClusterPlanApprovalPublishedDate: nullableFact(answers.semiconductorClusterPlanApprovalPublishedDate),
+      semiconductorClusterPlanApprovalNoticeReference: choiceFact(answers.semiconductorClusterPlanApprovalNoticeReference),
+      industrialComplexPlanDocumentsIncluded: nullableFact(answers.industrialComplexPlanDocumentsIncluded),
+      industrialComplexPlanConsultationCompleted: nullableFact(answers.industrialComplexPlanConsultationCompleted),
+      industrialComplexPlanApprovalPublished: nullableFact(answers.industrialComplexPlanApprovalPublished),
+      industrialComplexPlanApprovalPublishedDate: nullableFact(answers.industrialComplexPlanApprovalPublishedDate),
+      industrialComplexPlanApprovalNoticeReference: choiceFact(answers.industrialComplexPlanApprovalNoticeReference),
+      regionalSpecialZonePlanDocumentsIncluded: nullableFact(answers.regionalSpecialZonePlanDocumentsIncluded),
+      regionalSpecialZonePlanConsultationCompleted: nullableFact(answers.regionalSpecialZonePlanConsultationCompleted),
+      regionalSpecialZonePlanApprovalPublished: nullableFact(answers.regionalSpecialZonePlanApprovalPublished),
+      regionalSpecialZonePlanApprovalPublishedDate: nullableFact(answers.regionalSpecialZonePlanApprovalPublishedDate),
+      regionalSpecialZonePlanApprovalNoticeReference: choiceFact(answers.regionalSpecialZonePlanApprovalNoticeReference),
+    },
     permitCoordination: nullableFact(answers.permitCoordination),
-    strategicIndustrySpecialCase: known([...answers.appliedSpecialLawIds]),
-    existingApprovalIds:
-      answers.buildingAction === "NONE"
+    strategicIndustrySpecialCase: known([
+      ...answers.appliedSpecialLawIds,
+      ...confirmedAutomaticSpecialLaws,
+    ]),
+    existingApprovalIds: answers.existingApprovalIds.trim()
+      ? known(answers.existingApprovalIds.split(/[,\n]/).map((item) => item.trim()).filter(Boolean))
+      : answers.buildingAction === "NONE"
         ? notApplicable()
-        : answers.buildingAction === "UNKNOWN"
-          ? unknown()
-          : known([]),
+        : unknown(),
   };
 }

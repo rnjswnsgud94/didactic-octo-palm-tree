@@ -31,13 +31,13 @@ export const procedureCategoryOrder: ProcedureCategory[] = ["REQUIRED", "CONFIRM
 
 export const procedureCategorySummaries: Record<ProcedureCategory, { label: string; description: string; empty: string }> = {
   REQUIRED: {
-    label: "필수적으로 거쳐야 하는 절차",
-    description: "현재 입력값이 포함규칙과 일치해 계획경로에 넣은 절차",
+    label: "확인된 필수 절차",
+    description: "검토 완료 규칙과 입력 증빙이 일치해 현재 경로에 확정 반영한 절차",
     empty: "현재 입력값으로 확정된 필수 절차가 없습니다.",
   },
   CONFIRM: {
-    label: "대상 여부 확인이 필요한 절차",
-    description: "관계기관 확인 또는 추가 사업정보가 있어야 적용 여부가 정해지는 절차",
+    label: "잠정 포함·대상 확인 절차",
+    description: "초안 규칙, 관계기관 확인 또는 추가 사업정보가 남아 실행 전 확정해야 하는 절차",
     empty: "대상 여부를 별도로 확인할 절차가 없습니다.",
   },
   NOT_REQUIRED: {
@@ -53,9 +53,12 @@ export function procedureCategoryForDecision(decision: {
   conflictRuleIds: string[];
   isDeemed?: boolean;
 }): ProcedureCategory {
-  if (decision.isDeemed) return "REQUIRED";
-  if (!decision.conflictRuleIds.length && decision.provisionalEffect === "INCLUDE") return "REQUIRED";
-  if (!decision.conflictRuleIds.length && decision.provisionalEffect === "EXCLUDE") return "NOT_REQUIRED";
+  if (
+    decision.isDeemed &&
+    decision.status === "DOES_NOT_APPLY" &&
+    decision.provisionalEffect === "EXCLUDE" &&
+    !decision.conflictRuleIds.length
+  ) return "REQUIRED";
   if (decision.status === "APPLIES") return "REQUIRED";
   if (decision.status === "DOES_NOT_APPLY") return "NOT_REQUIRED";
   return "CONFIRM";
@@ -74,6 +77,7 @@ export const actionLabels = {
 
 export const tabLabels = {
   SWIMLANE: "절차 흐름",
+  ACTION: "실행 계획",
   LIST: "전체 절차",
   SCHEDULE: "사업 일정",
   LEGAL: "법령 근거",
@@ -86,15 +90,32 @@ const inputLabels: Record<string, string> = {
   assessmentDate: "검토 기준일",
   plannedConstructionStartDate: "예상 공사 시작일",
   plannedConstructionEndDate: "예상 공사 종료일",
+  equipmentInstallationCompletionDate: "주요 설비 설치완료 예정일",
+  commissioningStartDate: "시운전 시작 예정일",
   investmentType: "투자 유형",
   "location.province": "시·도",
   "location.city": "시·군·구",
   province: "시·도",
   city: "시·군·구",
+  siteAddress: "사업 부지 주소",
+  siteZoning: "용도지역·지구",
+  siteRestrictedFactors: "확인된 입지규제",
   "industrialComplex.inside": "산업단지 안/밖",
   insideIndustrialComplex: "입지 구분",
+  "industrialComplex.name": "산업단지명",
+  "industrialComplex.identifier": "산업단지 식별자",
+  "industrialComplex.managingAuthority": "산업단지 관리기관",
+  "industrialComplex.occupancyContractStatus": "입주계약·변경계약 상태",
+  industrialComplexName: "산업단지명",
+  industrialComplexIdentifier: "산업단지 식별자",
+  industrialComplexManagingAuthority: "산업단지 관리기관",
+  industrialComplexOccupancyContractStatus: "입주계약·변경계약 상태",
   "industry.category": "업종 유형",
   industryCategory: "업종·공정 유형",
+  ksicCode: "한국표준산업분류(KSIC)",
+  products: "생산품·서비스",
+  coreProcesses: "핵심 공정·설비",
+  existingApprovalIds: "기존 허가·신고 식별자",
   "industry.ksic": "한국표준산업분류(KSIC)",
   "industry.products": "생산제품",
   "industry.coreProcesses": "핵심 공정·설비·물질",
@@ -120,6 +141,39 @@ const inputLabels: Record<string, string> = {
   "industry.aiDataCenterOneStopStatus": "인허가 일괄처리 진행상태",
   aiDataCenterOneStopStatus: "인허가 일괄처리 진행상태",
   appliedSpecialLawIds: "적용 확인한 업종별 특례",
+  advancedStrategicIndustryFastTrackConfirmed: "국가첨단전략산업 신속처리 요건",
+  advancedStrategicIndustryApplicantRoleConfirmed: "전략산업 특화단지 법정 사업시행자 지위",
+  advancedStrategicIndustryDelayRiskConfirmed: "전략산업 인허가 지연·현저한 지장 우려",
+  advancedStrategicIndustryCommitteeResolved: "국가첨단전략산업위원회 의결",
+  advancedStrategicIndustryMinisterRequestDate: "산업통상부장관 신속처리 요청일",
+  advancedStrategicIndustryFastTrackPermitIds: "전략산업 신속처리 요청대상 인허가",
+  semiconductorClusterFastTrackConfirmed: "반도체클러스터 신속처리 요건",
+  semiconductorClusterApplicantRoleConfirmed: "반도체클러스터 법정 신청자 지위",
+  semiconductorClusterDelayRiskConfirmed: "반도체 인허가 지연·현저한 지장 우려",
+  semiconductorClusterCommitteeResolved: "반도체산업경쟁력강화위원회 의결",
+  semiconductorClusterMinisterRequestDate: "반도체 신속처리 장관 요청일",
+  semiconductorClusterFastTrackPermitIds: "반도체 신속처리 요청대상 인허가",
+  semiconductorClusterPlanDeemingConfirmed: "반도체클러스터 조성계획 승인·의제 요건",
+  semiconductorClusterPlanDocumentsIncluded: "반도체클러스터 계획의 인허가별 서류 포함",
+  semiconductorClusterPlanConsultationCompleted: "반도체클러스터 계획 관계기관 사전협의·승인",
+  semiconductorClusterPlanApprovalPublished: "반도체클러스터 계획 승인·고시 완료",
+  semiconductorClusterPlanApprovalPublishedDate: "반도체클러스터 계획 승인·고시일",
+  semiconductorClusterPlanApprovalNoticeReference: "반도체클러스터 계획 고시문 근거",
+  semiconductorClusterPlanIncludedPermitIds: "반도체클러스터 계획의 실제 의제 인허가",
+  industrialComplexPlanSpecialCaseConfirmed: "산업단지계획 통합승인·의제 요건",
+  industrialComplexPlanDocumentsIncluded: "산업단지계획의 인허가별 서류 포함",
+  industrialComplexPlanConsultationCompleted: "산업단지계획 관계기관 협의 완료",
+  industrialComplexPlanApprovalPublished: "산업단지계획 승인·고시 완료",
+  industrialComplexPlanApprovalPublishedDate: "산업단지계획 승인·고시일",
+  industrialComplexPlanApprovalNoticeReference: "산업단지계획 고시문 근거",
+  industrialComplexPlanIncludedPermitIds: "산업단지계획의 실제 의제 인허가",
+  regionalSpecialZonePlanDeemingConfirmed: "지역특화발전특구계획 의제 요건",
+  regionalSpecialZonePlanDocumentsIncluded: "특화특구계획의 인허가별 서류 포함",
+  regionalSpecialZonePlanConsultationCompleted: "특화특구계획 관계기관 사전협의 완료",
+  regionalSpecialZonePlanApprovalPublished: "특화특구계획 승인·고시 완료",
+  regionalSpecialZonePlanApprovalPublishedDate: "특화특구계획 승인·고시일",
+  regionalSpecialZonePlanApprovalNoticeReference: "특화특구계획 고시문 근거",
+  regionalSpecialZonePlanIncludedPermitIds: "특화특구계획의 실제 의제 인허가",
   "site.disasterImpactAssessmentType": "재해영향평가등 협의 유형",
   disasterImpactAssessmentType: "재해영향평가등 협의 검토 결과",
   "site.undergroundSafetyAssessmentType": "지하안전평가 유형",
@@ -174,6 +228,7 @@ const inputLabels: Record<string, string> = {
   hazardousMaterialsPreventionRulesRequired: "위험물 예방규정 작성 대상 여부",
   "safety.highPressureGas": "허가·신고 대상 고압가스 여부",
   highPressureGas: "허가·신고 대상 고압가스 여부",
+  highPressureGasBusinessStartTarget: "고압가스 사업·저장소 개시신고 대상 확인",
   "safety.specificHighPressureGasUse": "특정고압가스 사용신고 대상 여부",
   specificHighPressureGasUse: "특정고압가스 사용신고 대상 여부",
   "safety.lpgSpecificUseFacility": "LPG 특정사용시설 완성검사 대상 여부",
@@ -182,6 +237,9 @@ const inputLabels: Record<string, string> = {
   cityGasSpecificUseFacility: "도시가스 특정사용시설 완성검사 대상 여부",
   "safety.psmCovered": "PSM 대상 여부",
   psmCovered: "공정안전보고서(PSM) 대상 여부",
+  fireWorkSupervisionTarget: "소방공사 감리자 지정신고 대상 확인",
+  firstFireSelfInspectionTarget: "최초 소방시설 자체점검·결과보고 대상 확인",
+  forestRestorationObligation: "산지 복구의무·면제 확인",
   "safety.fireSafetyManagerRequired": "소방안전관리자 선임 대상 여부",
   fireSafetyManagerRequired: "소방안전관리자 선임 대상 여부",
   "safety.heatUseEquipment": "검사대상 열사용기자재 설치 여부",

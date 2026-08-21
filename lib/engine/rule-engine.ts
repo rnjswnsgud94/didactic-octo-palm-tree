@@ -239,9 +239,17 @@ function isRuleActive(
 
 function traceRule(rule: ApplicabilityRule, input: ProjectInput): RuleTrace {
   const trace = evaluateCondition(rule.condition, input);
+  const missingInputs = stableUnique([
+    ...trace.missingInputs,
+    ...rule.requiredInputs.filter(
+      (path) => resolveFact(input, path).state === "UNKNOWN",
+    ),
+  ]);
   const status: ApplicabilityStatus =
     trace.truth === "TRUE"
-      ? "APPLIES"
+      ? missingInputs.length
+        ? "NEEDS_MORE_INFO"
+        : "APPLIES"
       : trace.truth === "FALSE"
         ? "DOES_NOT_APPLY"
         : "NEEDS_MORE_INFO";
@@ -251,7 +259,7 @@ function traceRule(rule: ApplicabilityRule, input: ProjectInput): RuleTrace {
     procedureId: rule.procedureId,
     status,
     usedInputs: trace.usedInputs,
-    missingInputs: stableUnique([...trace.missingInputs, ...rule.requiredInputs.filter((path) => resolveFact(input, path).state === "UNKNOWN")]),
+    missingInputs,
     passedConditions: trace.passedConditions,
     failedConditions: trace.failedConditions,
     citationIds: rule.citationIds,
@@ -398,12 +406,16 @@ export function resolveProcedure(
   if (excludeRules.length && highestExclude > highestInclude) {
     const winner = excludeRules.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))[0];
     const disclosure = getLegalReviewDisclosure(procedure, [winner]);
+    const exclusionRuleIsReviewed =
+      winner.status === "INTERNAL_REVIEWED" || winner.status === "EXPERT_REVIEWED";
     return {
       procedure,
-      status: disclosure.needsLegalReview ? "POSSIBLY_APPLIES" : "DOES_NOT_APPLY",
-      reason: disclosure.needsLegalReview
-        ? `${winner.explanationTemplate} 제외 근거의 세부 법률검토 상태는 상세에서 확인해야 합니다.`
-        : winner.explanationTemplate,
+      status: exclusionRuleIsReviewed ? "DOES_NOT_APPLY" : "POSSIBLY_APPLIES",
+      reason: exclusionRuleIsReviewed
+        ? disclosure.needsLegalReview
+          ? `${winner.explanationTemplate} 제외 판정근거는 검토됐으며, 절차 설명·제출자료의 검토상태는 상세에서 별도로 확인해야 합니다.`
+          : winner.explanationTemplate
+        : `${winner.explanationTemplate} 제외 근거의 세부 법률검토 상태는 상세에서 확인해야 합니다.`,
       ...disclosure,
       missingInputs: stableUnique(unknownTraces.flatMap((trace) => trace.missingInputs)),
       traces,
@@ -451,6 +463,22 @@ export function resolveProcedure(
     };
   }
 
+  if (activeRules.every((rule) => rule.effect === "EXCLUDE")) {
+    return {
+      procedure,
+      status: "POSSIBLY_APPLIES",
+      reason: "현재 제외규칙에는 해당하지 않지만, 평가일에 유효한 포함기준이 없어 적용 여부를 별도로 확인해야 합니다.",
+      ...getLegalReviewDisclosure(procedure, activeRules),
+      missingInputs: [],
+      traces,
+      matchedRuleIds: [],
+      conflictRuleIds: [],
+      provisionalEffect: null,
+      isDeemed: false,
+      dataVersion,
+    };
+  }
+
   return {
     procedure,
     status: "DOES_NOT_APPLY",
@@ -478,10 +506,21 @@ export function resolveAllProcedures(
   const decisionsByProcedureId = new Map(
     decisions.map((decision) => [decision.procedure.id, decision]),
   );
-  const deemedStatuses: ProcedureDecision["status"][] = [
-    "APPLIES",
-    "POSSIBLY_APPLIES",
-  ];
+  const rulesById = new Map(rules.map((rule) => [rule.id, rule]));
+
+  const matchedExplicitExclusions = (decision: ProcedureDecision) =>
+    decision.matchedRuleIds
+      .map((ruleId) => rulesById.get(ruleId))
+      .filter(
+        (rule): rule is ApplicabilityRule => rule?.effect === "EXCLUDE",
+      );
+
+  const isConfirmedDeemingParent = (decision: ProcedureDecision) =>
+    decision.status === "APPLIES" &&
+    decision.provisionalEffect === "INCLUDE" &&
+    !decision.needsLegalReview &&
+    decision.missingInputs.length === 0 &&
+    decision.conflictRuleIds.length === 0;
 
   return decisions
     .map((decision) => {
@@ -499,9 +538,18 @@ export function resolveAllProcedures(
         decision.status === "DOES_NOT_APPLY" &&
         deemedByProcedureIds.some((procedureId) => {
           const deemedByDecision = decisionsByProcedureId.get(procedureId);
-          return deemedByDecision
-            ? deemedStatuses.includes(deemedByDecision.status)
-            : false;
+          if (!deemedByDecision || !isConfirmedDeemingParent(deemedByDecision)) {
+            return false;
+          }
+
+          const parentCitationIds = new Set(
+            deemedByDecision.procedure.citationIds,
+          );
+          return matchedExplicitExclusions(decision).some((rule) =>
+            rule.citationIds.some((citationId) =>
+              parentCitationIds.has(citationId),
+            ),
+          );
         });
       return isDeemed === decision.isDeemed
         ? decision

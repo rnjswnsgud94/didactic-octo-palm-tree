@@ -18,15 +18,25 @@ import {
 } from "@/lib/data/expanded-catalog";
 import {
   aiDataCenterProfileRules,
+  aiDataCenterSpecialLawIds,
   specialLawCitations,
   specialLawDurations,
   specialLawEdges,
-  specialLawIds,
   specialLawLegalSources,
   specialLawProcedures,
   specialLawRuleIdsByProcedure,
   specialLawRules,
 } from "@/lib/data/special-laws";
+import {
+  buildFastTrackTargetEdges,
+  buildFastTrackTargetRules,
+  specialLawDeemingParentsByProcedure,
+  specialLawProcessDurations,
+  specialLawProcessEdges,
+  specialLawProcessProcedures,
+  specialLawProcessRuleIdsByProcedure,
+  specialLawProcessRules,
+} from "@/lib/data/special-law-processes";
 import {
   applicabilityRuleSchema,
   durationEstimateSchema,
@@ -59,11 +69,26 @@ export const scenarioAnswerSchema = z.object({
   assessmentDate: isoDateSchema,
   plannedConstructionStartDate: isoDateSchema.nullable().default(null),
   plannedConstructionEndDate: isoDateSchema.nullable().default(null),
+  equipmentInstallationCompletionDate: isoDateSchema.nullable().default(null),
+  commissioningStartDate: isoDateSchema.nullable().default(null),
   investmentType: z.string(),
   province: z.string(),
   city: z.string(),
+  siteAddress: z.string().max(200).default(""),
+  siteZoning: z.string().max(120).default(""),
+  siteRestrictedFactors: z.string().max(500).default(""),
   insideIndustrialComplex: z.boolean().nullable(),
+  industrialComplexName: z.string().max(120).default(""),
+  industrialComplexIdentifier: z.string().max(80).default(""),
+  industrialComplexManagingAuthority: z.string().max(120).default(""),
+  industrialComplexOccupancyContractStatus: z
+    .enum(["NOT_APPLIED", "PLANNED", "IN_PROGRESS", "COMPLETED"])
+    .default("NOT_APPLIED"),
   industryCategory: z.string(),
+  ksicCode: z.string().max(20).default(""),
+  products: z.string().max(500).default(""),
+  coreProcesses: z.string().max(500).default(""),
+  existingApprovalIds: z.string().max(500).default(""),
   buildingAction: z.string(),
   mechanicalEquipmentActTarget: z.boolean().nullable().default(null),
   existingAreaM2: z.number().nullable(),
@@ -80,7 +105,40 @@ export const scenarioAnswerSchema = z.object({
   aiDataCenterOneStopStatus: z
     .enum(["NOT_APPLIED", "PLANNED", "IN_PROGRESS", "COMPLETED"])
     .default("NOT_APPLIED"),
-  appliedSpecialLawIds: z.array(z.enum(specialLawIds)).default([]),
+  appliedSpecialLawIds: z.array(z.enum(aiDataCenterSpecialLawIds)).default([]),
+  advancedStrategicIndustryFastTrackConfirmed: z.boolean().nullable().default(null),
+  advancedStrategicIndustryApplicantRoleConfirmed: z.boolean().nullable().default(null),
+  advancedStrategicIndustryDelayRiskConfirmed: z.boolean().nullable().default(null),
+  advancedStrategicIndustryCommitteeResolved: z.boolean().nullable().default(null),
+  advancedStrategicIndustryMinisterRequestDate: isoDateSchema.nullable().default(null),
+  advancedStrategicIndustryFastTrackPermitIds: z.array(z.string()).default([]),
+  semiconductorClusterFastTrackConfirmed: z.boolean().nullable().default(null),
+  semiconductorClusterApplicantRoleConfirmed: z.boolean().nullable().default(null),
+  semiconductorClusterDelayRiskConfirmed: z.boolean().nullable().default(null),
+  semiconductorClusterCommitteeResolved: z.boolean().nullable().default(null),
+  semiconductorClusterMinisterRequestDate: isoDateSchema.nullable().default(null),
+  semiconductorClusterFastTrackPermitIds: z.array(z.string()).default([]),
+  semiconductorClusterPlanDeemingConfirmed: z.boolean().nullable().default(null),
+  semiconductorClusterPlanDocumentsIncluded: z.boolean().nullable().default(null),
+  semiconductorClusterPlanConsultationCompleted: z.boolean().nullable().default(null),
+  semiconductorClusterPlanApprovalPublished: z.boolean().nullable().default(null),
+  semiconductorClusterPlanApprovalPublishedDate: isoDateSchema.nullable().default(null),
+  semiconductorClusterPlanApprovalNoticeReference: z.string().max(300).default(""),
+  semiconductorClusterPlanIncludedPermitIds: z.array(z.string()).default([]),
+  industrialComplexPlanSpecialCaseConfirmed: z.boolean().nullable().default(null),
+  industrialComplexPlanDocumentsIncluded: z.boolean().nullable().default(null),
+  industrialComplexPlanConsultationCompleted: z.boolean().nullable().default(null),
+  industrialComplexPlanApprovalPublished: z.boolean().nullable().default(null),
+  industrialComplexPlanApprovalPublishedDate: isoDateSchema.nullable().default(null),
+  industrialComplexPlanApprovalNoticeReference: z.string().max(300).default(""),
+  industrialComplexPlanIncludedPermitIds: z.array(z.string()).default([]),
+  regionalSpecialZonePlanDeemingConfirmed: z.boolean().nullable().default(null),
+  regionalSpecialZonePlanDocumentsIncluded: z.boolean().nullable().default(null),
+  regionalSpecialZonePlanConsultationCompleted: z.boolean().nullable().default(null),
+  regionalSpecialZonePlanApprovalPublished: z.boolean().nullable().default(null),
+  regionalSpecialZonePlanApprovalPublishedDate: isoDateSchema.nullable().default(null),
+  regionalSpecialZonePlanApprovalNoticeReference: z.string().max(300).default(""),
+  regionalSpecialZonePlanIncludedPermitIds: z.array(z.string()).default([]),
   permitCoordination: z.string().nullable(),
   airEmissionFacility: z.boolean().nullable(),
   waterDischargeFacility: z.boolean().nullable(),
@@ -91,11 +149,14 @@ export const scenarioAnswerSchema = z.object({
   hazardousChemicalBusiness: z.boolean().nullable(),
   hazardousMaterials: z.boolean().nullable(),
   highPressureGas: z.boolean().nullable(),
+  highPressureGasBusinessStartTarget: z.boolean().nullable().default(null),
   specificHighPressureGasUse: z.boolean().nullable(),
   lpgSpecificUseFacility: z.boolean().nullable().default(null),
   cityGasSpecificUseFacility: z.boolean().nullable().default(null),
   psmCovered: z.boolean().nullable(),
   fireFacilityWork: z.boolean().nullable(),
+  fireWorkSupervisionTarget: z.boolean().nullable().default(null),
+  firstFireSelfInspectionTarget: z.boolean().nullable().default(null),
   privateElectricalFacilityWork: z.boolean().nullable(),
   energyUsePlanRequired: z.boolean().nullable(),
   groundwaterDevelopment: z.boolean().nullable(),
@@ -130,6 +191,7 @@ export const scenarioAnswerSchema = z.object({
   hazardousMachineryInspectionRequired: z.boolean().nullable().default(null),
   safetyManagerRequired: z.boolean().nullable().default(null),
   healthManagerRequired: z.boolean().nullable().default(null),
+  forestRestorationObligation: z.boolean().nullable().default(null),
   powerIncreaseMw: z.number().nullable(),
   waterDemandM3Day: z.number().nullable(),
   wastewaterM3Day: z.number().nullable(),
@@ -142,11 +204,19 @@ const scenarioSchema = z.object({
   answers: scenarioAnswerSchema,
 });
 
-const additionalRuleIdsByProcedure: Record<string, string[]> = {
-  "air-emission-installation-permit": ["rule-exp-air-integrated-exclusion"],
-  "water-discharge-installation-permit": ["rule-exp-water-integrated-exclusion"],
-  ...specialLawRuleIdsByProcedure,
-};
+const additionalRuleIdsByProcedure: Record<string, string[]> = [
+  {
+    "air-emission-installation-permit": ["rule-exp-air-integrated-exclusion"],
+    "water-discharge-installation-permit": ["rule-exp-water-integrated-exclusion"],
+  },
+  specialLawRuleIdsByProcedure,
+  specialLawProcessRuleIdsByProcedure,
+].reduce<Record<string, string[]>>((merged, additions) => {
+  for (const [procedureId, ruleIds] of Object.entries(additions)) {
+    merged[procedureId] = [...new Set([...(merged[procedureId] ?? []), ...ruleIds])];
+  }
+  return merged;
+}, {});
 
 const excludedNonPermitProcedureIds = new Set([
   "utility-supply-consultation",
@@ -170,7 +240,12 @@ const isExcludedCitation = (citationId: string) =>
   );
 
 const procedures = z.array(procedureSchema).parse(
-  [...proceduresJson, ...expandedProcedures, ...specialLawProcedures]
+  [
+    ...proceduresJson,
+    ...expandedProcedures,
+    ...specialLawProcedures,
+    ...specialLawProcessProcedures,
+  ]
   .filter((procedure) => !excludedNonPermitProcedureIds.has(procedure.id))
   .map((procedure) => ({
     ...procedure,
@@ -178,10 +253,22 @@ const procedures = z.array(procedureSchema).parse(
       ...procedure.ruleIds,
       ...(additionalRuleIdsByProcedure[procedure.id] ?? []),
     ])],
+    deemedByProcedureIds: [...new Set([
+      ...procedure.deemedByProcedureIds,
+      ...(specialLawDeemingParentsByProcedure[procedure.id] ?? []),
+    ])],
   })),
 );
+const fastTrackTargetRules = buildFastTrackTargetRules(procedures);
+const fastTrackTargetEdges = buildFastTrackTargetEdges(procedures);
 const edges = z.array(procedureEdgeSchema).parse(
-  [...edgesJson, ...expandedEdges, ...specialLawEdges].filter(
+  [
+    ...edgesJson,
+    ...expandedEdges,
+    ...specialLawEdges,
+    ...specialLawProcessEdges,
+    ...fastTrackTargetEdges,
+  ].filter(
     (edge) =>
       !excludedNonPermitProcedureIds.has(edge.from) &&
       !excludedNonPermitProcedureIds.has(edge.to),
@@ -192,6 +279,8 @@ const rules = z.array(applicabilityRuleSchema).parse(
     ...rulesJson,
     ...expandedRules,
     ...specialLawRules,
+    ...specialLawProcessRules,
+    ...fastTrackTargetRules,
     ...aiDataCenterProfileRules,
   ].filter(
     (rule) => !excludedNonPermitProcedureIds.has(rule.procedureId),
@@ -208,7 +297,12 @@ const citations = z.array(legalCitationSchema).parse(
   ),
 );
 const durations = z.array(durationEstimateSchema).parse(
-  [...durationsJson, ...expandedDurations, ...specialLawDurations].filter(
+  [
+    ...durationsJson,
+    ...expandedDurations,
+    ...specialLawDurations,
+    ...specialLawProcessDurations,
+  ].filter(
     (duration) => !excludedNonPermitProcedureIds.has(duration.procedureId),
   ),
 );

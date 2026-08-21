@@ -22,6 +22,17 @@
     "summary": "산업단지 입주계약 또는 변경계약을 체결하면 공장설립 등의 승인을 받은 것으로 본다."
   },
   {
+    "id": "cit-indcluster-38-occupancy-contract",
+    "sourceId": "src-industrial-cluster-act-20260701",
+    "article": "제38조",
+    "paragraph": "제1항부터 제3항",
+    "subparagraph": null,
+    "item": null,
+    "role": "APPLICABILITY",
+    "sourceVersion": "시행 2026.7.1., 법률 제21447호",
+    "summary": "산업단지에서 제조업 또는 그 밖의 사업을 하려는 자는 법정 예외를 제외하고 관리기관과 입주계약을 체결하고, 중요 계약사항 변경 시 변경계약을 체결한다."
+  },
+  {
     "id": "cit-indcluster-13-3",
     "sourceId": "src-industrial-cluster-act-20260701",
     "article": "제13조",

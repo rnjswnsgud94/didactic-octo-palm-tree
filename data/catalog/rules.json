@@ -49,21 +49,26 @@
   },
   {
     "id": "rule-factory-approval-deemed-by-occupancy",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "procedureId": "factory-establishment-approval",
     "effect": "EXCLUDE",
     "effectiveFrom": "2026-07-01",
     "effectiveTo": null,
     "jurisdiction": { "nationwide": true, "provinces": [], "cities": [], "industrialComplexIds": [] },
-    "condition": { "eq": { "path": "industrialComplex.inside", "value": true } },
-    "requiredInputs": ["industrialComplex.inside"],
+    "condition": {
+      "all": [
+        { "eq": { "path": "industrialComplex.inside", "value": true } },
+        { "eq": { "path": "industrialComplex.occupancyContractHeld", "value": true } }
+      ]
+    },
+    "requiredInputs": ["industrialComplex.inside", "industrialComplex.occupancyContractHeld"],
     "missingPolicy": "INDETERMINATE",
     "citationIds": ["cit-indcluster-13-2-deeming"],
     "explanationTemplate": "산업단지 입주계약 체결 시 공장설립 승인이 의제되므로 별도 승인 절차를 중복 표시하지 않습니다.",
     "priority": 100,
-    "status": "DRAFT",
-    "reviewActor": "AI-assisted draft",
-    "note": "명시적 법정 의제에 따른 제외 규칙."
+    "status": "INTERNAL_REVIEWED",
+    "reviewActor": "법제처 현행 법률 제13조제2항·제38조 대조",
+    "note": "산업단지 소재만으로 제외하지 않고 실제 입주계약 또는 변경계약 체결을 확인한 경우에만 별도 공장설립 승인 절차를 제외한다."
   },
   {
     "id": "rule-building-action",

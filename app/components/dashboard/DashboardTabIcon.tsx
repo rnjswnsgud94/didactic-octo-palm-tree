@@ -3,6 +3,7 @@ import type { DashboardTab } from "@/app/components/dashboard/constants";
 export function DashboardTabIcon({ tab }: { tab: DashboardTab }) {
   const paths: Record<DashboardTab, React.ReactNode> = {
     SWIMLANE: <><path d="M4 5h16M4 12h16M4 19h16" /><path d="M8 3v18M15 3v18" /></>,
+    ACTION: <><path d="M5 4h14v16H5z" /><path d="m8 9 1.5 1.5L12 8M8 15h8" /></>,
     LIST: <><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></>,
     SCHEDULE: <><path d="M4 19V5M4 19h16" /><path d="m7 15 4-5 3 2 5-7" /></>,
     LEGAL: <><path d="M6 3h9l3 3v15H6z" /><path d="M9 9h6M9 13h6M9 17h4" /></>,

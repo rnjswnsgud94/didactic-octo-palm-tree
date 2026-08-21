@@ -110,6 +110,10 @@ describe("AI data-center special-law routing", () => {
       decision(evaluation, "power-grid-impact-assessment").specialLawImpacts?.[0]
         .statutoryCap,
     ).toContain("거부 통지가 없으면");
+    expect(
+      decision(evaluation, "power-grid-impact-assessment").specialLawImpacts?.[0]
+        .statutoryCap,
+    ).toContain("1회 30일 이내 연장");
     expect(decision(evaluation, "energy-use-plan-consultation").specialLawImpacts?.[0].statutoryCap).toContain("90일");
     expect(decision(evaluation, "landscape-review").specialLawImpacts?.[0].statutoryCap).toContain("90일");
     expect(decision(evaluation, "building-committee-review").specialLawImpacts?.[0].statutoryCap).toContain("90일");
@@ -267,5 +271,361 @@ describe("AI data-center special-law routing", () => {
         (trace) => trace.ruleId,
       ),
     ).not.toContain("rule-aidc-grid-impact-exemption");
+  });
+});
+
+describe("industry, industrial-complex, and regional special-law routing", () => {
+  it.each([
+    {
+      lawId: "SEMICONDUCTOR_CLUSTER_PLAN_DEEMING" as const,
+      overrides: {
+        industryCategory: "SEMICONDUCTOR_ELECTRONICS",
+        semiconductorClusterPlanDeemingConfirmed: true,
+        semiconductorClusterPlanDocumentsIncluded: true,
+        semiconductorClusterPlanConsultationCompleted: true,
+        semiconductorClusterPlanApprovalPublished: true,
+        semiconductorClusterPlanApprovalPublishedDate: "2026-08-20",
+        semiconductorClusterPlanApprovalNoticeReference: "산업통상부고시 제2026-1호",
+        semiconductorClusterPlanIncludedPermitIds: ["__forged-plan-permit__"],
+      },
+    },
+    {
+      lawId: "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL" as const,
+      overrides: {
+        industryCategory: "GENERAL_MANUFACTURING",
+        industrialComplexPlanSpecialCaseConfirmed: true,
+        industrialComplexPlanDocumentsIncluded: true,
+        industrialComplexPlanConsultationCompleted: true,
+        industrialComplexPlanApprovalPublished: true,
+        industrialComplexPlanApprovalPublishedDate: "2026-08-20",
+        industrialComplexPlanApprovalNoticeReference: "충청남도고시 제2026-1호",
+        industrialComplexPlanIncludedPermitIds: ["__forged-plan-permit__"],
+      },
+    },
+    {
+      lawId: "REGIONAL_SPECIAL_ZONE_PLAN_DEEMING" as const,
+      overrides: {
+        industryCategory: "GENERAL_MANUFACTURING",
+        regionalSpecialZonePlanDeemingConfirmed: true,
+        regionalSpecialZonePlanDocumentsIncluded: true,
+        regionalSpecialZonePlanConsultationCompleted: true,
+        regionalSpecialZonePlanApprovalPublished: true,
+        regionalSpecialZonePlanApprovalPublishedDate: "2026-08-20",
+        regionalSpecialZonePlanApprovalNoticeReference: "중소벤처기업부고시 제2026-1호",
+        regionalSpecialZonePlanIncludedPermitIds: ["__forged-plan-permit__"],
+      },
+    },
+  ])(
+    "rejects an injected invalid-only permit list for $lawId",
+    ({ lawId, overrides }) => {
+      const evaluation = evaluateProject(
+        answers({
+          aiDataCenterActFacilityConfirmed: null,
+          advancedStrategicIndustryFastTrackConfirmed: false,
+          semiconductorClusterFastTrackConfirmed: false,
+          ...overrides,
+        }),
+      );
+      const tokens = evaluation.input.strategicIndustrySpecialCase.value;
+      const tokenList = Array.isArray(tokens) ? tokens : [];
+
+      expect(
+        evaluation.specialLawEvaluations.find((item) => item.id === lawId),
+      ).toMatchObject({ status: "UNCONFIRMED" });
+      expect(tokenList).not.toContain(lawId);
+      expect(tokenList).not.toContain(`${lawId}:__forged-plan-permit__`);
+      expect(evaluation.decisions.some((item) => item.isDeemed)).toBe(false);
+    },
+  );
+
+  it("shows semiconductor fast tracks as candidates without changing procedures before qualification is confirmed", () => {
+    const evaluation = evaluateProject(
+      answers({
+        industryCategory: "SEMICONDUCTOR_ELECTRONICS",
+        aiDataCenterActFacilityConfirmed: null,
+        semiconductorClusterFastTrackConfirmed: null,
+        advancedStrategicIndustryFastTrackConfirmed: null,
+        regionalSpecialZonePlanDeemingConfirmed: false,
+      }),
+    );
+
+    expect(evaluation.specialLawEvaluations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+        status: "UNCONFIRMED",
+      }),
+      expect.objectContaining({
+        id: "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
+        status: "UNCONFIRMED",
+      }),
+    ]));
+    expect(decision(evaluation, "building-permit").specialLawImpacts ?? []).toEqual([]);
+  });
+
+  it("adds the semiconductor 60-day processing-completion review only after exact request facts are confirmed", () => {
+    const scenario = answers({
+        assessmentDate: "2026-08-21",
+        industryCategory: "SEMICONDUCTOR_ELECTRONICS",
+        aiDataCenterActFacilityConfirmed: null,
+        semiconductorClusterFastTrackConfirmed: true,
+        semiconductorClusterApplicantRoleConfirmed: true,
+        semiconductorClusterDelayRiskConfirmed: true,
+        semiconductorClusterCommitteeResolved: true,
+        semiconductorClusterMinisterRequestDate: "2026-08-15",
+        semiconductorClusterFastTrackPermitIds: ["building-permit"],
+        advancedStrategicIndustryFastTrackConfirmed: false,
+        regionalSpecialZonePlanDeemingConfirmed: false,
+      });
+    const evaluation = evaluateProject(scenario);
+    const ordinarySchedule = evaluateProject({
+      ...scenario,
+      semiconductorClusterFastTrackConfirmed: false,
+    }).schedules.TYPICAL;
+
+    expect(evaluation.specialLawEvaluations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
+        status: "ACTIVE",
+      }),
+    ]));
+    expect(decision(evaluation, "building-permit").specialLawImpacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        lawId: "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
+        effect: "FAST_TRACK",
+        statutoryCap: expect.stringContaining("60일"),
+        citationIds: expect.arrayContaining(["cit-semiconductor-special-act-27-deeming"]),
+      }),
+    ]));
+    expect(decision(evaluation, "building-permit").provisionalEffect).toBe("INCLUDE");
+    expect(evaluation.schedules.TYPICAL.projectTimeline?.minimumKnownCompletionDate).toBe(
+      ordinarySchedule.projectTimeline?.minimumKnownCompletionDate,
+    );
+    expect(evaluation.schedules.TYPICAL.projectTimeline?.operationReadyDate).toBe(
+      ordinarySchedule.projectTimeline?.operationReadyDate,
+    );
+    expect(evaluation.schedules.TYPICAL.projectTimeline?.unknownPlanningDurationProcedureIds).toContain(
+      "semiconductor-cluster-fast-track-result-check",
+    );
+  });
+
+  it("does not activate the semiconductor special Act before its effective date", () => {
+    const evaluation = evaluateProject(
+      answers({
+        assessmentDate: "2026-08-10",
+        industryCategory: "SEMICONDUCTOR_ELECTRONICS",
+        aiDataCenterActFacilityConfirmed: null,
+        semiconductorClusterFastTrackConfirmed: true,
+        advancedStrategicIndustryFastTrackConfirmed: false,
+        regionalSpecialZonePlanDeemingConfirmed: false,
+      }),
+    );
+
+    expect(evaluation.specialLawEvaluations.find(
+      (item) => item.id === "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
+    )?.status).toBe("FUTURE");
+    expect(decision(evaluation, "building-permit").specialLawImpacts ?? []).toEqual([]);
+  });
+
+  it("marks only confirmed industrial-complex-plan and regional-plan permits as deemed", () => {
+    const evaluation = evaluateProject(
+      answers({
+        industryCategory: "GENERAL_MANUFACTURING",
+        aiDataCenterActFacilityConfirmed: null,
+        insideIndustrialComplex: true,
+        landCategory: "FARMLAND",
+        industrialComplexPlanSpecialCaseConfirmed: true,
+        industrialComplexPlanDocumentsIncluded: true,
+        industrialComplexPlanConsultationCompleted: true,
+        industrialComplexPlanApprovalPublished: true,
+        industrialComplexPlanApprovalPublishedDate: "2026-08-20",
+        industrialComplexPlanApprovalNoticeReference: "충청남도고시 제2026-100호",
+        industrialComplexPlanIncludedPermitIds: ["building-permit", "farmland-conversion-permit"],
+        regionalSpecialZonePlanDeemingConfirmed: true,
+        regionalSpecialZonePlanDocumentsIncluded: true,
+        regionalSpecialZonePlanConsultationCompleted: true,
+        regionalSpecialZonePlanApprovalPublished: true,
+        regionalSpecialZonePlanApprovalPublishedDate: "2026-08-20",
+        regionalSpecialZonePlanApprovalNoticeReference: "중소벤처기업부고시 제2026-200호",
+        regionalSpecialZonePlanIncludedPermitIds: ["farmland-conversion-permit"],
+      }),
+    );
+
+    expect(decision(evaluation, "building-permit").specialLawImpacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        lawId: "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL",
+        effect: "INTEGRATED_APPROVAL",
+        statutoryCap: expect.stringContaining("6개월"),
+      }),
+    ]));
+    expect(decision(evaluation, "farmland-conversion-permit").specialLawImpacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ lawId: "INDUSTRIAL_COMPLEX_PLAN_INTEGRATED_APPROVAL" }),
+      expect.objectContaining({
+        lawId: "REGIONAL_SPECIAL_ZONE_PLAN_DEEMING",
+        article: "제64조·제65조",
+        citationIds: ["cit-regional-special-zone-act-64-65"],
+      }),
+    ]));
+    expect(decision(evaluation, "farmland-conversion-permit")).toMatchObject({
+      status: "DOES_NOT_APPLY",
+      provisionalEffect: "EXCLUDE",
+      isDeemed: true,
+    });
+  });
+
+  it("activates the national strategic-industry fast track for a confirmed battery-specialized-complex project", () => {
+    const evaluation = evaluateProject(
+      answers({
+        industryCategory: "SECONDARY_BATTERY_CHEMICAL",
+        aiDataCenterActFacilityConfirmed: null,
+        advancedStrategicIndustryFastTrackConfirmed: true,
+        advancedStrategicIndustryApplicantRoleConfirmed: true,
+        advancedStrategicIndustryDelayRiskConfirmed: true,
+        advancedStrategicIndustryCommitteeResolved: true,
+        advancedStrategicIndustryMinisterRequestDate: "2026-08-15",
+        advancedStrategicIndustryFastTrackPermitIds: ["building-permit"],
+        regionalSpecialZonePlanDeemingConfirmed: false,
+      }),
+    );
+
+    expect(evaluation.specialLawEvaluations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+        status: "ACTIVE",
+      }),
+    ]));
+    expect(decision(evaluation, "building-permit").specialLawImpacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        lawId: "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+        effect: "FAST_TRACK",
+      }),
+    ]));
+  });
+
+  it("uses the 2023-07-01 strategic-industry effective date and rejects pre-effective minister requests for both fast tracks", () => {
+    const postEffective = evaluateProject(
+      answers({
+        assessmentDate: "2024-01-15",
+        industryCategory: "SECONDARY_BATTERY_CHEMICAL",
+        aiDataCenterActFacilityConfirmed: null,
+        advancedStrategicIndustryFastTrackConfirmed: true,
+        advancedStrategicIndustryApplicantRoleConfirmed: true,
+        advancedStrategicIndustryDelayRiskConfirmed: true,
+        advancedStrategicIndustryCommitteeResolved: true,
+        advancedStrategicIndustryMinisterRequestDate: "2023-12-15",
+        advancedStrategicIndustryFastTrackPermitIds: ["building-permit"],
+        regionalSpecialZonePlanDeemingConfirmed: false,
+      }),
+    );
+    expect(
+      postEffective.specialLawEvaluations.find(
+        (item) => item.id === "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+      ),
+    ).toMatchObject({ status: "ACTIVE", effectiveFrom: "2023-07-01" });
+    expect(
+      decision(postEffective, "advanced-strategic-industry-fast-track-request").status,
+    ).toBe("APPLIES");
+
+    const advancedPreEffectiveRequest = evaluateProject(
+      answers({
+        assessmentDate: "2026-08-21",
+        industryCategory: "SECONDARY_BATTERY_CHEMICAL",
+        aiDataCenterActFacilityConfirmed: null,
+        advancedStrategicIndustryFastTrackConfirmed: true,
+        advancedStrategicIndustryApplicantRoleConfirmed: true,
+        advancedStrategicIndustryDelayRiskConfirmed: true,
+        advancedStrategicIndustryCommitteeResolved: true,
+        advancedStrategicIndustryMinisterRequestDate: "2023-06-30",
+        advancedStrategicIndustryFastTrackPermitIds: ["building-permit"],
+        regionalSpecialZonePlanDeemingConfirmed: false,
+      }),
+    );
+    expect(
+      advancedPreEffectiveRequest.specialLawEvaluations.find(
+        (item) => item.id === "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+      ),
+    ).toMatchObject({ status: "UNCONFIRMED" });
+    expect(
+      decision(
+        advancedPreEffectiveRequest,
+        "advanced-strategic-industry-fast-track-request",
+      ).status,
+    ).toBe("DOES_NOT_APPLY");
+
+    const semiconductorPreEffectiveRequest = evaluateProject(
+      answers({
+        assessmentDate: "2026-08-21",
+        industryCategory: "SEMICONDUCTOR_ELECTRONICS",
+        aiDataCenterActFacilityConfirmed: null,
+        semiconductorClusterFastTrackConfirmed: true,
+        semiconductorClusterApplicantRoleConfirmed: true,
+        semiconductorClusterDelayRiskConfirmed: true,
+        semiconductorClusterCommitteeResolved: true,
+        semiconductorClusterMinisterRequestDate: "2026-08-10",
+        semiconductorClusterFastTrackPermitIds: ["building-permit"],
+        advancedStrategicIndustryFastTrackConfirmed: false,
+        regionalSpecialZonePlanDeemingConfirmed: false,
+      }),
+    );
+    expect(
+      semiconductorPreEffectiveRequest.specialLawEvaluations.find(
+        (item) => item.id === "SEMICONDUCTOR_CLUSTER_FAST_TRACK",
+      ),
+    ).toMatchObject({ status: "UNCONFIRMED" });
+    expect(
+      decision(
+        semiconductorPreEffectiveRequest,
+        "semiconductor-cluster-fast-track-request",
+      ).status,
+    ).toBe("DOES_NOT_APPLY");
+  });
+
+  it("does not activate a fast track for a future request date or an unlisted permit", () => {
+    const futureRequest = evaluateProject(
+      answers({
+        assessmentDate: "2026-08-21",
+        industryCategory: "SECONDARY_BATTERY_CHEMICAL",
+        aiDataCenterActFacilityConfirmed: null,
+        advancedStrategicIndustryFastTrackConfirmed: true,
+        advancedStrategicIndustryApplicantRoleConfirmed: true,
+        advancedStrategicIndustryDelayRiskConfirmed: true,
+        advancedStrategicIndustryCommitteeResolved: true,
+        advancedStrategicIndustryMinisterRequestDate: "2026-08-22",
+        advancedStrategicIndustryFastTrackPermitIds: ["building-permit"],
+        regionalSpecialZonePlanDeemingConfirmed: false,
+      }),
+    );
+    expect(futureRequest.specialLawEvaluations.find(
+      (item) => item.id === "ADVANCED_STRATEGIC_INDUSTRY_FAST_TRACK",
+    )).toMatchObject({ status: "UNCONFIRMED" });
+    expect(decision(futureRequest, "building-permit").specialLawImpacts ?? []).toEqual([]);
+    expect(
+      decision(futureRequest, "advanced-strategic-industry-fast-track-request"),
+    ).toMatchObject({
+      status: "DOES_NOT_APPLY",
+      provisionalEffect: "EXCLUDE",
+    });
+    expect(
+      decision(futureRequest, "advanced-strategic-industry-fast-track-result-check"),
+    ).toMatchObject({
+      status: "DOES_NOT_APPLY",
+      provisionalEffect: "EXCLUDE",
+    });
+
+    const selectedOnly = evaluateProject(
+      answers({
+        assessmentDate: "2026-08-21",
+        industryCategory: "SECONDARY_BATTERY_CHEMICAL",
+        aiDataCenterActFacilityConfirmed: null,
+        advancedStrategicIndustryFastTrackConfirmed: true,
+        advancedStrategicIndustryApplicantRoleConfirmed: true,
+        advancedStrategicIndustryDelayRiskConfirmed: true,
+        advancedStrategicIndustryCommitteeResolved: true,
+        advancedStrategicIndustryMinisterRequestDate: "2026-08-15",
+        advancedStrategicIndustryFastTrackPermitIds: ["building-permit"],
+        regionalSpecialZonePlanDeemingConfirmed: false,
+      }),
+    );
+    expect(decision(selectedOnly, "building-permit").specialLawImpacts).toHaveLength(1);
+    expect(decision(selectedOnly, "farmland-conversion-permit").specialLawImpacts ?? []).toEqual([]);
   });
 });

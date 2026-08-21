@@ -32,6 +32,7 @@ describe("automatic planning durations", () => {
       unit: "BUSINESS_DAY",
       overlapPolicy: "PRE_CONSTRUCTION",
       evidenceType: "OFFICIAL_SERVICE_STANDARD",
+      endToEndMissingComponents: ["신청인 준비", "관계기관 협의"],
     });
     expect(durationFor("energy-use-plan-consultation")).toMatchObject({
       minimum: 30,
@@ -56,6 +57,17 @@ describe("automatic planning durations", () => {
       confidence: "UNVERIFIED",
       sourceLabel: null,
     });
+  });
+
+  it("treats an evidenced zero-day component as known rather than missing", () => {
+    expect(
+      durationFor("air-facility-operation-start-report")
+        ?.endToEndMissingComponents,
+    ).not.toContain("기관 처리");
+    expect(
+      durationFor("air-facility-operation-start-report")
+        ?.endToEndMissingComponents,
+    ).not.toContain("전체 경과");
   });
 
   it.each([
@@ -132,6 +144,42 @@ describe("automatic planning durations", () => {
     expect(durationFor("fire-facility-completion-inspection")).toMatchObject({
       overlapPolicy: "PRE_OPERATION",
       releasePolicy: "CONSTRUCTION_FINISH",
+    });
+  });
+
+  it("uses only confirmed past event dates as zero-day special-law milestones", () => {
+    expect(
+      durationFor("advanced-strategic-industry-fast-track-request", {
+        assessmentDate: "2026-08-21",
+        advancedStrategicIndustryMinisterRequestDate: "2026-08-15",
+      }),
+    ).toMatchObject({
+      minimum: 0,
+      typical: 0,
+      unit: "CALENDAR_DAY",
+      endToEndMissingComponents: [],
+      sourceLabel: expect.stringContaining("2026-08-15"),
+    });
+    expect(
+      durationFor("advanced-strategic-industry-fast-track-request", {
+        assessmentDate: "2026-08-21",
+        advancedStrategicIndustryMinisterRequestDate: "2023-06-30",
+      }),
+    ).toMatchObject({ minimum: null, typical: null, unit: null });
+
+    expect(
+      durationFor("industrial-complex-plan-approval", {
+        assessmentDate: "2026-08-21",
+        industrialComplexPlanApprovalPublished: true,
+        industrialComplexPlanApprovalPublishedDate: "2026-08-20",
+        industrialComplexPlanApprovalNoticeReference: "충청남도고시 제2026-100호",
+      }),
+    ).toMatchObject({
+      minimum: 0,
+      typical: 0,
+      unit: "CALENDAR_DAY",
+      endToEndMissingComponents: [],
+      sourceLabel: expect.stringContaining("2026-08-20"),
     });
   });
 });

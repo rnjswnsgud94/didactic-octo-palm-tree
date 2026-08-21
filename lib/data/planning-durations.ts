@@ -1,6 +1,7 @@
 import type { DurationEstimate, Procedure } from "@/lib/domain/schemas";
 import type { ScenarioAnswers } from "@/lib/data/catalog";
 import type {
+  DurationUnit,
   PlanningDuration,
   PlanningOverlapPolicy,
   PlanningReleasePolicy,
@@ -78,18 +79,29 @@ export function buildPlanningDurations(
     const source = durationByProcedure.get(procedure.id);
     const elapsed = source?.elapsed ?? null;
     const resolved = resolveOfficialRoute(procedure.id, elapsed, answers);
+    const hasDurationComponent = (value: unknown) =>
+      value !== null && value !== undefined;
+    const endToEndMissingComponents = resolved.confirmedMilestone
+      ? []
+      : [
+          hasDurationComponent(source?.applicantPreparation) ? null : "신청인 준비",
+          hasDurationComponent(source?.authorityProcessing) ? null : "기관 처리",
+          hasDurationComponent(source?.interagencyConsultation) ? null : "관계기관 협의",
+          hasDurationComponent(source?.elapsed) ? null : "전체 경과",
+        ].filter((item): item is string => item !== null);
     return {
       procedureId: procedure.id,
       minimum: resolved.minimum,
       typical: resolved.typical,
-      unit: elapsed?.unit ?? null,
+      unit: resolved.unit ?? elapsed?.unit ?? null,
       overlapPolicy: overlapPolicy(procedure),
       releasePolicy: releasePolicy(procedure),
       evidenceType: source?.evidenceType ?? "INSUFFICIENT_DATA",
       confidence: source?.estimateConfidence ?? "UNVERIFIED",
-      sourceLabel: source?.statutoryPeriod ?? null,
+      sourceLabel: resolved.sourceLabel ?? source?.statutoryPeriod ?? null,
       assumptions: source?.assumptions ?? [],
       reviewedAt: source?.verifiedAt ?? null,
+      endToEndMissingComponents,
     } satisfies PlanningDuration;
   });
 }
@@ -98,12 +110,87 @@ function resolveOfficialRoute(
   procedureId: string,
   elapsed: DurationEstimate["elapsed"],
   answers?: ScenarioAnswers,
-) {
+): {
+  minimum: number | null;
+  typical: number | null;
+  unit?: DurationUnit;
+  sourceLabel?: string;
+  confirmedMilestone?: boolean;
+} {
   const fallback = {
     minimum: elapsed?.min ?? null,
     typical: elapsed?.base ?? null,
+    unit: undefined,
+    sourceLabel: undefined,
+    confirmedMilestone: false,
   };
   if (!answers) return fallback;
+
+  const confirmedMilestone = (date: string, label: string) => ({
+    minimum: 0,
+    typical: 0,
+    unit: "CALENDAR_DAY" as const,
+    sourceLabel: `${label} ${date} 확인 · 평가 기준일 이전 완료 이정표`,
+    confirmedMilestone: true,
+  });
+
+  if (
+    procedureId === "advanced-strategic-industry-fast-track-request" &&
+    answers.advancedStrategicIndustryMinisterRequestDate !== null &&
+    answers.advancedStrategicIndustryMinisterRequestDate >= "2023-07-01" &&
+    answers.advancedStrategicIndustryMinisterRequestDate <= answers.assessmentDate
+  ) {
+    return confirmedMilestone(
+      answers.advancedStrategicIndustryMinisterRequestDate,
+      "산업통상부장관 신속처리 요청일",
+    );
+  }
+
+  if (
+    procedureId === "semiconductor-cluster-fast-track-request" &&
+    answers.semiconductorClusterMinisterRequestDate !== null &&
+    answers.semiconductorClusterMinisterRequestDate >= "2026-08-11" &&
+    answers.semiconductorClusterMinisterRequestDate <= answers.assessmentDate
+  ) {
+    return confirmedMilestone(
+      answers.semiconductorClusterMinisterRequestDate,
+      "산업통상부장관 신속처리 요청일",
+    );
+  }
+
+  const planApprovalMilestones = {
+    "semiconductor-cluster-plan-approval": {
+      published: answers.semiconductorClusterPlanApprovalPublished,
+      date: answers.semiconductorClusterPlanApprovalPublishedDate,
+      reference: answers.semiconductorClusterPlanApprovalNoticeReference,
+      effectiveFrom: "2026-08-11",
+    },
+    "industrial-complex-plan-approval": {
+      published: answers.industrialComplexPlanApprovalPublished,
+      date: answers.industrialComplexPlanApprovalPublishedDate,
+      reference: answers.industrialComplexPlanApprovalNoticeReference,
+      effectiveFrom: "2008-09-06",
+    },
+    "regional-special-zone-plan-approval": {
+      published: answers.regionalSpecialZonePlanApprovalPublished,
+      date: answers.regionalSpecialZonePlanApprovalPublishedDate,
+      reference: answers.regionalSpecialZonePlanApprovalNoticeReference,
+      effectiveFrom: "2019-04-17",
+    },
+  } as const;
+  const planApproval =
+    planApprovalMilestones[
+      procedureId as keyof typeof planApprovalMilestones
+    ];
+  if (
+    planApproval?.published === true &&
+    planApproval.date !== null &&
+    planApproval.date >= planApproval.effectiveFrom &&
+    planApproval.date <= answers.assessmentDate &&
+    planApproval.reference.trim().length > 0
+  ) {
+    return confirmedMilestone(planApproval.date, "계획 승인·고시일");
+  }
 
   if (procedureId === "factory-establishment-approval") {
     const daysByCoordination: Record<string, number> = {

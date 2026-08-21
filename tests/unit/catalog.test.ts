@@ -67,10 +67,10 @@ describe("catalog integrity", () => {
       "local-investment-subsidy-application-review",
       "local-investment-subsidy-grant-payment",
       "local-investment-subsidy-settlement",
-      "industrial-complex-occupancy-contract",
       "construction-quality-management-plan-approval",
       "construction-quality-test-plan",
     ]) expect(ids.has(id), id).toBe(false);
+    expect(ids.has("industrial-complex-occupancy-contract")).toBe(true);
     expect(catalog.coverage.supported.regions.join(" ")).toContain("전국 비수도권 13개 광역자치단체");
   });
 

@@ -55,6 +55,8 @@ export type PlanningDuration = {
   sourceLabel: string | null;
   assumptions: string[];
   reviewedAt: string | null;
+  /** Empty only when preparation, authority review, consultation, and elapsed time are all evidenced. */
+  endToEndMissingComponents?: string[];
 };
 
 export type ScheduleNode = {
@@ -122,6 +124,8 @@ export type ProjectTimelineResult = {
   absorbedByConstructionCalendarDays: number;
   complete: boolean;
   unknownPlanningDurationProcedureIds: string[];
+  /** Procedures with a processing value but an incomplete preparation/review/consultation breakdown. */
+  incompleteDurationComponentProcedureIds: string[];
   conditionalProcedureIds: string[];
   omittedConditionalProcedureIds: string[];
   provisionalExcludedProcedureIds: string[];
@@ -466,6 +470,20 @@ function buildProjectTimeline({
   const unknownPostOperationProcedureIds = unknownPlanningDurationProcedureIds.filter(
     (id) => policy(id) === "POST_OPERATION",
   );
+  const incompleteDurationComponentProcedureIds = ids.filter(
+    (id) =>
+      valueByProcedure.get(id) !== null &&
+      valueByProcedure.get(id) !== undefined &&
+      (planningByProcedure.get(id)?.endToEndMissingComponents?.length ?? 0) > 0,
+  );
+  const incompleteOperationReadyDurationComponentProcedureIds =
+    incompleteDurationComponentProcedureIds.filter(
+      (id) => policy(id) !== "POST_OPERATION",
+    );
+  const incompletePreConstructionDurationComponentProcedureIds =
+    incompleteDurationComponentProcedureIds.filter(
+      (id) => policy(id) === "PRE_CONSTRUCTION",
+    );
   const conditionalOperationReadyProcedureIds = conditionalProcedureIds.filter(
     (id) => policy(id) !== "POST_OPERATION",
   );
@@ -630,6 +648,13 @@ function buildProjectTimeline({
   if (unknownPostOperationProcedureIds.length) {
     warnings.push("가동 후 별도 관리 " + unknownPostOperationProcedureIds.length + "개는 처리기간이 확인되지 않았습니다.");
   }
+  if (incompleteOperationReadyDurationComponentProcedureIds.length) {
+    warnings.push(
+      "가동 준비 전 절차 " +
+        incompleteOperationReadyDurationComponentProcedureIds.length +
+        "개는 신청인 준비·기관 심사·관계기관 협의·전체 경과 중 일부 기간이 없어, 표시 기간은 공식 처리기간만 반영한 일정 하한입니다.",
+    );
+  }
   if (calendarGapProcedureIds.size) {
     warnings.push("공휴일 달력 지원범위를 벗어난 " + calendarGapProcedureIds.size + "개 절차는 기간 미확인으로 처리했습니다.");
   }
@@ -654,7 +679,8 @@ function buildProjectTimeline({
     phaseInversionCount > 0;
   const hasUnknownOperationReadyDuration =
     unknownOperationReadyProcedureIds.length > 0 ||
-    omittedConditionalOperationReadyProcedureIds.length > 0;
+    omittedConditionalOperationReadyProcedureIds.length > 0 ||
+    incompleteOperationReadyDurationComponentProcedureIds.length > 0;
   const computedOperationReadyCalendarDays = Math.max(0, operationReadyBoundary - planningStartDay);
   const durationStatus: ProjectTimelineDurationStatus =
     hasUnknownOperationReadyDuration || structuralGap
@@ -666,6 +692,7 @@ function buildProjectTimeline({
     durationStatus === "MINIMUM_ONLY" ? null : computedOperationReadyCalendarDays;
   const preConstructionTimingKnown =
     unknownPreConstructionIds.length === 0 &&
+    incompletePreConstructionDurationComponentProcedureIds.length === 0 &&
     omittedConditionalOperationReadyProcedureIds.every((id) => policy(id) !== "PRE_CONSTRUCTION") &&
     !structuralGap;
   const visibleConstructionDelayCalendarDays = preConstructionTimingKnown
@@ -715,11 +742,13 @@ function buildProjectTimeline({
       absorbedByConstructionCalendarDays,
       complete:
         unknownPlanningDurationProcedureIds.length === 0 &&
+        incompleteDurationComponentProcedureIds.length === 0 &&
         invalidIds.length === 0 &&
         calendarGapProcedureIds.size === 0 &&
         phaseInversionCount === 0 &&
         conditionalProcedureIds.length === 0,
       unknownPlanningDurationProcedureIds,
+      incompleteDurationComponentProcedureIds,
       conditionalProcedureIds,
       omittedConditionalProcedureIds,
       provisionalExcludedProcedureIds,
@@ -814,7 +843,11 @@ export function calculateSchedule({
   const activeEdges = selectedEdges.filter(
     (edge) => edge.lagUnit === "BUSINESS_DAY",
   );
-  const order = topologicalSort(ids, activeEdges);
+  // Keep the visible order and dependency waves faithful to every active
+  // legal/practical edge. Only the CPM arithmetic below is restricted to
+  // business-day-compatible edges, so calendar-day/month edges are not
+  // silently converted but still appear in the correct sequence.
+  const order = topologicalSort(ids, selectedEdges);
   const durationByProcedure = new Map(
     durations.map((estimate) => [estimate.procedureId, durationValue(estimate, scenario)]),
   );
@@ -870,7 +903,7 @@ export function calculateSchedule({
     latestStart.set(id, latest);
   }
 
-  const { wave, countByWave } = dependencyWaves(ids, activeEdges, order);
+  const { wave, countByWave } = dependencyWaves(ids, selectedEdges, order);
   const nodes = order.map((procedureId) => {
     const duration = durationByProcedure.get(procedureId) ?? null;
     const start = earliestStart.get(procedureId) ?? 0;
@@ -907,11 +940,10 @@ export function calculateSchedule({
 
   let projectTimeline: ProjectTimelineResult | null = null;
   if (constructionPlan) {
-    const planningOrder = topologicalSort(ids, selectedEdges);
     const built = buildProjectTimeline({
       ids,
       edges: selectedEdges,
-      order: planningOrder,
+      order,
       scenario,
       constructionPlan,
       planningDurations,

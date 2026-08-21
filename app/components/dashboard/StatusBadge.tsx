@@ -17,7 +17,7 @@ export function StatusBadge({
   compact?: boolean;
   isDeemed?: boolean;
 }) {
-  const label = isDeemed ? "일괄처리로 충족" : statusLabels[status];
+  const label = isDeemed ? "상위 절차에서 의제 처리" : statusLabels[status];
   return (
     <span className={`status-badge status-${isDeemed ? "deemed" : status.toLowerCase()}`}>
       <span aria-hidden="true">{isDeemed ? "✓" : statusSymbols[status]}</span>

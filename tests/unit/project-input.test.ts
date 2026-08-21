@@ -5,14 +5,17 @@ import { scenarioAnswersToProjectInput } from "@/lib/domain/project-input";
 
 describe("project input normalization", () => {
   it("keeps an unselected province and choice sentinels unknown", () => {
-    const input = scenarioAnswersToProjectInput({
-      ...catalog.scenarios[0].answers,
-      province: "",
-      city: "",
-      investmentType: "UNKNOWN",
-      industryCategory: "UNKNOWN",
-      buildingAction: "UNKNOWN",
-    });
+    const input = scenarioAnswersToProjectInput(
+      {
+        ...catalog.scenarios[0].answers,
+        province: "",
+        city: "",
+        investmentType: "UNKNOWN",
+        industryCategory: "UNKNOWN",
+        buildingAction: "UNKNOWN",
+      },
+      catalog.procedures,
+    );
 
     expect(input.location.province).toEqual({ status: "UNKNOWN" });
     expect(input.location.city).toEqual({ status: "UNKNOWN" });

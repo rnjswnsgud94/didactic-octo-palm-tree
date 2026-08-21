@@ -1,6 +1,7 @@
-import { inputLabel, stageLabels } from "@/app/components/dashboard/constants";
+import { inputLabel, procedureCategoryForDecision, stageLabels } from "@/app/components/dashboard/constants";
 import { StatusBadge } from "@/app/components/dashboard/StatusBadge";
 import { catalog } from "@/lib/data/catalog";
+import type { ScenarioAnswers } from "@/lib/data/catalog";
 import { planningDurationNotice } from "@/lib/data/planning-durations";
 import type { ProcedureDecision } from "@/lib/engine/rule-engine";
 import type { ScheduleResult } from "@/lib/engine/schedule";
@@ -39,6 +40,313 @@ const citationRoleLabels: Record<(typeof catalog.citations)[number]["role"], str
   SUBMISSION: "제출자료",
 };
 
+const companyOwnerByDomain: Array<[RegExp, string]> = [
+  [/환경|대기|수질|폐기물|화학/, "환경 담당"],
+  [/안전|소방|위험|가스/, "안전·소방 담당"],
+  [/건축|공사|기계/, "설계·건설 담당"],
+  [/전력|에너지|용수|하수/, "설비·유틸리티 담당"],
+  [/산업단지|입지|공장설립|특별법/, "입지·인허가 PM"],
+];
+
+function recommendedOwner(decision: ProcedureDecision) {
+  return companyOwnerByDomain.find(([pattern]) => pattern.test(decision.procedure.domain))?.[1]
+    ?? "인허가 PM";
+}
+
+function authorityNeedsConfirmation(authority: string) {
+  return /관할|관계기관|개별 인허가|지정권자|관리기관|입력한/.test(authority);
+}
+
+const localAuthorityPattern = /시[·ㆍ/]?군[·ㆍ/]?구|시장[·ㆍ/]?군수[·ㆍ/]?구청장|관할\s*(?:시장|군수|구청장|시청|군청|구청)/;
+const provincialAuthorityPattern = /시[·ㆍ]?도(?:지사)?|광역시장|특별자치시장|도지사/;
+
+function hasMultipleAuthorityTiers(authority: string) {
+  const tiers = [
+    localAuthorityPattern.test(authority),
+    provincialAuthorityPattern.test(authority),
+    /중앙(?:부처|행정기관)|(?:기후에너지환경|농림축산식품|국토교통|산업통상|고용노동|행정안전|과학기술정보통신)부|장관/.test(authority),
+  ].filter(Boolean).length;
+  return tiers > 1;
+}
+
+type AuthorityResolution = {
+  label: string;
+  note: string | null;
+  specific: boolean;
+};
+
+function localDecisionMaker(city: string) {
+  if (city.endsWith("시")) return `${city.slice(0, -1)}시장`;
+  if (city.endsWith("군")) return `${city.slice(0, -1)}군수`;
+  if (city.endsWith("구")) return `${city.slice(0, -1)}구청장`;
+  return `${city} 단체장`;
+}
+
+function localGovernmentOffice(city: string) {
+  return `${city}청`;
+}
+
+function provincialDecisionMaker(province: string) {
+  if (province.endsWith("시")) return `${province.slice(0, -1)}시장`;
+  if (province.endsWith("도")) return `${province}지사`;
+  return `${province} 단체장`;
+}
+
+function resolveAuthority(
+  authority: string,
+  answers: ScenarioAnswers,
+  role: "RECEIVING" | "DECISION" | "CONSULTATION",
+): AuthorityResolution {
+  const industrialComplexAuthority = answers.industrialComplexManagingAuthority.trim();
+  if (
+    industrialComplexAuthority &&
+    /(?:입력한|해당)?\s*산업단지\s*관리기관/.test(authority)
+  ) {
+    return {
+      label: industrialComplexAuthority,
+      note: role === "RECEIVING"
+        ? "산업단지 관리기관 입력값 · 실제 접수창구 확인"
+        : "산업단지 관리기관 입력값 · 법정 권한 확인",
+      specific: true,
+    };
+  }
+
+  if (hasMultipleAuthorityTiers(authority)) {
+    const enteredJurisdiction = [answers.province, answers.city].filter(Boolean).join(" ");
+    return {
+      label: authority,
+      note: `${enteredJurisdiction ? `입력 지역: ${enteredJurisdiction} · ` : ""}권한분기와 실제 기관·담당부서 확인`,
+      specific: false,
+    };
+  }
+
+  if (
+    answers.city &&
+    localAuthorityPattern.test(authority)
+  ) {
+    const decisionMaker = localDecisionMaker(answers.city);
+    const governmentOffice = localGovernmentOffice(answers.city);
+    const label = authority
+      .replace(/관할\s*시장[·ㆍ/]?군수[·ㆍ/]?구청장/g, decisionMaker)
+      .replace(/관할\s*(?:시장|군수|구청장)/g, decisionMaker)
+      .replace(/관할\s*(?:시청|군청|구청)/g, governmentOffice)
+      .replace(/^관할\s*/, "")
+      .replace(/시장[·ㆍ/]?군수[·ㆍ/]?구청장/g, decisionMaker)
+      .replace(/시[·ㆍ/]?군[·ㆍ/]?구/g, answers.city);
+    return {
+      label,
+      note: `원문 표기: ${authority} · 실제 담당부서 확인`,
+      specific: false,
+    };
+  }
+
+  if (
+    answers.province &&
+    provincialAuthorityPattern.test(authority)
+  ) {
+    const label = authority
+      .replace(/^관할\s*/, "")
+      .replace(/시[·ㆍ]?도지사/g, provincialDecisionMaker(answers.province))
+      .replace(/시[·ㆍ]?도/g, answers.province)
+      .replace(/(?:광역시장|특별자치시장|도지사)/g, provincialDecisionMaker(answers.province));
+    return {
+      label,
+      note: `원문 표기: ${authority} · 실제 담당부서 확인`,
+      specific: false,
+    };
+  }
+
+  const needsConfirmation = authorityNeedsConfirmation(authority);
+  return {
+    label: authority,
+    note: needsConfirmation ? "일반 기관 표기 · 실제 기관과 담당부서 확인" : null,
+    specific: !needsConfirmation,
+  };
+}
+
+function authorityExportText(authority: AuthorityResolution) {
+  return authority.note ? `${authority.label} (${authority.note})` : authority.label;
+}
+
+function csvCell(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+export function ActionPlanView({
+  decisions,
+  schedule,
+  answers,
+  onSelect,
+}: {
+  decisions: ProcedureDecision[];
+  schedule: ScheduleResult;
+  answers: ScenarioAnswers;
+  onSelect: (id: string) => void;
+}) {
+  const activeEdgeIds = new Set(schedule.activeEdgeIds);
+  const timelineById = new Map(
+    (schedule.projectTimeline?.nodes ?? []).map((node) => [node.procedureId, node]),
+  );
+  const rows = decisions
+    .filter((decision) => procedureCategoryForDecision(decision) !== "NOT_REQUIRED")
+    .map((decision) => {
+      const category = procedureCategoryForDecision(decision);
+      const timeline = timelineById.get(decision.procedure.id);
+      const incoming = catalog.edges.filter(
+        (edge) => edge.to === decision.procedure.id && activeEdgeIds.has(edge.id),
+      );
+      const predecessorName = (procedureId: string) =>
+        catalog.procedures.find((procedure) => procedure.id === procedureId)?.name ?? procedureId;
+      const legalPrerequisites = incoming
+        .filter((edge) => edge.strength === "LEGAL_HARD" && edge.citationIds.length > 0)
+        .map((edge) => predecessorName(edge.from));
+      const recommendedPrerequisites = incoming
+        .filter((edge) => edge.strength !== "LEGAL_HARD")
+        .map((edge) => predecessorName(edge.from));
+      const unsupportedLegalPrerequisites = incoming
+        .filter((edge) => edge.strength === "LEGAL_HARD" && edge.citationIds.length === 0)
+        .map((edge) => predecessorName(edge.from));
+      const receivingAuthority = resolveAuthority(
+        decision.procedure.receivingAuthority,
+        answers,
+        "RECEIVING",
+      );
+      const statutoryDecisionMaker = resolveAuthority(
+        decision.procedure.statutoryDecisionMaker,
+        answers,
+        "DECISION",
+      );
+      const consultationAuthorities = [...new Map(
+        decision.procedure.consultationAuthorities.map((authority) => {
+          const resolved = resolveAuthority(authority, answers, "CONSULTATION");
+          return [authorityExportText(resolved), resolved] as const;
+        }),
+      ).values()];
+      const hasSubmissionCitation = decision.procedure.citationIds.some((citationId) =>
+        catalog.citations.some(
+          (citation) => citation.id === citationId && citation.role === "SUBMISSION",
+        ),
+      );
+      const hasAuthorityCitation = decision.procedure.citationIds.some((citationId) =>
+        catalog.citations.some(
+          (citation) => citation.id === citationId && citation.role === "AUTHORITY",
+        ),
+      );
+      const milestoneTarget = decision.procedure.stage === "PRE_OPERATION"
+        ? answers.equipmentInstallationCompletionDate ?? answers.commissioningStartDate
+        : decision.procedure.stage === "DURING_CONSTRUCTION"
+          ? answers.plannedConstructionStartDate
+          : null;
+      const nextAction = decision.isDeemed
+        ? `${receivingAuthority.label} 제출용 상위 승인문서·의제목록·관계기관 협의완료 증빙 확보`
+        : category === "CONFIRM"
+          ? decision.missingInputs.length
+            ? `${decision.missingInputs.slice(0, 2).map(inputLabel).join(" · ")} 확인 후 ${receivingAuthority.label}에 적용 여부 문의`
+            : `적용대상·관할·법적 근거를 ${receivingAuthority.label}에 확인`
+          : `${receivingAuthority.label} 접수용 구비서류를 확정하고 접수·협의 일정을 배정`;
+      return {
+        decision,
+        category,
+        timeline,
+        legalPrerequisites,
+        recommendedPrerequisites,
+        unsupportedLegalPrerequisites,
+        receivingAuthority,
+        statutoryDecisionMaker,
+        consultationAuthorities,
+        hasSubmissionCitation,
+        hasAuthorityCitation,
+        targetDate: timeline?.startDate ?? milestoneTarget ?? "미정",
+        nextAction,
+      };
+    })
+    .sort((left, right) =>
+      (left.timeline?.startOffsetDays ?? Number.MAX_SAFE_INTEGER) -
+        (right.timeline?.startOffsetDays ?? Number.MAX_SAFE_INTEGER) ||
+      left.decision.procedure.name.localeCompare(right.decision.procedure.name),
+    );
+  const evidenceSummary = {
+    exactAuthority: rows.filter((row) => row.receivingAuthority.specific).length,
+    authorityCitation: rows.filter((row) => row.hasAuthorityCitation).length,
+    submissionCitation: rows.filter((row) => row.hasSubmissionCitation).length,
+    knownDuration: rows.filter((row) => row.timeline?.processingDuration !== null && row.timeline !== undefined).length,
+  };
+
+  function downloadCsv() {
+    const header = ["순번", "절차", "판정", "다음 행동", "권장 사내 담당", "접수기관", "법정 결정권자", "협의기관", "권한근거 상태", "법정 선행", "실무 권장 선행", "근거 미연결 선행", "목표 착수일", "준비서류", "서류근거 상태"];
+    const body = rows.map((row, index) => [
+      String(index + 1),
+      row.decision.procedure.name,
+      row.category === "REQUIRED" ? "확인된 필수" : "확인 필요",
+      row.nextAction,
+      recommendedOwner(row.decision),
+      authorityExportText(row.receivingAuthority),
+      authorityExportText(row.statutoryDecisionMaker),
+      row.consultationAuthorities.map(authorityExportText).join(" · ") || "별도 협의기관 없음",
+      row.hasAuthorityCitation ? "법정 권한 인용 연결" : "권한 원문 근거 미연결·관할 확인 필요",
+      row.legalPrerequisites.join(" · ") || "법정 근거가 연결된 직접 선행 없음",
+      row.recommendedPrerequisites.join(" · ") || "직접 실무 권장 선행 없음",
+      row.unsupportedLegalPrerequisites.join(" · ") || "없음",
+      row.targetDate,
+      row.decision.procedure.submissions.join(" · "),
+      row.hasSubmissionCitation ? "법정 제출자료 인용 연결" : "초안 목록·원문 대조 필요",
+    ]);
+    const csv = [header, ...body].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `permit-action-plan-${answers.assessmentDate}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="action-plan-layout">
+      <header className="action-plan-heading">
+        <div><span className="eyebrow">실행 체크리스트</span><h3>다음 행동과 담당·접수 순서</h3><p>법정 제출자료 인용이 없는 항목은 초안 목록으로 표시하며, 접수 전 공식 서식과 관할부서에 대조해야 합니다.</p></div>
+        <button type="button" className="secondary-button" onClick={downloadCsv}>CSV 내보내기</button>
+      </header>
+      <div className="action-plan-status" role="note">
+        <strong>법정 처리기간과 회사 계획기간은 분리됩니다.</strong>
+        <span>목표일은 현재 일정 그래프의 착수일이며 신청인 준비·보완·위원회 대기기간이 확인되지 않으면 총기간으로 사용할 수 없습니다.</span>
+      </div>
+      <section className="action-plan-evidence" aria-label="실행계획 근거 완성도">
+        <div><span>현재 실행대상</span><strong>{rows.length}</strong><small>개 절차</small></div>
+        <div><span>기관명 구체화</span><strong>{evidenceSummary.exactAuthority}</strong><small>/ {rows.length}</small></div>
+        <div className={evidenceSummary.authorityCitation < rows.length ? "has-gap" : ""}><span>권한 원문 연결</span><strong>{evidenceSummary.authorityCitation}</strong><small>/ {rows.length}</small></div>
+        <div className={evidenceSummary.submissionCitation < rows.length ? "has-gap" : ""}><span>제출자료 원문 연결</span><strong>{evidenceSummary.submissionCitation}</strong><small>/ {rows.length}</small></div>
+        <div className={evidenceSummary.knownDuration < rows.length ? "has-gap" : ""}><span>처리기간 근거 확인</span><strong>{evidenceSummary.knownDuration}</strong><small>/ {rows.length}</small></div>
+      </section>
+      <div className="action-plan-list">
+        {rows.map((row, index) => (
+          <article className={`action-plan-card action-${row.category.toLowerCase()}`} key={row.decision.procedure.id}>
+            <header>
+              <span>{String(index + 1).padStart(2, "0")} · {stageLabels[row.decision.procedure.stage]}</span>
+              <strong>{row.decision.procedure.name}</strong>
+              <em>{row.category === "REQUIRED" ? "확인된 필수" : "확인 필요"}</em>
+            </header>
+            <dl>
+              <div><dt>다음 행동</dt><dd>{row.nextAction}</dd></div>
+              <div><dt>권장 사내 담당</dt><dd>{recommendedOwner(row.decision)}</dd></div>
+              <div><dt>접수기관</dt><dd>{row.receivingAuthority.label}{row.receivingAuthority.note ? <small>{row.receivingAuthority.note}</small> : null}</dd></div>
+              <div><dt>법정 결정권자</dt><dd>{row.statutoryDecisionMaker.label}{row.statutoryDecisionMaker.note ? <small>{row.statutoryDecisionMaker.note}</small> : null}</dd></div>
+              <div><dt>협의기관</dt><dd>{row.consultationAuthorities.length ? row.consultationAuthorities.map((authority, authorityIndex) => <span key={`${authority.label}-${authorityIndex}`}>{authority.label}{authority.note ? <small>{authority.note}</small> : null}</span>) : "별도 협의기관 없음"}</dd></div>
+              <div><dt>법정 선행</dt><dd>{row.legalPrerequisites.length ? row.legalPrerequisites.join(" · ") : "법정 근거가 연결된 직접 선행 없음"}</dd></div>
+              <div><dt>실무 권장 선행</dt><dd>{row.recommendedPrerequisites.length ? row.recommendedPrerequisites.join(" · ") : "직접 실무 권장 선행 없음"}</dd></div>
+              {row.unsupportedLegalPrerequisites.length ? <div><dt>근거 미연결 선행</dt><dd>{row.unsupportedLegalPrerequisites.join(" · ")}<small>edge에 인용 근거가 없어 법정 선행으로 단정하지 않습니다.</small></dd></div> : null}
+              <div><dt>목표 착수일</dt><dd>{row.targetDate}{row.timeline?.processingDuration === null ? " · 처리기간 미확인" : ""}</dd></div>
+              <div><dt>준비서류</dt><dd>{row.decision.procedure.submissions.join(" · ") || "수록 자료 없음"}<small>{row.hasSubmissionCitation ? "법정 제출자료 인용 연결" : "초안 목록 · 공식 서식/원문 대조 필요"}</small></dd></div>
+            </dl>
+            <button type="button" className="text-button" onClick={() => onSelect(row.decision.procedure.id)}>근거·기관·기간 상세 보기</button>
+          </article>
+        ))}
+      </div>
+      {!rows.length ? <div className="empty-state">현재 실행계획에 포함할 절차가 없습니다.</div> : null}
+    </div>
+  );
+}
+
 export function ProcedureList({ decisions, schedule, onSelect }: {
   decisions: ProcedureDecision[];
   schedule: ScheduleResult;
@@ -71,7 +379,7 @@ export function ProcedureList({ decisions, schedule, onSelect }: {
   );
 }
 
-export function ScheduleView({ schedule }: { schedule: ScheduleResult }) {
+export function ScheduleView({ schedule, answers }: { schedule: ScheduleResult; answers: ScenarioAnswers }) {
   const names = new Map(catalog.procedures.map((item) => [item.id, item.name]));
   const timeline = schedule.projectTimeline;
   if (!timeline) {
@@ -93,6 +401,10 @@ export function ScheduleView({ schedule }: { schedule: ScheduleResult }) {
   );
   const extendingNodes = timedActiveNodes.filter((node) => node.extendsOperationReady);
   const unknownActiveNodes = activeNodes.filter((node) => node.processingDuration === null);
+  const incompleteActiveDurationComponentCount =
+    timeline.incompleteDurationComponentProcedureIds.filter(
+      (id) => !timeline.postOperationProcedureIds.includes(id),
+    ).length;
   const denominator = timeline.displayHorizonDays;
   const dayIndex = (value: string) =>
     Math.floor(new Date(value + "T00:00:00.000Z").getTime() / 86_400_000);
@@ -117,13 +429,24 @@ export function ScheduleView({ schedule }: { schedule: ScheduleResult }) {
         : schedule.scenario === "MIN"
           ? "확인된 공식 최단 처리경로입니다."
           : "확인된 공식 표준 처리경로입니다.";
+  const durationLabel = timeline.durationStatus === "MINIMUM_ONLY"
+    ? "확인된 일정 하한"
+    : "총 소요기간";
+  const companyMilestones = [
+    answers.equipmentInstallationCompletionDate
+      ? { label: "주요 설비 설치완료", date: answers.equipmentInstallationCompletionDate }
+      : null,
+    answers.commissioningStartDate
+      ? { label: "시운전 시작", date: answers.commissioningStartDate }
+      : null,
+  ].filter((item): item is { label: string; date: string } => item !== null);
 
   return (
     <div className="schedule-layout">
       <div className="schedule-summary">
         <div>
-          <span>총 소요기간</span>
-          <strong>{totalDuration}<small>{timeline.durationStatus === "MINIMUM_ONLY" ? " · 확인된 처리기간 기준 · 기간 미확인 " + unknownActiveNodes.length + "개 별도" : schedule.scenario === "MIN" ? " · 최소기간" : " · 통상"}</small></strong>
+          <span>{durationLabel}</span>
+          <strong>{totalDuration}<small>{timeline.durationStatus === "MINIMUM_ONLY" ? ` · 확인된 처리기간 기준 하한 · 처리기간 미확인 ${unknownActiveNodes.length}개 · 기간 구성 미확인 ${incompleteActiveDurationComponentCount}개` : schedule.scenario === "MIN" ? " · 최소기간" : " · 통상"}</small></strong>
         </div>
         <div>
           <span>{timeline.permitLeadCalendarDays === null ? "계획상 착공 준비" : "착공 전 인허가"}</span>
@@ -137,7 +460,7 @@ export function ScheduleView({ schedule }: { schedule: ScheduleResult }) {
         <div><span>기간 근거 있음</span><strong>{timedActiveNodes.length}</strong><small>개 절차</small></div>
         <div><span>공사 중 완료</span><strong>{absorbedNodes.length}</strong><small>개 절차</small></div>
         <div><span>준공 뒤 연장</span><strong>{extendingNodes.length}</strong><small>개 절차</small></div>
-        <div className={unknownActiveNodes.length ? "has-gap" : ""}><span>기간 근거 없음</span><strong>{unknownActiveNodes.length}</strong><small>개 절차</small></div>
+        <div className={unknownActiveNodes.length || incompleteActiveDurationComponentCount ? "has-gap" : ""}><span>기간 근거 공백</span><strong>{unknownActiveNodes.length + incompleteActiveDurationComponentCount}</strong><small>처리값 {unknownActiveNodes.length} · 구성 {incompleteActiveDurationComponentCount}</small></div>
         <div><span>가동 후 별도</span><strong>{postNodes.length}</strong><small>개 절차</small></div>
       </div>
       <div className="timeline-milestones" aria-label="주요 일정">
@@ -151,6 +474,12 @@ export function ScheduleView({ schedule }: { schedule: ScheduleResult }) {
         </div>
         <div><span>가동 준비 완료</span><strong>{timeline.operationReadyDate ?? "기간 근거 확인 필요"}</strong>{timeline.operationReadyDate ? null : <small>확인된 경계 {timeline.minimumKnownCompletionDate}</small>}</div>
       </div>
+      {companyMilestones.length ? (
+        <section className="company-milestones" aria-label="사용자 계획 마일스톤">
+          <header><strong>회사 계획 마일스톤</strong><span>인허가 계산값이 아닌 사용자 입력 목표일입니다.</span></header>
+          <div>{companyMilestones.map((milestone) => <p key={milestone.label}><span>{milestone.label}</span><strong>{milestone.date}</strong></p>)}</div>
+        </section>
+      ) : null}
       <div className="schedule-warning" role="note"><strong>{statusTitle}</strong><span>{planningDurationNotice}</span></div>
       <div className="gantt-shell" aria-label="인허가와 공사를 합친 날짜별 일정">
         <div className="gantt-scale"><span>{timeline.projectStartDate}</span><span>중간</span><span>{completionDate}</span></div>
@@ -215,10 +544,25 @@ export function LegalView({ decisions, onSelect }: { decisions: ProcedureDecisio
 }
 
 export function GapsView({ decisions }: { decisions: ProcedureDecision[] }) {
-  const missing = [...new Set(decisions.flatMap((decision) => decision.missingInputs))].sort();
+  const stagePriority = Object.keys(stageLabels);
+  const missing = [...new Set(decisions.flatMap((decision) => decision.missingInputs))]
+    .map((path) => {
+      const affected = decisions.filter((decision) => decision.missingInputs.includes(path));
+      return {
+        path,
+        affected,
+        stage: Math.min(...affected.map((decision) => stagePriority.indexOf(decision.procedure.stage))),
+        requiredCandidateCount: affected.filter((decision) => decision.provisionalEffect === "INCLUDE").length,
+      };
+    })
+    .sort((left, right) =>
+      right.requiredCandidateCount - left.requiredCandidateCount ||
+      left.stage - right.stage ||
+      left.path.localeCompare(right.path),
+    );
   return (
     <div className="gaps-layout">
-      <section className="gap-section priority-gap"><span className="eyebrow">입력 확인</span><h3>판정에 필요한 추가 정보</h3>{missing.length ? <ul>{missing.map((item) => <li key={item}>{inputLabel(item)}</li>)}</ul> : <p>현재 수록된 판정규칙에 필요한 입력값은 모두 채워졌습니다. 필지별 규제와 지역기준은 별도로 확인해야 합니다.</p>}</section>
+      <section className="gap-section priority-gap"><span className="eyebrow">임계경로 영향순</span><h3>판정에 필요한 추가 정보</h3>{missing.length ? <ol className="priority-missing-list">{missing.map((item, index) => <li key={item.path}><span>{index + 1}</span><div><strong>{inputLabel(item.path)}</strong><small>관련 {item.affected.length}개 · 계획경로 후보 {item.requiredCandidateCount}개 · {item.affected.slice(0, 3).map((decision) => decision.procedure.name).join(" · ")}{item.affected.length > 3 ? " 외" : ""}</small></div></li>)}</ol> : <p>현재 수록된 판정규칙에 필요한 입력값은 모두 채워졌습니다. 필지별 규제와 지역기준은 별도로 확인해야 합니다.</p>}</section>
       <section className="gap-section"><span className="eyebrow">검토 범위</span><h3>현재 데이터에 포함되지 않은 항목</h3><ul>{catalog.coverage.gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul></section>
       <section className="gap-section future-gap"><span className="eyebrow">법령 점검</span><h3>다음 확인 예정사항</h3><ul>{catalog.coverage.futureLawWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></section>
     </div>
