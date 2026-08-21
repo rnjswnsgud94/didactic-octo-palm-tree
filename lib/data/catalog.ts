@@ -142,6 +142,7 @@ export const scenarioAnswerSchema = z.object({
   permitCoordination: z.string().nullable(),
   airEmissionFacility: z.boolean().nullable(),
   waterDischargeFacility: z.boolean().nullable(),
+  noiseVibrationFacility: z.boolean().nullable().default(null),
   environmentalAssessmentType: z.enum(["NONE", "ENVIRONMENTAL", "SMALL"]).nullable(),
   integratedEnvironmentalPermitTarget: z.boolean().nullable(),
   chemicalsHandled: z.boolean().nullable(),

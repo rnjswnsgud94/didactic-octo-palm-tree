@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import {
+  getVisibleProjectInputSections,
   ProjectInputSummary,
   projectInputSections,
 } from "@/app/components/dashboard/ScenarioPicker";
@@ -17,7 +18,7 @@ function answerFixture(overrides: Partial<ScenarioAnswers> = {}) {
 }
 
 describe("ProjectInputSummary", () => {
-  it("shows every Project Input field exactly once in practical sections", () => {
+  it("shows each relevant roadmap input once and omits legacy record-only fields", () => {
     const answers = answerFixture();
     const { container } = render(<ProjectInputSummary answers={answers} />);
 
@@ -29,16 +30,37 @@ describe("ProjectInputSummary", () => {
     const configuredKeys = projectInputSections.flatMap((section) =>
       section.fields.map((field) => field.key),
     );
-    expect(new Set(configuredKeys)).toEqual(new Set(Object.keys(answers)));
     expect(configuredKeys).toHaveLength(new Set(configuredKeys).size);
-    expect(container.querySelectorAll("[data-input-key]")).toHaveLength(configuredKeys.length);
+    for (const legacyKey of [
+      "siteAddress",
+      "siteZoning",
+      "siteRestrictedFactors",
+      "industrialComplexName",
+      "industrialComplexIdentifier",
+      "industrialComplexManagingAuthority",
+      "ksicCode",
+      "products",
+      "coreProcesses",
+      "existingApprovalIds",
+      "existingAreaM2",
+      "increaseAreaM2",
+    ]) {
+      expect(configuredKeys).not.toContain(legacyKey);
+    }
+
+    const visibleKeys = getVisibleProjectInputSections(answers).flatMap((section) =>
+      section.fields.map((field) => field.key),
+    );
+    expect(container.querySelectorAll("[data-input-key]")).toHaveLength(visibleKeys.length);
+    expect(container.querySelector('[data-input-key="totalAreaM2"]')).not.toBeNull();
+    expect(container.querySelector('[data-input-key="noiseVibrationFacility"]')).not.toBeNull();
   });
 
   it("does not collapse false, zero, null, and empty text into one state", () => {
     const answers = answerFixture({
       city: "",
       insideIndustrialComplex: false,
-      existingAreaM2: 0,
+      totalAreaM2: 0,
       airEmissionFacility: null,
     });
     const { container } = render(<ProjectInputSummary answers={answers} />);
@@ -48,8 +70,8 @@ describe("ProjectInputSummary", () => {
 
     expect(valueFor("insideIndustrialComplex")).toHaveAttribute("data-input-state", "false");
     expect(valueFor("insideIndustrialComplex")).toHaveTextContent("개별입지");
-    expect(valueFor("existingAreaM2")).toHaveAttribute("data-input-state", "zero");
-    expect(valueFor("existingAreaM2")).toHaveTextContent("0 ㎡");
+    expect(valueFor("totalAreaM2")).toHaveAttribute("data-input-state", "zero");
+    expect(valueFor("totalAreaM2")).toHaveTextContent("0 ㎡");
     expect(valueFor("airEmissionFacility")).toHaveAttribute("data-input-state", "unknown");
     expect(valueFor("airEmissionFacility")).toHaveTextContent("미확인");
     expect(valueFor("city")).toHaveAttribute("data-input-state", "set");

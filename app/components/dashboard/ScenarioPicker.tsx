@@ -16,8 +16,8 @@ type InputSection = {
 };
 
 /**
- * Project Input에 있는 값을 화면 순서와 무관하게 한 번씩 모두 보여 주기 위한 목록입니다.
- * 새 입력 항목을 추가할 때는 해당 섹션에 키를 함께 추가해야 합니다.
+ * 로드맵 판정에 사용하는 핵심 조건을 화면 순서와 무관하게 한 번씩 보여 줍니다.
+ * 기존 공유 URL 호환용 기록 필드는 ScenarioAnswers에 남겨 두되 이 요약에서는 제외합니다.
  */
 export const projectInputSections: readonly InputSection[] = [
   {
@@ -27,13 +27,7 @@ export const projectInputSections: readonly InputSection[] = [
       { key: "assessmentDate" },
       { key: "province" },
       { key: "city" },
-      { key: "siteAddress" },
-      { key: "siteZoning" },
-      { key: "siteRestrictedFactors" },
       { key: "insideIndustrialComplex" },
-      { key: "industrialComplexName" },
-      { key: "industrialComplexIdentifier" },
-      { key: "industrialComplexManagingAuthority" },
       { key: "industrialComplexOccupancyContractStatus" },
       { key: "industrialComplexPlanSpecialCaseConfirmed" },
       { key: "industrialComplexPlanDocumentsIncluded" },
@@ -70,15 +64,9 @@ export const projectInputSections: readonly InputSection[] = [
     fields: [
       { key: "investmentType" },
       { key: "industryCategory" },
-      { key: "ksicCode" },
-      { key: "products" },
-      { key: "coreProcesses" },
-      { key: "existingApprovalIds" },
       { key: "buildingAction" },
       { key: "buildingCommitteeReviewRequired" },
       { key: "mechanicalEquipmentActTarget" },
-      { key: "existingAreaM2", unit: "㎡" },
-      { key: "increaseAreaM2", unit: "㎡" },
       { key: "totalAreaM2", unit: "㎡" },
       { key: "permitCoordination" },
       { key: "aiDataCenterActFacilityConfirmed" },
@@ -111,6 +99,7 @@ export const projectInputSections: readonly InputSection[] = [
     fields: [
       { key: "airEmissionFacility" },
       { key: "waterDischargeFacility" },
+      { key: "noiseVibrationFacility" },
       { key: "wasteFacility" },
       { key: "environmentalAssessmentType" },
       { key: "integratedEnvironmentalPermitTarget" },
@@ -250,6 +239,127 @@ function getInputValue(answers: ScenarioAnswers, key: string) {
   return (answers as unknown as Record<string, unknown>)[key];
 }
 
+const industrialComplexBaseKeys = new Set([
+  "industrialComplexOccupancyContractStatus",
+]);
+const industrialComplexPlanEvidenceKeys = new Set([
+  "industrialComplexPlanDocumentsIncluded",
+  "industrialComplexPlanConsultationCompleted",
+  "industrialComplexPlanApprovalPublished",
+  "industrialComplexPlanApprovalPublishedDate",
+  "industrialComplexPlanApprovalNoticeReference",
+  "industrialComplexPlanIncludedPermitIds",
+]);
+const regionalSpecialZoneEvidenceKeys = new Set([
+  "regionalSpecialZonePlanDocumentsIncluded",
+  "regionalSpecialZonePlanConsultationCompleted",
+  "regionalSpecialZonePlanApprovalPublished",
+  "regionalSpecialZonePlanApprovalPublishedDate",
+  "regionalSpecialZonePlanApprovalNoticeReference",
+  "regionalSpecialZonePlanIncludedPermitIds",
+]);
+const advancedFastTrackEvidenceKeys = new Set([
+  "advancedStrategicIndustryApplicantRoleConfirmed",
+  "advancedStrategicIndustryDelayRiskConfirmed",
+  "advancedStrategicIndustryCommitteeResolved",
+  "advancedStrategicIndustryMinisterRequestDate",
+  "advancedStrategicIndustryFastTrackPermitIds",
+]);
+const semiconductorFastTrackEvidenceKeys = new Set([
+  "semiconductorClusterApplicantRoleConfirmed",
+  "semiconductorClusterDelayRiskConfirmed",
+  "semiconductorClusterCommitteeResolved",
+  "semiconductorClusterMinisterRequestDate",
+  "semiconductorClusterFastTrackPermitIds",
+]);
+const semiconductorPlanEvidenceKeys = new Set([
+  "semiconductorClusterPlanDocumentsIncluded",
+  "semiconductorClusterPlanConsultationCompleted",
+  "semiconductorClusterPlanApprovalPublished",
+  "semiconductorClusterPlanApprovalPublishedDate",
+  "semiconductorClusterPlanApprovalNoticeReference",
+  "semiconductorClusterPlanIncludedPermitIds",
+]);
+const chemicalDetailKeys = new Set([
+  "chemicalManufactureOrImport",
+  "hazardousChemicalBusiness",
+  "chemicalRegistrationRequired",
+  "restrictedOrToxicChemicalImport",
+]);
+
+export function isProjectInputFieldVisible(
+  answers: ScenarioAnswers,
+  key: string,
+) {
+  if (industrialComplexBaseKeys.has(key) && answers.insideIndustrialComplex !== true) return false;
+  if (key === "industrialComplexPlanSpecialCaseConfirmed" && !answers.province) return false;
+  if (industrialComplexPlanEvidenceKeys.has(key)) {
+    return answers.industrialComplexPlanSpecialCaseConfirmed === true;
+  }
+  if (key === "permitCoordination" && answers.insideIndustrialComplex !== false) return false;
+  if (key === "regionalSpecialZonePlanDeemingConfirmed" && !answers.province) return false;
+  if (regionalSpecialZoneEvidenceKeys.has(key)) {
+    return answers.regionalSpecialZonePlanDeemingConfirmed === true;
+  }
+
+  const isAdvancedIndustry = [
+    "SEMICONDUCTOR_ELECTRONICS",
+    "SECONDARY_BATTERY_CHEMICAL",
+    "PHARMACEUTICAL_BIO",
+  ].includes(answers.industryCategory);
+  if (key === "advancedStrategicIndustryFastTrackConfirmed" && !isAdvancedIndustry) return false;
+  if (advancedFastTrackEvidenceKeys.has(key)) {
+    return isAdvancedIndustry && answers.advancedStrategicIndustryFastTrackConfirmed === true;
+  }
+
+  const isSemiconductor = answers.industryCategory === "SEMICONDUCTOR_ELECTRONICS";
+  if (
+    ["semiconductorClusterFastTrackConfirmed", "semiconductorClusterPlanDeemingConfirmed"].includes(key)
+    && !isSemiconductor
+  ) return false;
+  if (semiconductorFastTrackEvidenceKeys.has(key)) {
+    return isSemiconductor && answers.semiconductorClusterFastTrackConfirmed === true;
+  }
+  if (semiconductorPlanEvidenceKeys.has(key)) {
+    return isSemiconductor && answers.semiconductorClusterPlanDeemingConfirmed === true;
+  }
+
+  const isAiDataCenter = answers.industryCategory === "AI_DATA_CENTER";
+  if (["aiDataCenterActFacilityConfirmed", "appliedSpecialLawIds"].includes(key)) {
+    return isAiDataCenter;
+  }
+  if (key === "aiDataCenterOneStopStatus") {
+    return isAiDataCenter && answers.appliedSpecialLawIds.includes("AIDC_ONE_STOP");
+  }
+
+  if (chemicalDetailKeys.has(key)) return answers.chemicalsHandled === true;
+  if (["hazardousMaterialsTank", "hazardousMaterialsPreventionRulesRequired"].includes(key)) {
+    return answers.hazardousMaterials === true;
+  }
+  if (key === "highPressureGasBusinessStartTarget") return answers.highPressureGas === true;
+  if (["fireWorkSupervisionTarget", "firstFireSelfInspectionTarget"].includes(key)) {
+    return answers.fireFacilityWork === true;
+  }
+  if (key === "forestRestorationObligation") return answers.landCategory === "FOREST";
+  if (key === "asbestosPresent") return answers.demolitionRequired === true;
+  if (["equipmentInstallationCompletionDate", "commissioningStartDate"].includes(key)) {
+    return Boolean(getInputValue(answers, key));
+  }
+  if (["buildingCommitteeReviewRequired", "mechanicalEquipmentActTarget", "landscapeReviewRequired"].includes(key)) {
+    return answers.buildingAction !== "NONE";
+  }
+  return true;
+}
+
+export function getVisibleProjectInputSections(answers: ScenarioAnswers) {
+  return projectInputSections
+    .map((section) => ({
+      ...section,
+      fields: section.fields.filter((field) => isProjectInputFieldVisible(answers, field.key)),
+    }))
+    .filter((section) => section.fields.length > 0);
+}
+
 export function formatProjectInputValue(
   key: string,
   value: unknown,
@@ -294,19 +404,20 @@ export function formatProjectInputValue(
 
 export function ProjectInputSummary({ answers }: { answers: ScenarioAnswers }) {
   const ordinanceLinks = getOfficialLocalOrdinanceLinks(answers.province, answers.city);
+  const visibleSections = getVisibleProjectInputSections(answers);
   return (
     <section className="project-input-summary" aria-labelledby="project-input-summary-title">
       <details>
       <summary className="project-input-summary-heading">
         <div>
           <h2 id="project-input-summary-title">현재 사업조건</h2>
-          <p>입력값 {Object.keys(answers).length}개 보기</p>
+          <p>판정에 사용한 핵심 조건 보기</p>
         </div>
         <span className="details-action" aria-hidden="true" />
       </summary>
 
       <div className="project-input-summary-sections">
-        {projectInputSections.map((section) => (
+        {visibleSections.map((section) => (
           <section
             className="project-input-summary-section"
             aria-labelledby={`project-input-section-${section.id}`}

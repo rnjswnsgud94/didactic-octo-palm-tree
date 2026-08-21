@@ -1,4 +1,9 @@
-import { inputLabel, procedureCategoryForDecision, stageLabels } from "@/app/components/dashboard/constants";
+import {
+  inputLabel,
+  isInputMatchedRoadmapInclusion,
+  procedureCategoryForDecision,
+  stageLabels,
+} from "@/app/components/dashboard/constants";
 import { StatusBadge } from "@/app/components/dashboard/StatusBadge";
 import { catalog } from "@/lib/data/catalog";
 import type { ScenarioAnswers } from "@/lib/data/catalog";
@@ -237,16 +242,20 @@ export function ActionPlanView({
         : decision.procedure.stage === "DURING_CONSTRUCTION"
           ? answers.plannedConstructionStartDate
           : null;
+      const inputMatchedInclusion = isInputMatchedRoadmapInclusion(decision);
       const nextAction = decision.isDeemed
         ? `${receivingAuthority.label} 제출용 상위 승인문서·의제목록·관계기관 협의완료 증빙 확보`
         : category === "CONFIRM"
           ? decision.missingInputs.length
             ? `${decision.missingInputs.slice(0, 2).map(inputLabel).join(" · ")} 확인 후 ${receivingAuthority.label}에 적용 여부 문의`
             : `적용대상·관할·법적 근거를 ${receivingAuthority.label}에 확인`
+          : inputMatchedInclusion && decision.needsLegalReview
+            ? `적용근거와 실제 관할을 ${receivingAuthority.label}에 확인하고 접수용 구비서류·일정을 확정`
           : `${receivingAuthority.label} 접수용 구비서류를 확정하고 접수·협의 일정을 배정`;
       return {
         decision,
         category,
+        inputMatchedInclusion,
         timeline,
         legalPrerequisites,
         recommendedPrerequisites,
@@ -277,7 +286,11 @@ export function ActionPlanView({
     const body = rows.map((row, index) => [
       String(index + 1),
       row.decision.procedure.name,
-      row.category === "REQUIRED" ? "확인된 필수" : "확인 필요",
+      row.inputMatchedInclusion
+        ? "로드맵 포함 · 근거 검토 중"
+        : row.category === "REQUIRED"
+          ? "확정 필수"
+          : "추가 확인 필요",
       row.nextAction,
       recommendedOwner(row.decision),
       authorityExportText(row.receivingAuthority),
@@ -324,7 +337,7 @@ export function ActionPlanView({
             <header>
               <span>{String(index + 1).padStart(2, "0")} · {stageLabels[row.decision.procedure.stage]}</span>
               <strong>{row.decision.procedure.name}</strong>
-              <em>{row.category === "REQUIRED" ? "확인된 필수" : "확인 필요"}</em>
+              <em>{row.inputMatchedInclusion ? "로드맵 포함 · 근거 검토" : row.category === "REQUIRED" ? "확정 필수" : "추가 확인 필요"}</em>
             </header>
             <dl>
               <div><dt>다음 행동</dt><dd>{row.nextAction}</dd></div>
@@ -362,7 +375,7 @@ export function ProcedureList({ decisions, schedule, onSelect }: {
             const timelineNode = schedule.projectTimeline?.nodes.find((item) => item.procedureId === decision.procedure.id);
             return (
               <tr key={decision.procedure.id}>
-                <td><StatusBadge status={decision.status} isDeemed={decision.isDeemed} /></td>
+                <td><StatusBadge status={decision.status} isDeemed={decision.isDeemed} provisionalEffect={decision.provisionalEffect} missingInputs={decision.missingInputs} conflictRuleIds={decision.conflictRuleIds} needsLegalReview={decision.needsLegalReview} /></td>
                 <td><strong>{decision.procedure.name}</strong><small>{decision.procedure.domain}</small>{decision.specialLawImpacts?.length ? <em className="special-law-chip">{decision.specialLawImpacts[0].effectLabel} · {decision.specialLawImpacts[0].statusLabel}</em> : null}</td>
                 <td>{stageLabels[decision.procedure.stage]}</td>
                 <td>{decision.procedure.receivingAuthority}</td>

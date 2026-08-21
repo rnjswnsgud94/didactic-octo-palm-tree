@@ -302,6 +302,7 @@ export function scenarioAnswersToProjectInput(
     environment: {
       airEmissionFacility: nullableFact(answers.airEmissionFacility),
       waterDischargeFacility: nullableFact(answers.waterDischargeFacility),
+      noiseVibrationFacility: nullableFact(answers.noiseVibrationFacility),
       wasteFacility: nullableFact(answers.wasteFacility),
       chemicalsHandled: nullableFact(answers.chemicalsHandled),
       environmentalAssessmentType: nullableFact(answers.environmentalAssessmentType),

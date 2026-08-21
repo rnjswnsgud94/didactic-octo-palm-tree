@@ -36,7 +36,7 @@ function decision(decisions: ReturnType<typeof decide>, id: string) {
 describe("deterministic four-state rules", () => {
   it("surfaces the industrial-complex occupancy contract without duplicating factory approval", () => {
     const decisions = decide(catalog.scenarios[0].answers);
-    expect(status(decisions, "industrial-complex-occupancy-contract")).toBe("NEEDS_MORE_INFO");
+    expect(status(decisions, "industrial-complex-occupancy-contract")).toBe("APPLIES");
     expect(status(decisions, "factory-establishment-approval")).toBe("DOES_NOT_APPLY");
     expect(status(decisions, "factory-completion-report-complex")).toBe("APPLIES");
     expect(status(decisions, "factory-completion-report-offsite")).toBe("DOES_NOT_APPLY");
@@ -255,6 +255,7 @@ describe("deterministic four-state rules", () => {
     const rule = {
       ...baseRule,
       status: "INTERNAL_REVIEWED" as const,
+      requiredInputs: [...baseRule.requiredInputs, "site.restrictedFactors"],
     };
     const input = scenarioAnswersToProjectInput({
       ...catalog.scenarios[2].answers,
@@ -287,6 +288,7 @@ describe("deterministic four-state rules", () => {
     const rule = {
       ...baseRule,
       status: "INTERNAL_REVIEWED" as const,
+      requiredInputs: [...baseRule.requiredInputs, "site.restrictedFactors"],
     };
     const input = scenarioAnswersToProjectInput({
       ...catalog.scenarios[2].answers,
@@ -327,10 +329,10 @@ describe("deterministic four-state rules", () => {
       privateElectricalFacilityWork: true,
       specificHighPressureGasUse: true,
     });
-    expect(status(included, "chemical-substance-confirmation")).toBe("NEEDS_MORE_INFO");
+    expect(status(included, "chemical-substance-confirmation")).toBe("APPLIES");
     expect(status(included, "private-electrical-facility-construction-plan")).toBe("APPLIES");
     expect(status(included, "electrical-pre-use-inspection")).toBe("APPLIES");
-    expect(status(included, "specific-high-pressure-gas-use-report")).toBe("NEEDS_MORE_INFO");
+    expect(status(included, "specific-high-pressure-gas-use-report")).toBe("APPLIES");
   });
 
   it("registers expanded exclusion rules on their procedures", () => {
@@ -339,7 +341,7 @@ describe("deterministic four-state rules", () => {
     expect(decision(decide(), "hazard-prevention-plan")?.procedure.ruleIds).toContain("rule-exp-hazard-prevention-psm-exclusion");
   });
 
-  it("uses factual land and safety inputs for the expanded permit paths", () => {
+  it("uses structured land and safety confirmations without free-text gates", () => {
     const answers = {
       ...catalog.scenarios[2].answers,
       landCategory: "FARMLAND" as const,
@@ -353,8 +355,8 @@ describe("deterministic four-state rules", () => {
       "hazardous-materials-facility-installation-permit",
       "high-pressure-gas-manufacture-storage-permit-report",
     ]) {
-      expect(status(decisions, id), id).toBe("NEEDS_MORE_INFO");
-      expect(decision(decisions, id)?.missingInputs.length, id).toBeGreaterThan(0);
+      expect(status(decisions, id), id).toBe("APPLIES");
+      expect(decision(decisions, id)?.missingInputs, id).toEqual([]);
     }
   });
 
@@ -451,10 +453,12 @@ describe("deterministic four-state rules", () => {
     expect(draftInclude.needsLegalReview).toBe(true);
     expect(draftInclude.legalReviewReasons.join(" ")).toContain(baseRule.id);
     expect(draftInclude.reason).toContain("세부 법률검토");
+    expect(procedureCategoryForDecision(draftInclude)).toBe("REQUIRED");
     expect(draftExclude.status).toBe("POSSIBLY_APPLIES");
     expect(draftExclude.provisionalEffect).toBe("EXCLUDE");
     expect(draftExclude.needsLegalReview).toBe(true);
     expect(draftExclude.legalReviewReasons.join(" ")).toContain("rule-test-draft-exclude");
+    expect(procedureCategoryForDecision(draftExclude)).toBe("CONFIRM");
     expect(reviewedInclude.status).toBe("APPLIES");
     expect(reviewedInclude.needsLegalReview).toBe(false);
     expect(reviewedInclude.legalReviewReasons).toEqual([]);
@@ -490,6 +494,39 @@ describe("deterministic four-state rules", () => {
     expect(result.missingInputs).toContain("environment.airEmissionFacility");
     expect(result.needsLegalReview).toBe(true);
     expect(result.legalReviewReasons.join(" ")).toContain(rule.id);
+  });
+
+  it("does not hold decisions in a missing-input state for removed free-text metadata", () => {
+    const decisions = resolveAllProcedures(
+      [...catalog.procedures],
+      [...catalog.rules],
+      scenarioAnswersToProjectInput({
+        ...catalog.scenarios[0].answers,
+        siteZoning: "",
+        siteRestrictedFactors: "",
+        industrialComplexName: "",
+        industrialComplexIdentifier: "",
+        industrialComplexManagingAuthority: "",
+        ksicCode: "",
+        products: "",
+        coreProcesses: "",
+      }),
+      catalog.coverage.catalogVersion,
+    );
+    const missingInputs = new Set(decisions.flatMap((item) => item.missingInputs));
+
+    for (const removedPath of [
+      "site.zoning",
+      "site.restrictedFactors",
+      "industrialComplex.name",
+      "industrialComplex.identifier",
+      "industrialComplex.managingAuthority",
+      "industry.ksic",
+      "industry.products",
+      "industry.coreProcesses",
+    ]) {
+      expect(missingInputs).not.toContain(removedPath);
+    }
   });
 
   it("preserves a deterministic planning direction while keeping draft production matches downgraded", () => {

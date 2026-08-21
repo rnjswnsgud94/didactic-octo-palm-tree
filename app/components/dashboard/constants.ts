@@ -19,10 +19,10 @@ export const laneLabels = {
 } as const;
 
 export const statusLabels: Record<ApplicabilityStatus, string> = {
-  APPLIES: "필수 절차",
-  DOES_NOT_APPLY: "거칠 필요 없음",
+  APPLIES: "확정 필수 절차",
+  DOES_NOT_APPLY: "확인된 제외",
   POSSIBLY_APPLIES: "대상 여부 확인 필요",
-  NEEDS_MORE_INFO: "대상 여부 확인 필요",
+  NEEDS_MORE_INFO: "추가 입력 필요",
 };
 
 export type ProcedureCategory = "REQUIRED" | "CONFIRM" | "NOT_REQUIRED";
@@ -31,28 +31,49 @@ export const procedureCategoryOrder: ProcedureCategory[] = ["REQUIRED", "CONFIRM
 
 export const procedureCategorySummaries: Record<ProcedureCategory, { label: string; description: string; empty: string }> = {
   REQUIRED: {
-    label: "확인된 필수 절차",
-    description: "검토 완료 규칙과 입력 증빙이 일치해 현재 경로에 확정 반영한 절차",
-    empty: "현재 입력값으로 확정된 필수 절차가 없습니다.",
+    label: "로드맵 포함 절차",
+    description: "입력값과 판정규칙이 일치해 일정에 반영한 절차입니다. ‘근거 검토 중’ 표시는 신청 전 공식 원문·관할기관 확인이 필요합니다.",
+    empty: "현재 입력값으로 로드맵에 포함된 절차가 없습니다.",
   },
   CONFIRM: {
-    label: "잠정 포함·대상 확인 절차",
-    description: "초안 규칙, 관계기관 확인 또는 추가 사업정보가 남아 실행 전 확정해야 하는 절차",
-    empty: "대상 여부를 별도로 확인할 절차가 없습니다.",
+    label: "추가 확인 필요 절차",
+    description: "입력 누락·규칙 충돌·적용기준 부재 또는 잠정 제외로 실제 판정이 남은 절차입니다.",
+    empty: "추가로 대상 여부를 확인할 절차가 없습니다.",
   },
   NOT_REQUIRED: {
-    label: "거칠 필요가 없는 절차",
-    description: "현재 입력값이 제외규칙과 일치하거나 적용조건에 해당하지 않는 절차",
-    empty: "현재 조건에서 제외되는 절차가 없습니다.",
+    label: "확인된 제외 절차",
+    description: "현재 입력값이 검토된 제외규칙과 일치하거나 적용조건에 해당하지 않는 절차입니다.",
+    empty: "현재 조건에서 확인된 제외 절차가 없습니다.",
   },
 };
 
-export function procedureCategoryForDecision(decision: {
+export type ProcedureClassificationDecision = {
   status: ApplicabilityStatus;
   provisionalEffect: "INCLUDE" | "EXCLUDE" | null;
-  conflictRuleIds: string[];
+  conflictRuleIds: readonly string[];
+  missingInputs: readonly string[];
   isDeemed?: boolean;
-}): ProcedureCategory {
+};
+
+/**
+ * A draft rule can deterministically match the supplied facts while its legal
+ * evidence is still under review. Keep that warning, but do not mislabel an
+ * already scheduled route as an unanswered applicability question.
+ */
+export function isInputMatchedRoadmapInclusion(
+  decision: ProcedureClassificationDecision,
+) {
+  return (
+    decision.status === "POSSIBLY_APPLIES" &&
+    decision.provisionalEffect === "INCLUDE" &&
+    decision.missingInputs.length === 0 &&
+    decision.conflictRuleIds.length === 0
+  );
+}
+
+export function procedureCategoryForDecision(
+  decision: ProcedureClassificationDecision,
+): ProcedureCategory {
   if (
     decision.isDeemed &&
     decision.status === "DOES_NOT_APPLY" &&
@@ -60,6 +81,7 @@ export function procedureCategoryForDecision(decision: {
     !decision.conflictRuleIds.length
   ) return "REQUIRED";
   if (decision.status === "APPLIES") return "REQUIRED";
+  if (isInputMatchedRoadmapInclusion(decision)) return "REQUIRED";
   if (decision.status === "DOES_NOT_APPLY") return "NOT_REQUIRED";
   return "CONFIRM";
 }
@@ -204,6 +226,8 @@ const inputLabels: Record<string, string> = {
   airEmissionFacility: "대기배출시설 해당 여부",
   "environment.waterDischargeFacility": "폐수배출시설 해당 여부",
   waterDischargeFacility: "폐수배출시설 해당 여부",
+  "environment.noiseVibrationFacility": "소음·진동배출시설 해당 여부",
+  noiseVibrationFacility: "소음·진동배출시설 해당 여부",
   "environment.wasteFacility": "폐기물 종류·발생량",
   wasteFacility: "폐기물처리시설 설치 여부",
   "environment.chemicalsHandled": "화학물질 취급 여부",

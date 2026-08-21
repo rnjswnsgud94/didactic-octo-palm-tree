@@ -95,7 +95,14 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
     <aside className="procedure-drawer" aria-label={`${procedure.name} 상세정보`}>
       <div className="drawer-header">
         <div>
-          <StatusBadge status={decision.status} isDeemed={decision.isDeemed} />
+          <StatusBadge
+            status={decision.status}
+            isDeemed={decision.isDeemed}
+            provisionalEffect={decision.provisionalEffect}
+            missingInputs={decision.missingInputs}
+            conflictRuleIds={decision.conflictRuleIds}
+            needsLegalReview={decision.needsLegalReview}
+          />
           <p className="drawer-kicker">{procedure.domain} · {actionLabels[procedure.actionType]}</p>
           <h2>{procedure.name}</h2>
         </div>

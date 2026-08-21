@@ -91,6 +91,7 @@ export const projectInputSchema = z.object({
   environment: z.object({
     airEmissionFacility: factSchema,
     waterDischargeFacility: factSchema,
+    noiseVibrationFacility: factSchema,
     wasteFacility: factSchema,
     chemicalsHandled: factSchema,
     environmentalAssessmentType: factSchema,

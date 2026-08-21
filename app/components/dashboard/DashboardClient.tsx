@@ -99,6 +99,7 @@ const defaultAnswers: ScenarioAnswers = {
   permitCoordination: null,
   airEmissionFacility: null,
   waterDischargeFacility: null,
+  noiseVibrationFacility: null,
   environmentalAssessmentType: null,
   integratedEnvironmentalPermitTarget: null,
   chemicalsHandled: null,
@@ -353,6 +354,14 @@ export function DashboardClient() {
         </div>
       </header>
 
+      <aside className="ai-feedback-notice" role="note" aria-labelledby="ai-feedback-notice-title">
+        <span className="ai-feedback-notice-mark" aria-hidden="true">AI</span>
+        <div>
+          <strong id="ai-feedback-notice-title">AI 활용 안내</strong>
+          <p>AI를 활용한 인허가 로드맵 툴입니다. 오류 등 피드백 시 산업부 권준형 사무관(<a href="mailto:jnhnkn15@korea.kr" aria-label="권준형 사무관에게 이메일 보내기">jnhnkn15@korea.kr</a>)으로 연락 주세요.</p>
+        </div>
+      </aside>
+
       <div id="main-dashboard" className="dashboard-grid">
         <Wizard answers={answers} activeStep={activeStep} onStepChange={setActiveStep} onChange={changeAnswer} />
         <section className="workspace" aria-label="판정 결과">
@@ -434,8 +443,8 @@ export function DashboardClient() {
             <div className="filterbar">
               <label className="search-field"><span className="sr-only">절차 검색</span><i aria-hidden="true" /><input type="search" placeholder="절차·기관 검색" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
               <label><span className="sr-only">분야 필터</span><select value={domain} onChange={(event) => setDomain(event.target.value)}><option value="ALL">모든 분야</option>{domains.map((item) => <option key={item}>{item}</option>)}</select></label>
-              <label className="check-control"><input type="checkbox" checked={includeConditional} onChange={(event) => setIncludeConditional(event.target.checked)} /><span>대상 확인 절차 일정 포함</span></label>
-              <label className="check-control"><input type="checkbox" checked={requiredOnly} onChange={(event) => setRequiredOnly(event.target.checked)} /><span>필수만 보기</span></label>
+              <label className="check-control"><input type="checkbox" checked={includeConditional} onChange={(event) => setIncludeConditional(event.target.checked)} /><span>추가 확인 절차 일정 포함</span></label>
+              <label className="check-control"><input type="checkbox" checked={requiredOnly} onChange={(event) => setRequiredOnly(event.target.checked)} /><span>로드맵 포함만 보기</span></label>
               <label className="check-control"><input type="checkbox" checked={includePractical} onChange={(event) => setIncludePractical(event.target.checked)} /><span>실무 선행 포함</span></label>
               <label className="check-control"><input type="checkbox" checked={showExcluded} onChange={(event) => setShowExcluded(event.target.checked)} /><span>거칠 필요 없는 절차 표시</span></label>
             </div>

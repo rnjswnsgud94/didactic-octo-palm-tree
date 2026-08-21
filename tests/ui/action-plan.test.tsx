@@ -43,6 +43,19 @@ function readBlob(blob: Blob) {
 }
 
 describe("action plan", () => {
+  it("keeps a fully matched draft include on the roadmap while exposing legal review", () => {
+    renderActionPlan();
+
+    const buildingTitle = screen.getByText("건축허가·신고 경로 확인", {
+      selector: ".action-plan-card > header > strong",
+    });
+    const buildingCard = buildingTitle.closest("article");
+    expect(buildingCard).not.toBeNull();
+    expect(buildingCard).toHaveTextContent("로드맵 포함 · 근거 검토");
+    expect(buildingCard).toHaveTextContent("적용근거와 실제 관할");
+    expect(buildingCard).not.toHaveTextContent("확인 필요");
+  });
+
   it("resolves standalone local-government labels before removing the jurisdiction prefix", () => {
     const answers = industrialComplexAnswers();
     const evaluation = evaluateProject(answers);

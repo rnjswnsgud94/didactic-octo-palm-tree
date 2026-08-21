@@ -19,6 +19,7 @@ export const INDUSTRY_TAXONOMY_SOURCE = {
 export const industryReviewFieldLabels = {
   airEmissionFacility: "대기배출시설",
   waterDischargeFacility: "폐수배출시설",
+  noiseVibrationFacility: "소음·진동배출시설",
   wasteFacility: "폐기물처리시설 설치",
   integratedEnvironmentalPermitTarget: "통합환경허가",
   chemicalsHandled: "화학물질 취급",
@@ -70,7 +71,7 @@ export const industryProfiles = [
     group: "디지털 인프라",
     ksicDivisions: [63],
     examples: "AI 학습·추론용 데이터센터, GPU 클러스터, 기존 데이터센터의 AI 전환",
-    reviewKeys: ["aiDataCenterActFacilityConfirmed", "gridImpactAssessmentRequired", "buildingCommitteeReviewRequired", "landscapeReviewRequired", "privateElectricalFacilityWork", "energyUsePlanRequired", "fireFacilityWork", "hazardousMaterials", "highPressureGas", "publicSewerConnection"],
+    reviewKeys: ["aiDataCenterActFacilityConfirmed", "noiseVibrationFacility", "gridImpactAssessmentRequired", "buildingCommitteeReviewRequired", "landscapeReviewRequired", "privateElectricalFacilityWork", "energyUsePlanRequired", "fireFacilityWork", "hazardousMaterials", "highPressureGas", "publicSewerConnection"],
     initialValues: {},
   },
   {
@@ -79,7 +80,7 @@ export const industryProfiles = [
     group: "생활·바이오",
     ksicDivisions: [10, 11, 12],
     examples: "식품가공, 음료, 사료, 담배제품",
-    reviewKeys: ["waterDischargeFacility", "airEmissionFacility", "heatUseEquipment", "publicSewerConnection", "privateSewageTreatmentFacility"],
+    reviewKeys: ["waterDischargeFacility", "airEmissionFacility", "noiseVibrationFacility", "heatUseEquipment", "publicSewerConnection", "privateSewageTreatmentFacility"],
     initialValues: {},
   },
   {
@@ -88,7 +89,7 @@ export const industryProfiles = [
     group: "생활·바이오",
     ksicDivisions: [13, 14, 15],
     examples: "방적·직조, 염색가공, 의복, 가죽제품",
-    reviewKeys: ["waterDischargeFacility", "chemicalsHandled", "airEmissionFacility", "heatUseEquipment", "publicSewerConnection"],
+    reviewKeys: ["waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "airEmissionFacility", "heatUseEquipment", "publicSewerConnection"],
     initialValues: {},
   },
   {
@@ -97,7 +98,7 @@ export const industryProfiles = [
     group: "생활·바이오",
     ksicDivisions: [16, 17, 18],
     examples: "목재가공, 펄프·종이, 인쇄·기록매체",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "heatUseEquipment"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "heatUseEquipment"],
     initialValues: {},
   },
   {
@@ -106,7 +107,7 @@ export const industryProfiles = [
     group: "생활·바이오",
     ksicDivisions: [21],
     examples: "원료·완제의약품, 바이오의약품",
-    reviewKeys: ["chemicalsHandled", "waterDischargeFacility", "airEmissionFacility", "hazardousMaterials", "highPressureGas", "publicSewerConnection"],
+    reviewKeys: ["chemicalsHandled", "waterDischargeFacility", "airEmissionFacility", "noiseVibrationFacility", "hazardousMaterials", "highPressureGas", "publicSewerConnection"],
     initialValues: { chemicalsHandled: true },
   },
   {
@@ -115,7 +116,7 @@ export const industryProfiles = [
     group: "생활·바이오",
     ksicDivisions: [32, 33],
     examples: "가구, 귀금속, 악기, 운동용품, 기타 제품",
-    reviewKeys: ["airEmissionFacility", "chemicalsHandled", "hazardousMaterials", "hazardousMachineryInspectionRequired"],
+    reviewKeys: ["airEmissionFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "hazardousMachineryInspectionRequired"],
     initialValues: {},
   },
   {
@@ -124,7 +125,7 @@ export const industryProfiles = [
     group: "석유·화학·소재",
     ksicDivisions: [19],
     examples: "석유정제품, 윤활유, 코크스·연탄",
-    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "hazardousMaterialsTank", "highPressureGas", "psmCovered"],
+    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "hazardousMaterialsTank", "highPressureGas", "psmCovered"],
     initialValues: { chemicalsHandled: true },
   },
   {
@@ -133,7 +134,7 @@ export const industryProfiles = [
     group: "석유·화학·소재",
     ksicDivisions: [20],
     examples: "기초화학, 합성수지, 도료, 접착제, 화장품",
-    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "chemicalManufactureOrImport", "hazardousChemicalBusiness", "chemicalRegistrationRequired", "restrictedOrToxicChemicalImport", "hazardousMaterials", "highPressureGas", "psmCovered"],
+    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "chemicalManufactureOrImport", "hazardousChemicalBusiness", "chemicalRegistrationRequired", "restrictedOrToxicChemicalImport", "hazardousMaterials", "highPressureGas", "psmCovered"],
     initialValues: { chemicalsHandled: true, chemicalManufactureOrImport: true },
   },
   {
@@ -142,7 +143,7 @@ export const industryProfiles = [
     group: "석유·화학·소재",
     ksicDivisions: [20, 28],
     examples: "양극재·음극재·전해액, 셀·모듈·팩",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousChemicalBusiness", "chemicalRegistrationRequired", "hazardousMaterials", "highPressureGas", "psmCovered", "energyUsePlanRequired"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousChemicalBusiness", "chemicalRegistrationRequired", "hazardousMaterials", "highPressureGas", "psmCovered", "energyUsePlanRequired"],
     initialValues: { chemicalsHandled: true },
   },
   {
@@ -151,7 +152,7 @@ export const industryProfiles = [
     group: "석유·화학·소재",
     ksicDivisions: [22],
     examples: "고무제품, 플라스틱 성형·가공",
-    reviewKeys: ["airEmissionFacility", "chemicalsHandled", "hazardousMaterials", "heatUseEquipment", "hazardousMachineryInspectionRequired"],
+    reviewKeys: ["airEmissionFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "heatUseEquipment", "hazardousMachineryInspectionRequired"],
     initialValues: {},
   },
   {
@@ -160,7 +161,7 @@ export const industryProfiles = [
     group: "석유·화학·소재",
     ksicDivisions: [23],
     examples: "유리, 시멘트, 콘크리트, 도자기·세라믹",
-    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "heatUseEquipment", "hazardousMachineryInspectionRequired"],
+    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "heatUseEquipment", "hazardousMachineryInspectionRequired"],
     initialValues: {},
   },
   {
@@ -169,7 +170,7 @@ export const industryProfiles = [
     group: "금속·기계",
     ksicDivisions: [24],
     examples: "제철·제강, 압연, 비철금속 제련·가공",
-    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "psmCovered", "heatUseEquipment", "hazardousMachineryInspectionRequired", "energyUsePlanRequired"],
+    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "psmCovered", "heatUseEquipment", "hazardousMachineryInspectionRequired", "energyUsePlanRequired"],
     initialValues: {},
   },
   {
@@ -178,7 +179,7 @@ export const industryProfiles = [
     group: "금속·기계",
     ksicDivisions: [25],
     examples: "주조·단조, 절삭가공, 도금, 금속구조물",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
     initialValues: {},
   },
   {
@@ -187,7 +188,7 @@ export const industryProfiles = [
     group: "금속·기계",
     ksicDivisions: [29],
     examples: "산업기계, 공작기계, 냉동공조, 로봇",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
     initialValues: {},
   },
   {
@@ -196,7 +197,7 @@ export const industryProfiles = [
     group: "금속·기계",
     ksicDivisions: [34],
     examples: "산업기계·전기·운송장비 수리·정비",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas"],
     initialValues: {},
   },
   {
@@ -205,7 +206,7 @@ export const industryProfiles = [
     group: "전기전자·정밀",
     ksicDivisions: [26],
     examples: "반도체 소자·소재, 디스플레이 패널, 웨이퍼·식각·증착 공정",
-    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousChemicalBusiness", "hazardousMaterials", "highPressureGas", "specificHighPressureGasUse", "psmCovered", "privateElectricalFacilityWork", "energyUsePlanRequired"],
+    reviewKeys: ["integratedEnvironmentalPermitTarget", "airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousChemicalBusiness", "hazardousMaterials", "highPressureGas", "specificHighPressureGasUse", "psmCovered", "privateElectricalFacilityWork", "energyUsePlanRequired"],
     initialValues: { chemicalsHandled: true },
   },
   {
@@ -214,7 +215,7 @@ export const industryProfiles = [
     group: "전기전자·정밀",
     ksicDivisions: [26],
     examples: "전자부품 조립, 컴퓨터·주변기기, 통신·영상·음향기기",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "hazardousMachineryInspectionRequired", "privateElectricalFacilityWork"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "hazardousMachineryInspectionRequired", "privateElectricalFacilityWork"],
     initialValues: {},
   },
   {
@@ -223,7 +224,7 @@ export const industryProfiles = [
     group: "전기전자·정밀",
     ksicDivisions: [27],
     examples: "의료기기, 측정·제어기기, 광학기기",
-    reviewKeys: ["waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
+    reviewKeys: ["waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
     initialValues: {},
   },
   {
@@ -232,7 +233,7 @@ export const industryProfiles = [
     group: "전기전자·정밀",
     ksicDivisions: [28],
     examples: "전동기·변압기, 배전반, 전선, 조명장치",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "hazardousMachineryInspectionRequired", "privateElectricalFacilityWork"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "hazardousMachineryInspectionRequired", "privateElectricalFacilityWork"],
     initialValues: {},
   },
   {
@@ -241,7 +242,7 @@ export const industryProfiles = [
     group: "수송장비",
     ksicDivisions: [30],
     examples: "완성차, 차체·부품, 전기차 구동부품",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired", "energyUsePlanRequired"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired", "energyUsePlanRequired"],
     initialValues: {},
   },
   {
@@ -250,7 +251,7 @@ export const industryProfiles = [
     group: "수송장비",
     ksicDivisions: [31],
     examples: "선박·해양플랜트, 항공기, 철도차량",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
     initialValues: {},
   },
   {
@@ -259,7 +260,7 @@ export const industryProfiles = [
     group: "생활·바이오",
     ksicDivisions: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34],
     examples: "세부 업종 또는 주 공정이 아직 정해지지 않은 제조업",
-    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
+    reviewKeys: ["airEmissionFacility", "waterDischargeFacility", "noiseVibrationFacility", "chemicalsHandled", "hazardousMaterials", "highPressureGas", "hazardousMachineryInspectionRequired"],
     initialValues: {},
   },
 ] as const satisfies readonly IndustryProfile[];

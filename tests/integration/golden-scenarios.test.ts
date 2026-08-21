@@ -102,6 +102,7 @@ describe("golden manufacturing scenarios", () => {
       waterSourceProtectionZone: true,
       airEmissionFacility: true,
       waterDischargeFacility: true,
+      noiseVibrationFacility: true,
       wasteFacility: true,
       chemicalsHandled: true,
       chemicalManufactureOrImport: true,

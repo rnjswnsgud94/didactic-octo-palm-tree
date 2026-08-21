@@ -83,6 +83,7 @@ const keys: Array<[keyof ScenarioAnswers, string]> = [
   ["permitCoordination", "pc"],
   ["airEmissionFacility", "air"],
   ["waterDischargeFacility", "wat"],
+  ["noiseVibrationFacility", "noi"],
   ["environmentalAssessmentType", "eia"],
   ["integratedEnvironmentalPermitTarget", "iep"],
   ["chemicalsHandled", "chem"],
@@ -197,6 +198,10 @@ const version11OnlyFields = new Set<keyof ScenarioAnswers>([
   "regionalSpecialZonePlanApprovalNoticeReference",
 ]);
 
+const version12OnlyFields = new Set<keyof ScenarioAnswers>([
+  "noiseVibrationFacility",
+]);
+
 const version2Fields: Array<[keyof ScenarioAnswers, string]> = [
   ["landCategory", "land"],
   ["demolitionRequired", "demo"],
@@ -287,6 +292,7 @@ function decodeValue(
       "mechanicalEquipmentActTarget",
       "airEmissionFacility",
       "waterDischargeFacility",
+      "noiseVibrationFacility",
       "demolitionRequired",
       "roadConnectionRequired",
       "trafficImpactAssessmentRequired",
@@ -380,7 +386,7 @@ export function encodeShareState(
   tab: string,
 ) {
   const params = new URLSearchParams();
-  params.set("v", "11");
+  params.set("v", "12");
   for (const [key, shortKey] of keys) {
     params.set(shortKey, encodeValue(answers[key]));
   }
@@ -404,12 +410,12 @@ export function decodeShareState(
   const params = new URLSearchParams(search);
   if (!params.has("v")) return { answers: fallback };
   const version = params.get("v");
-  if (!["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"].includes(version ?? "")) {
+  if (!["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].includes(version ?? "")) {
     return { answers: fallback, warning: "지원하지 않는 공유 주소 버전입니다." };
   }
   const warnings: string[] = [];
   const candidate: Record<string, unknown> = { ...fallback };
-  if (!["8", "9", "10", "11"].includes(version ?? "")) {
+  if (!["8", "9", "10", "11", "12"].includes(version ?? "")) {
     candidate.gridImpactAssessmentRequired = null;
     candidate.aiDataCenterActFacilityConfirmed = null;
     candidate.landscapeReviewRequired = null;
@@ -418,19 +424,23 @@ export function decodeShareState(
     candidate.appliedSpecialLawIds = [];
     warnings.push("예전 공유 주소에는 AI 데이터센터 특례 조건이 없어 미확인·미선택 상태로 복원했습니다.");
   }
-  if (!["9", "10", "11"].includes(version ?? "")) {
+  if (!["9", "10", "11", "12"].includes(version ?? "")) {
     for (const key of version9OnlyFields) candidate[key] = null;
     warnings.push("예전 공유 주소에는 업종·지역·산업단지 특별법 확인값이 없어 미확인 상태로 복원했습니다.");
   }
-  if (!["10", "11"].includes(version ?? "")) {
+  if (!["10", "11", "12"].includes(version ?? "")) {
     for (const key of version10OnlyFields) candidate[key] = fallback[key];
     warnings.push("예전 공유 주소에는 산단 계약·의제 증빙·세부 사업정보가 없어 기본값으로 복원했습니다.");
   }
-  if (version !== "11") {
+  if (!["11", "12"].includes(version ?? "")) {
     for (const key of version11OnlyFields) {
       candidate[key] = key.endsWith("NoticeReference") ? "" : null;
     }
     warnings.push("예전 공유 주소에는 계획 승인·고시 완료 증거가 없어 미확인 상태로 복원했습니다.");
+  }
+  if (version !== "12") {
+    for (const key of version12OnlyFields) candidate[key] = null;
+    warnings.push("예전 공유 주소에는 소음·진동배출시설 확인값이 없어 미확인 상태로 복원했습니다.");
   }
   if (version === "1") {
     const missingNewFields = version2Fields.filter(([, shortKey]) => !params.has(shortKey));
@@ -446,15 +456,16 @@ export function decodeShareState(
   for (const [key, shortKey] of keys) {
     const value = params.get(shortKey);
     if (value === null) continue;
-    if (!["8", "9", "10", "11"].includes(version ?? "") && version8OnlyFields.has(key)) continue;
-    if (!["9", "10", "11"].includes(version ?? "") && version9OnlyFields.has(key)) continue;
-    if (!["10", "11"].includes(version ?? "") && version10OnlyFields.has(key)) continue;
-    if (version !== "11" && version11OnlyFields.has(key)) continue;
-    if (!["6", "7", "8", "9", "10", "11"].includes(version ?? "") && key === "plannedConstructionStartDate" && /^\d{4}-\d{2}$/.test(value)) {
+    if (!["8", "9", "10", "11", "12"].includes(version ?? "") && version8OnlyFields.has(key)) continue;
+    if (!["9", "10", "11", "12"].includes(version ?? "") && version9OnlyFields.has(key)) continue;
+    if (!["10", "11", "12"].includes(version ?? "") && version10OnlyFields.has(key)) continue;
+    if (!["11", "12"].includes(version ?? "") && version11OnlyFields.has(key)) continue;
+    if (version !== "12" && version12OnlyFields.has(key)) continue;
+    if (!["6", "7", "8", "9", "10", "11", "12"].includes(version ?? "") && key === "plannedConstructionStartDate" && /^\d{4}-\d{2}$/.test(value)) {
       candidate[key] = `${value}-01`;
       continue;
     }
-    if (!["6", "7", "8", "9", "10", "11"].includes(version ?? "") && key === "plannedConstructionEndDate" && /^\d{4}-\d{2}$/.test(value)) {
+    if (!["6", "7", "8", "9", "10", "11", "12"].includes(version ?? "") && key === "plannedConstructionEndDate" && /^\d{4}-\d{2}$/.test(value)) {
       const [year, month] = value.split("-").map(Number);
       const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
       candidate[key] = end;
@@ -462,7 +473,7 @@ export function decodeShareState(
     }
     candidate[key] = decodeValue(key, value);
   }
-  if (!["6", "7", "8", "9", "10", "11"].includes(version ?? "") && (params.has("cs") || params.has("ce"))) {
+  if (!["6", "7", "8", "9", "10", "11", "12"].includes(version ?? "") && (params.has("cs") || params.has("ce"))) {
     warnings.push("예전 공유 주소의 월 단위 공사 일정을 해당 월의 첫날과 마지막 날로 변환했습니다.");
   }
   const parsed = scenarioAnswerSchema.safeParse(candidate);

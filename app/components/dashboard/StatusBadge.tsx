@@ -1,5 +1,8 @@
 import type { ApplicabilityStatus } from "@/lib/domain/schemas";
-import { statusLabels } from "@/app/components/dashboard/constants";
+import {
+  isInputMatchedRoadmapInclusion,
+  statusLabels,
+} from "@/app/components/dashboard/constants";
 
 const statusSymbols: Record<ApplicabilityStatus, string> = {
   APPLIES: "✓",
@@ -12,15 +15,55 @@ export function StatusBadge({
   status,
   compact = false,
   isDeemed = false,
+  provisionalEffect = null,
+  missingInputs = [],
+  conflictRuleIds = [],
+  needsLegalReview = false,
 }: {
   status: ApplicabilityStatus;
   compact?: boolean;
   isDeemed?: boolean;
+  provisionalEffect?: "INCLUDE" | "EXCLUDE" | null;
+  missingInputs?: readonly string[];
+  conflictRuleIds?: readonly string[];
+  needsLegalReview?: boolean;
 }) {
-  const label = isDeemed ? "상위 절차에서 의제 처리" : statusLabels[status];
+  const inputMatchedInclusion = isInputMatchedRoadmapInclusion({
+    status,
+    provisionalEffect,
+    missingInputs,
+    conflictRuleIds,
+    isDeemed,
+  });
+  const provisionalExclusion =
+    status === "POSSIBLY_APPLIES" &&
+    provisionalEffect === "EXCLUDE" &&
+    missingInputs.length === 0 &&
+    conflictRuleIds.length === 0;
+  const label = isDeemed
+    ? "상위 절차에서 의제 처리"
+    : inputMatchedInclusion
+      ? `로드맵 포함${needsLegalReview ? " · 근거 검토 중" : ""}`
+      : provisionalExclusion
+        ? "잠정 제외 · 근거 확인"
+        : statusLabels[status];
+  const tone = isDeemed
+    ? "deemed"
+    : inputMatchedInclusion
+      ? "roadmap_included"
+      : provisionalExclusion
+        ? "provisional_exclude"
+        : status.toLowerCase();
+  const symbol = isDeemed
+    ? "✓"
+    : inputMatchedInclusion
+      ? "△"
+      : provisionalExclusion
+        ? "—"
+        : statusSymbols[status];
   return (
-    <span className={`status-badge status-${isDeemed ? "deemed" : status.toLowerCase()}`}>
-      <span aria-hidden="true">{isDeemed ? "✓" : statusSymbols[status]}</span>
+    <span className={`status-badge status-${tone}`}>
+      <span aria-hidden="true">{symbol}</span>
       {compact ? <span className="sr-only">{label}</span> : label}
     </span>
   );

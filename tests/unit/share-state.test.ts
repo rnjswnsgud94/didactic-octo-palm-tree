@@ -14,7 +14,7 @@ describe("versioned share state", () => {
     const first = encodeShareState(answers, "SCHEDULE");
     const second = encodeShareState(answers, "SCHEDULE");
     expect(first).toBe(second);
-    expect(first).toContain("v=11");
+    expect(first).toContain("v=12");
     expect(decodeShareState(first, catalog.scenarios[0].answers)).toEqual({ answers, tab: "SCHEDULE" });
     expect(first).not.toContain("address");
   });
@@ -115,7 +115,7 @@ describe("versioned share state", () => {
     expect(restored.warning).toContain("업종·지역·산업단지 특별법 확인값");
   });
 
-  it("round-trips plan approval and gazette evidence only in v11", () => {
+  it("preserves plan approval and gazette evidence introduced in v11", () => {
     const fallback = catalog.scenarios[0].answers;
     const answers: ScenarioAnswers = {
       ...fallback,
@@ -129,7 +129,7 @@ describe("versioned share state", () => {
     };
     const encoded = encodeShareState(answers, "LEGAL");
 
-    expect(encoded).toContain("v=11");
+    expect(encoded).toContain("v=12");
     expect(encoded).toContain("ipa=1");
     expect(encoded).toContain("ipad=2026-08-20");
     expect(decodeShareState(encoded, fallback)).toEqual({ answers, tab: "LEGAL" });
@@ -141,6 +141,25 @@ describe("versioned share state", () => {
     expect(restored.answers.industrialComplexPlanApprovalPublishedDate).toBeNull();
     expect(restored.answers.industrialComplexPlanApprovalNoticeReference).toBe("");
     expect(restored.warning).toContain("승인·고시 완료 증거");
+  });
+
+  it("round-trips the noise-vibration facility answer only in v12", () => {
+    const fallback = catalog.scenarios[0].answers;
+    const answers: ScenarioAnswers = {
+      ...fallback,
+      noiseVibrationFacility: true,
+    };
+    const encoded = encodeShareState(answers, "SWIMLANE");
+
+    expect(encoded).toContain("v=12");
+    expect(encoded).toContain("noi=1");
+    expect(decodeShareState(encoded, fallback)).toEqual({ answers, tab: "SWIMLANE" });
+
+    const legacy = new URLSearchParams(encoded);
+    legacy.set("v", "11");
+    const restored = decodeShareState(legacy.toString(), fallback);
+    expect(restored.answers.noiseVibrationFacility).toBeNull();
+    expect(restored.warning).toContain("소음·진동배출시설 확인값");
   });
 
   it("ignores injected v8-only special-law fields in a legacy-version URL", () => {
@@ -241,7 +260,11 @@ describe("versioned share state", () => {
     params.set("opx", "12");
 
     const restored = decodeShareState(params.toString(), fallback);
-    expect(restored.answers).toEqual(fallback);
+    expect(restored.answers).toEqual({
+      ...fallback,
+      noiseVibrationFacility: null,
+    });
+    expect(restored.warning).toContain("소음·진동배출시설 확인값");
     expect("preConstructionPlanningBaseMonths" in restored.answers).toBe(false);
   });
 

@@ -9,7 +9,35 @@ import type {
 } from "@/lib/domain/schemas";
 
 const REVIEW_DATE = "2026-08-21";
-const VERSION = "2026.08.21.3";
+const VERSION = "2026.08.21.4";
+const internallyReviewedExpandedProcedureIds = new Set([
+  "integrated-environmental-permit",
+  "integrated-environmental-operation-start-report",
+]);
+
+const manufacturingIndustryCategories = [
+  "FOOD_BEVERAGE_TOBACCO",
+  "TEXTILE_APPAREL_LEATHER",
+  "WOOD_PAPER_PRINTING",
+  "PHARMACEUTICAL_BIO",
+  "FURNITURE_OTHER_MANUFACTURING",
+  "PETROLEUM_COAL",
+  "CHEMICAL_PRODUCTS",
+  "SECONDARY_BATTERY_CHEMICAL",
+  "RUBBER_PLASTIC",
+  "NONMETALLIC_MINERAL",
+  "PRIMARY_METAL",
+  "FABRICATED_METAL",
+  "MACHINERY_EQUIPMENT",
+  "INDUSTRIAL_EQUIPMENT_REPAIR",
+  "SEMICONDUCTOR_ELECTRONICS",
+  "ELECTRONICS_COMMUNICATION",
+  "MEDICAL_PRECISION_OPTICAL",
+  "ELECTRICAL_EQUIPMENT",
+  "AUTOMOTIVE_MOBILITY",
+  "SHIPBUILDING_AEROSPACE_RAIL",
+  "GENERAL_MANUFACTURING",
+] as const;
 
 type SourceSeed = {
   id: string;
@@ -233,7 +261,7 @@ const permitSeeds: PermitSeed[] = [
     stage: "PLAN_AND_OCCUPANCY", domain: "입지·토지", lane: "CITY_COUNTY_DISTRICT", applicant: "사업자 또는 토지사용권자", authority: "관할 시·군·구 개발행위허가 부서",
     consultations: ["도시계획·환경·도로·농지·산지 관계부서"], submissions: ["토지 권원자료", "배치도·공사계획도·설계도서", "환경·경관·위해 방지계획", "공공시설 귀속·부담 조서(해당 시)"], followUp: ["허가조건 이행", "준공검사 대상 여부 확인"],
     sourceId: "src-national-land-planning-act-20260603", article: "제56조", citationSummary: "건축물 건축, 공작물 설치, 토지 형질변경 등 대통령령상 개발행위는 원칙적으로 관할 허가권자의 허가가 필요하다.",
-    condition: { all: [{ eq: { path: "industrialComplex.inside", value: false } }, BUILDING_WORK] }, requiredInputs: ["site.zoning", "site.developmentAreaM2", "site.restrictedFactors"], explanation: "개별입지의 건축·개발행위이므로 개발행위허가 및 건축허가 의제협의 여부를 검토합니다.", reviewNote: "용도지역·개발면적·경사도·조례와 건축허가 의제서류를 확인해야 확정됩니다.", days: [15, 15, 30], statutoryPeriod: "정부24 전국 공통 안내 기준 총 15일; 보완·협의기간은 별도", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["용도지역", "도시계획위원회 심의", "관계부서 협의"], deemedBy: ["building-permit", "factory-establishment-approval"],
+    condition: { all: [{ eq: { path: "industrialComplex.inside", value: false } }, BUILDING_WORK] }, requiredInputs: ["site.developmentAreaM2"], explanation: "개별입지의 건축·개발행위이므로 개발행위허가 및 건축허가 의제협의 여부를 검토합니다.", reviewNote: "용도지역·개발면적·경사도·조례와 건축허가 의제서류를 확인해야 확정됩니다.", days: [15, 15, 30], statutoryPeriod: "정부24 전국 공통 안내 기준 총 15일; 보완·협의기간은 별도", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["용도지역", "도시계획위원회 심의", "관계부서 협의"], deemedBy: ["building-permit", "factory-establishment-approval"],
   },
   {
     id: "development-activity-completion-inspection", name: "개발행위 준공검사", aliases: ["토지형질변경 준공검사"],
@@ -248,14 +276,14 @@ const permitSeeds: PermitSeed[] = [
     stage: "SITE_REVIEW", domain: "입지·농지", lane: "CITY_COUNTY_DISTRICT", applicant: "농지를 전용하려는 사업자", authority: "면적·농업진흥지역에 따른 시·군·구, 시·도 또는 농림축산식품부",
     consultations: ["농지관리 부서", "개발행위·공장설립 승인부서"], submissions: ["사업계획서", "토지 권원자료", "지형도·피해방지계획", "전용면적 산출도"], followUp: ["농지보전부담금 납부", "허가목적 외 사용·면적 변경 시 변경허가 검토"],
     sourceId: "src-farmland-act-20260616", article: "제34조", citationSummary: "농지를 전용하려는 자는 법정 예외를 제외하고 농림축산식품부장관의 허가 또는 의제협의를 받아야 한다.",
-    condition: { eq: { path: "site.landCategory", value: "FARMLAND" } }, requiredInputs: ["site.developmentAreaM2", "site.restrictedFactors"], explanation: "입력한 부지 현황이 농지이므로 전용허가와 입지제한을 검토합니다.", reviewNote: "농업진흥지역 여부, 현황농지, 전용면적과 오염시설 제한을 필지별로 확인해야 합니다.", verified: true, days: [10, 20, 30], statutoryPeriod: "정부24 안내 기준 농업진흥지역·면적에 따라 10일·20일·30일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["농업진흥지역", "전용면적", "관계기관 의제협의"], deemedBy: ["factory-establishment-approval", "development-activity-permit"],
+    condition: { eq: { path: "site.landCategory", value: "FARMLAND" } }, requiredInputs: ["site.developmentAreaM2"], explanation: "입력한 부지 현황이 농지이므로 전용허가와 입지제한을 검토합니다.", reviewNote: "농업진흥지역 여부, 현황농지, 전용면적과 오염시설 제한을 필지별로 확인해야 합니다.", verified: true, days: [10, 20, 30], statutoryPeriod: "정부24 안내 기준 농업진흥지역·면적에 따라 10일·20일·30일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["농업진흥지역", "전용면적", "관계기관 의제협의"], deemedBy: ["factory-establishment-approval", "development-activity-permit"],
   },
   {
     id: "forestland-conversion-permit", name: "산지전용허가", description: "산지를 공장·도로·부대시설 용지로 전용하기 전 보전산지 여부, 면적, 재해·복구대책을 심사받는 절차입니다.", outcome: "산지전용허가서",
     stage: "SITE_REVIEW", domain: "입지·산지", lane: "CITY_COUNTY_DISTRICT", applicant: "산지를 전용하려는 사업자", authority: "산림청장·시도지사·시장·군수·구청장 중 법정 권한자",
     consultations: ["산림부서", "재해·개발행위 관계부서"], submissions: ["경계·현황도", "토지 권원과 사업계획", "산림조사서", "토사유출·재해방지·복구계획"], followUp: ["복구비 예치", "복구설계 승인·복구준공검사 대상 확인"],
     sourceId: "src-forestland-act-current", article: "제14조", citationSummary: "산지전용을 하려는 자는 산지 종류와 면적에 따른 법정 권한자의 허가를 받아야 한다.",
-    condition: { eq: { path: "site.landCategory", value: "FOREST" } }, requiredInputs: ["site.developmentAreaM2", "site.restrictedFactors"], explanation: "입력한 부지 현황이 산지이므로 전용허가와 복구의무를 검토합니다.", reviewNote: "보전산지·산지전용제한지역·면적과 재해방지 기준 확인 전에는 확정할 수 없습니다.", variability: ["보전산지 여부", "전용면적", "산지전용타당성조사"], deemedBy: ["factory-establishment-approval", "development-activity-permit"],
+    condition: { eq: { path: "site.landCategory", value: "FOREST" } }, requiredInputs: ["site.developmentAreaM2"], explanation: "입력한 부지 현황이 산지이므로 전용허가와 복구의무를 검토합니다.", reviewNote: "보전산지·산지전용제한지역·면적과 재해방지 기준 확인 전에는 확정할 수 없습니다.", variability: ["보전산지 여부", "전용면적", "산지전용타당성조사"], deemedBy: ["factory-establishment-approval", "development-activity-permit"],
   },
   {
     id: "forestland-restoration-design-approval", name: "산지 복구설계서 승인", description: "산지전용허가 등에 따라 훼손된 비탈면·잔여 산지의 복구공사를 하기 전에 복구범위·공법·공정과 재해방지계획을 승인받는 절차입니다.", outcome: "산지 복구설계서 승인서",
@@ -276,7 +304,7 @@ const permitSeeds: PermitSeed[] = [
     stage: "PRE_CONSTRUCTION", domain: "건축·해체", lane: "CITY_COUNTY_DISTRICT", applicant: "건축물 관리자", authority: "관할 시·군·구 건축물관리 부서",
     consultations: ["석면조사기관", "해체계획 검토자·감리자"], submissions: ["해체계획서", "전문가 검토확인서(허가대상)", "석면조사 결과", "안전관리·폐기물 처리계획"], followUp: ["해체공사 착공신고", "해체감리 및 완료신고"],
     sourceId: "src-building-management-act-current", article: "제30조", citationSummary: "건축물 해체는 법정 규모와 위험요인에 따라 허가 또는 신고 대상이며 해체계획서를 제출해야 한다.",
-    condition: { eq: { path: "site.demolitionRequired", value: true } }, requiredInputs: ["building.totalAreaM2", "site.restrictedFactors"], explanation: "기존 건축물을 해체할 예정입니다. 규모와 주변 위험요인에 따라 해체허가 또는 신고가 필요합니다.", reviewNote: "연면적·높이·층수, 주요구조부 해체, 인접 위험시설 및 조례를 확인해야 허가·신고를 구분할 수 있습니다.", verified: true, days: [7, 7, 14], statutoryPeriod: "정부24 해체허가·신고 안내 기준 7일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["전문가 검토", "해체심의", "보완"],
+    condition: { eq: { path: "site.demolitionRequired", value: true } }, requiredInputs: ["building.totalAreaM2"], explanation: "기존 건축물을 해체할 예정입니다. 규모와 주변 위험요인에 따라 해체허가 또는 신고가 필요합니다.", reviewNote: "연면적·높이·층수, 주요구조부 해체, 인접 위험시설 및 조례를 확인해야 허가·신고를 구분할 수 있습니다.", verified: true, days: [7, 7, 14], statutoryPeriod: "정부24 해체허가·신고 안내 기준 7일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["전문가 검토", "해체심의", "보완"],
   },
   {
     id: "building-demolition-start-report", name: "건축물 해체공사 착공신고", description: "해체허가를 받은 건축물의 해체공사를 시작하기 전에 해체계획·감리자·시공자와 현장 안전조치 이행상태를 신고하는 절차입니다.", outcome: "해체공사 착공신고 확인증",
@@ -318,14 +346,14 @@ const permitSeeds: PermitSeed[] = [
     stage: "SITE_REVIEW", domain: "도로·교통", lane: "CITY_COUNTY_DISTRICT", applicant: "시설 소유자 또는 사용권자", authority: "해당 도로관리청",
     consultations: ["교통경찰", "지하매설물 관리기관", "도로안전 부서"], submissions: ["연결계획서", "가감속·회전차로 포함 설계도", "부대시설 계획", "지하매설물 의견"], followUp: ["허가조건에 따른 연결공사", "공사완료 확인 및 원상회복"],
     sourceId: "src-road-act-20260603", article: "제52조", citationSummary: "도로관리청이 아닌 자가 법정 대상 도로에 다른 도로·통로·시설을 연결하려면 미리 허가를 받아야 한다.",
-    condition: { eq: { path: "site.roadConnectionRequired", value: true } }, requiredInputs: ["site.restrictedFactors"], explanation: "공장 진출입로의 도로 직접 연결이 필요하므로 연결허가를 포함합니다.", reviewNote: "도로종류, 연결금지구간, 차로 수와 관할 도로관리청을 현장별로 확인해야 합니다.", verified: true, days: [21, 21, 30], statutoryPeriod: "정부24 도로 연결허가 안내 기준 21일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["도로관리청 협의", "교통안전시설", "설계 보완"], deems: ["road-occupation-permit"],
+    condition: { eq: { path: "site.roadConnectionRequired", value: true } }, requiredInputs: [], explanation: "공장 진출입로의 도로 직접 연결이 필요하므로 연결허가를 포함합니다.", reviewNote: "도로종류, 연결금지구간, 차로 수와 관할 도로관리청을 현장별로 확인해야 합니다.", verified: true, days: [21, 21, 30], statutoryPeriod: "정부24 도로 연결허가 안내 기준 21일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["도로관리청 협의", "교통안전시설", "설계 보완"], deems: ["road-occupation-permit"],
   },
   {
     id: "road-occupation-permit", name: "도로점용허가", description: "전력·통신·상하수도·가스 관로, 출입시설이나 구조물이 도로구역을 점용할 때 받는 허가입니다.", outcome: "도로점용허가서 및 점용·복구 조건",
     stage: "PRE_CONSTRUCTION", domain: "도로·인프라", lane: "CITY_COUNTY_DISTRICT", applicant: "시설 설치·운영자", authority: "해당 도로관리청",
     consultations: ["지하매설물 관리기관", "교통경찰", "도로굴착 관계기관"], submissions: ["위치도·평면도·상세설계", "굴착·복구계획", "교통처리·안전계획", "점용기간·면적 산출서"], followUp: ["점용료 납부", "굴착복구 및 공사완료 확인"],
     sourceId: "src-road-act-20260603", article: "제61조", citationSummary: "도로구역에서 공작물·물건 또는 시설을 신설·개축·변경하거나 그 밖의 목적으로 도로를 점용하려면 도로관리청 허가가 필요하다.",
-    condition: { any: [{ eq: { path: "site.roadConnectionRequired", value: true } }, POWER_WORK, { gt: { path: "utilities.waterDemandM3Day", value: 0 } }] }, requiredInputs: ["site.restrictedFactors"], explanation: "진출입 또는 유틸리티 인입으로 도로점용 가능성이 있어 점용·굴착 범위를 확인합니다.", reviewNote: "실제 도로구역 점용 여부, 관로 노선과 연결허가 의제 여부에 따라 적용됩니다.", days: [7, 7, 20], statutoryPeriod: "국가도로 정부24 안내 기준 7일; 도로종류·굴착협의에 따라 달라짐", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["도로종류", "굴착심의", "지하매설물 협의"], deemedBy: ["road-connection-permit"],
+    condition: { any: [{ eq: { path: "site.roadConnectionRequired", value: true } }, POWER_WORK, { gt: { path: "utilities.waterDemandM3Day", value: 0 } }] }, requiredInputs: [], explanation: "진출입 또는 유틸리티 인입으로 도로점용 가능성이 있어 점용·굴착 범위를 확인합니다.", reviewNote: "실제 도로구역 점용 여부, 관로 노선과 연결허가 의제 여부에 따라 적용됩니다.", days: [7, 7, 20], statutoryPeriod: "국가도로 정부24 안내 기준 7일; 도로종류·굴착협의에 따라 달라짐", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["도로종류", "굴착심의", "지하매설물 협의"], deemedBy: ["road-connection-permit"],
   },
   {
     id: "groundwater-development-use-permit-report", name: "지하수 개발·이용 허가·신고", description: "공업용수·공정수 확보를 위해 관정을 개발하는 경우 양수능력과 토출관 직경 등에 따라 허가 또는 신고하는 절차입니다.", outcome: "지하수 개발·이용 허가서 또는 신고증",
@@ -339,14 +367,14 @@ const permitSeeds: PermitSeed[] = [
     stage: "PLAN_AND_OCCUPANCY", actionType: "CONSULTATION", domain: "환경영향평가", lane: "CENTRAL_OR_REGIONAL_OFFICE", applicant: "사업자(승인기관을 통해 협의)", authority: "기후에너지환경부장관 또는 관할 지방환경관서",
     consultations: ["사업 승인기관", "관할 지자체", "주민·전문검토기관"], submissions: ["평가준비서", "평가서 초안·주민의견 수렴결과", "환경영향평가서", "저감·사후환경관리계획"], followUp: ["승인 전 협의내용 반영", "사전공사 금지와 사후환경영향조사"],
     sourceId: "src-eia-act-current", article: "제22조·제29조·제34조", citationSummary: "대통령령상 대상사업은 환경영향평가를 실시하고 사업 승인 전에 협의를 완료하며 협의 전 공사를 해서는 안 된다.",
-    condition: { eq: { path: "environment.environmentalAssessmentType", value: "ENVIRONMENTAL" } }, requiredInputs: ["site.developmentAreaM2", "site.zoning"], explanation: "환경영향평가 대상으로 입력되어 사업 승인 전 평가·협의 절차를 포함합니다.", reviewNote: "업종 자체가 아니라 사업유형·개발면적·입지와 시행령 별표 3 판정을 전제로 합니다.", verified: true, days: [45, 45, 60], statutoryPeriod: "협의 45일, 부득이한 경우 60일; 보완·전문위원회·공휴일 등 제외", durationEvidence: "STATUTE", variability: ["주민의견", "보완", "전문위원회 검토"],
+    condition: { eq: { path: "environment.environmentalAssessmentType", value: "ENVIRONMENTAL" } }, requiredInputs: ["site.developmentAreaM2"], explanation: "환경영향평가 대상으로 입력되어 사업 승인 전 평가·협의 절차를 포함합니다.", reviewNote: "업종 자체가 아니라 사업유형·개발면적·입지와 시행령 별표 3 판정을 전제로 합니다.", verified: true, days: [45, 45, 60], statutoryPeriod: "협의 45일, 부득이한 경우 60일; 보완·전문위원회·공휴일 등 제외", durationEvidence: "STATUTE", variability: ["주민의견", "보완", "전문위원회 검토"],
   },
   {
     id: "small-environmental-impact-assessment", name: "소규모 환경영향평가", description: "보전용도지역의 일정 규모 개발사업이 본 환경영향평가 대상은 아니지만 입지·환경영향 검토가 필요한 경우 진행하는 협의입니다.", outcome: "소규모 환경영향평가 협의내용 통보",
     stage: "PLAN_AND_OCCUPANCY", actionType: "CONSULTATION", domain: "환경영향평가", lane: "CENTRAL_OR_REGIONAL_OFFICE", applicant: "사업자 또는 사업 승인기관", authority: "관할 지방환경관서",
     consultations: ["사업 승인기관", "관할 지자체 환경부서"], submissions: ["사업계획·입지 현황", "환경현황 조사", "영향예측·저감방안", "도면·개발면적 산출"], followUp: ["승인 전 협의내용 반영", "협의내용 이행관리"],
     sourceId: "src-eia-act-current", article: "제43조·제44조", citationSummary: "보전이 필요한 지역에서 대통령령상 개발사업을 하려는 자는 승인 전에 소규모 환경영향평가 협의를 해야 한다.",
-    condition: { eq: { path: "environment.environmentalAssessmentType", value: "SMALL" } }, requiredInputs: ["site.developmentAreaM2", "site.zoning"], explanation: "소규모 환경영향평가 대상으로 입력되어 개발·건축 승인 전 협의를 포함합니다.", reviewNote: "용도지역·사업종류·개발면적과 시행령 별표 4 판정을 전제로 합니다.", verified: true, days: [20, 30, 40], statutoryPeriod: "원칙 30일(연장 40일), 일정 사업은 20일(연장 30일); 보완기간 등 제외", durationEvidence: "STATUTE", variability: ["입지 민감도", "보완", "현지조사"],
+    condition: { eq: { path: "environment.environmentalAssessmentType", value: "SMALL" } }, requiredInputs: ["site.developmentAreaM2"], explanation: "소규모 환경영향평가 대상으로 입력되어 개발·건축 승인 전 협의를 포함합니다.", reviewNote: "용도지역·사업종류·개발면적과 시행령 별표 4 판정을 전제로 합니다.", verified: true, days: [20, 30, 40], statutoryPeriod: "원칙 30일(연장 40일), 일정 사업은 20일(연장 30일); 보완기간 등 제외", durationEvidence: "STATUTE", variability: ["입지 민감도", "보완", "현지조사"],
   },
   {
     id: "integrated-environmental-permit", name: "환경오염시설 통합허가", description: "시행령상 대상 업종의 대기·수질 1·2종 등 대형 사업장이 개별 배출시설 허가를 통합환경관리계획으로 묶어 설치·운영 허가받는 절차입니다.", outcome: "배출시설등 설치·운영 통합허가서",
@@ -374,7 +402,7 @@ const permitSeeds: PermitSeed[] = [
     stage: "PRE_OPERATION", actionType: "NOTICE", domain: "환경·대기", lane: "CENTRAL_OR_REGIONAL_OFFICE", applicant: "비산배출시설 설치·운영자", authority: "관할 지방환경관서",
     consultations: ["관할 환경청"], submissions: ["시설 명세·배치도", "물질·공정 설명", "시설관리기준 준수계획", "점검·측정계획"], followUp: ["시설관리기준 준수", "정기점검보고서와 변경신고"],
     sourceId: "src-air-act-current-20260326", article: "제38조의2", citationSummary: "대통령령상 업종에서 비산배출되는 유해대기오염물질을 취급하는 시설은 설치·운영 신고와 시설관리기준 준수가 필요하다.",
-    condition: { all: [CHEMICALS, { in: { path: "industry.category", values: ["SEMICONDUCTOR_ELECTRONICS", "SECONDARY_BATTERY_CHEMICAL"] } }] }, requiredInputs: ["industry.coreProcesses"], explanation: "화학물질을 취급하는 전자·화학 공정이므로 비산배출 업종·공정 해당 여부를 검토합니다.", reviewNote: "시행령 대상업종과 공정·물질을 대조하기 전에는 적용 가능성으로만 표시합니다.", days: [10, 10, 10], statutoryPeriod: "신고수리 10일; 기간 내 미통지 시 수리 간주", durationEvidence: "STATUTE", variability: ["대상 업종", "공정·물질", "시설관리기준"],
+    condition: { all: [CHEMICALS, { in: { path: "industry.category", values: ["SEMICONDUCTOR_ELECTRONICS", "SECONDARY_BATTERY_CHEMICAL"] } }] }, requiredInputs: [], explanation: "화학물질을 취급하는 전자·화학 공정이므로 비산배출 업종·공정 해당 여부를 검토합니다.", reviewNote: "시행령 대상업종과 공정·물질을 대조하기 전에는 적용 가능성으로만 표시합니다.", days: [10, 10, 10], statutoryPeriod: "신고수리 10일; 기간 내 미통지 시 수리 간주", durationEvidence: "STATUTE", variability: ["대상 업종", "공정·물질", "시설관리기준"],
   },
   {
     id: "fugitive-dust-business-report", name: "비산먼지 발생사업 신고", description: "공장 신축·증축 과정의 토공·철거 등 공사가 시행규칙상 종류·규모에 해당할 때 비산먼지 억제계획을 신고합니다.", outcome: "비산먼지 발생사업 신고증명",
@@ -388,7 +416,7 @@ const permitSeeds: PermitSeed[] = [
     stage: "PRE_CONSTRUCTION", domain: "환경·대기", lane: "CENTRAL_OR_REGIONAL_OFFICE", applicant: "총량관리 대상 사업장 설치자", authority: "기후에너지환경부장관 또는 위임기관",
     consultations: ["관할 지방환경관서", "시·도 환경부서"], submissions: ["연료·원료 사용계획", "배출·방지시설 명세", "5년 배출량 예측", "총량저감계획"], followUp: ["배출허용총량 준수", "측정기기 설치·배출량 보고"],
     sourceId: "src-air-management-area-act-current", article: "제15조", citationSummary: "대기관리권역에서 배출량 기준을 초과하는 사업장을 설치하려는 자는 총량관리사업장 설치허가를 받아야 한다.",
-    condition: { eq: { path: "environment.airEmissionFacility", value: true } }, requiredInputs: ["location.city", "industry.coreProcesses"], explanation: "대기배출시설이 있으므로 비수도권 대기관리권역과 연간 배출량 기준을 확인합니다.", reviewNote: "소재지 권역 포함 여부와 NOx·SOx·먼지 연간 배출량이 없어 적용 가능성으로 표시합니다.", variability: ["대기관리권역", "연간 배출량", "배출총량 배정"],
+    condition: { eq: { path: "environment.airEmissionFacility", value: true } }, requiredInputs: ["location.city"], explanation: "대기배출시설이 있으므로 비수도권 대기관리권역과 연간 배출량 기준을 확인합니다.", reviewNote: "소재지 권역 포함 여부와 NOx·SOx·먼지 연간 배출량이 없어 적용 가능성으로 표시합니다.", variability: ["대기관리권역", "연간 배출량", "배출총량 배정"],
   },
   {
     id: "water-facility-operation-start-report", name: "폐수 배출·방지시설 가동시작 신고", description: "폐수배출시설과 수질오염방지시설 설치·변경을 완료한 뒤 가동 전에 처리계통과 가동예정일을 신고합니다.", outcome: "가동시작 신고 접수",
@@ -409,21 +437,21 @@ const permitSeeds: PermitSeed[] = [
     stage: "PRE_CONSTRUCTION", domain: "환경·소음진동", lane: "CITY_COUNTY_DISTRICT", applicant: "배출시설 설치자", authority: "관할 시·군·구",
     consultations: ["소음·진동 환경부서"], submissions: ["시설명세·배치도", "기계 출력·대수", "소음·진동 예측", "방지시설 계획"], followUp: ["배출허용기준 준수", "변경신고·방지시설 운영"],
     sourceId: "src-noise-vibration-act-current", article: "제8조·제9조", citationSummary: "소음·진동배출시설 설치자는 법정 입지에 따라 설치신고 또는 허가를 해야 하며 산업단지 등의 공장은 일부 제외된다.",
-    condition: ANY_INVESTMENT, requiredInputs: ["industry.coreProcesses", "industrialComplex.inside"], explanation: "제조업 기계·설비가 소음·진동 배출시설 분류에 해당하는지 검토합니다.", reviewNote: "기계 종류·출력, 학교·병원 주변 여부와 산업단지 제외규정을 확인해야 합니다.", deemedBy: ["integrated-environmental-permit"],
+    condition: { eq: { path: "environment.noiseVibrationFacility", value: true } }, requiredInputs: ["environment.noiseVibrationFacility"], explanation: "소음·진동배출시설에 해당하는 것으로 입력되어 설치신고·허가 절차를 포함합니다.", reviewNote: "사용자가 기계 종류·출력과 입지를 법정 배출시설 분류표에 대조한 결과를 사용하며, 허가·신고 구분은 관할기관 확인이 필요합니다.", deemedBy: ["integrated-environmental-permit"],
   },
   {
     id: "business-waste-generator-report", name: "사업장폐기물배출자 신고", description: "대기·수질·소음 배출시설 사업장 또는 폐기물 발생량 기준을 충족하는 제조 사업장이 폐기물 종류·양과 위탁처리계획을 신고합니다.", outcome: "사업장폐기물배출자 신고증명",
     stage: "PRE_OPERATION", actionType: "NOTICE", domain: "환경·폐기물", lane: "CITY_COUNTY_DISTRICT", applicant: "사업장폐기물 배출자", authority: "폐기물 발생지 관할 시·군·구",
     consultations: ["폐기물 처리업체", "관할 환경부서"], submissions: ["폐기물 종류·일평균 발생량", "보관·운반·처리계획", "수탁처리능력 확인자료", "성상분석자료(해당 시)"], followUp: ["올바로시스템 인계·인수", "발생량·처리방법 변경신고"],
     sourceId: "src-waste-control-act-current", article: "제17조", citationSummary: "대통령령상 사업장폐기물 배출자는 폐기물 처리계획을 수립하고 법정 신고·확인의무를 이행해야 한다.",
-    condition: ANY_INVESTMENT, requiredInputs: ["environment.wasteFacility", "industry.coreProcesses"], explanation: "제조사업장에서 발생하는 사업장폐기물의 종류·일평균량 기준을 확인합니다.", reviewNote: "배출시설 여부와 일평균 100kg·300kg 등 시행규칙 유형별 기준을 확인해야 합니다.", variability: ["폐기물 종류·발생량", "위탁처리계약", "지정폐기물 여부"],
+    condition: ANY_INVESTMENT, requiredInputs: ["environment.wasteFacility", "industry.category"], explanation: "제조사업장에서 발생하는 사업장폐기물의 종류·일평균량 기준을 확인합니다.", reviewNote: "배출시설 여부와 일평균 100kg·300kg 등 시행규칙 유형별 기준을 확인해야 합니다.", variability: ["폐기물 종류·발생량", "위탁처리계약", "지정폐기물 여부"],
   },
   {
     id: "designated-waste-plan-confirmation", name: "지정폐기물 처리계획 확인", description: "폐산·폐알칼리·폐유기용제·폐유·폐흡착제·폐촉매 등 지정폐기물이 종류별 월평균 기준 이상 발생할 때 처리계획을 확인받습니다.", outcome: "지정폐기물 처리계획 확인",
     stage: "PRE_OPERATION", actionType: "REVIEW", domain: "환경·폐기물", lane: "CENTRAL_OR_REGIONAL_OFFICE", applicant: "지정폐기물 배출자", authority: "관할 지방환경관서 또는 법정 위임기관",
     consultations: ["폐기물 분석기관", "지정폐기물 처리업체"], submissions: ["지정폐기물 종류·코드·월평균량", "성상분석 결과", "보관·운반·처리계획", "수탁확인서"], followUp: ["확인내용에 따른 보관·인계", "종류·양·처리방법 변경 시 변경확인"],
     sourceId: "src-waste-control-act-current", article: "제17조제5항", citationSummary: "환경 위해성이 높은 지정폐기물 배출자는 처리 전에 폐기물 처리계획 확인을 받아야 한다.",
-    condition: { any: [CHEMICALS, { in: { path: "industry.category", values: ["SEMICONDUCTOR_ELECTRONICS", "SECONDARY_BATTERY_CHEMICAL"] } }] }, requiredInputs: ["industry.coreProcesses"], explanation: "화학·전자 공정에서 지정폐기물 발생 가능성이 있어 폐기물 코드·월평균량 기준을 확인합니다.", reviewNote: "물질별 폐기물 코드와 시행규칙상 월평균 임계값이 없어 적용 가능성으로 표시합니다.", variability: ["폐기물 코드", "월평균량", "성상분석"],
+    condition: { any: [CHEMICALS, { in: { path: "industry.category", values: ["SEMICONDUCTOR_ELECTRONICS", "SECONDARY_BATTERY_CHEMICAL"] } }] }, requiredInputs: [], explanation: "화학·전자 공정에서 지정폐기물 발생 가능성이 있어 폐기물 코드·월평균량 기준을 확인합니다.", reviewNote: "물질별 폐기물 코드와 시행규칙상 월평균 임계값이 없어 적용 가능성으로 표시합니다.", variability: ["폐기물 코드", "월평균량", "성상분석"],
   },
   {
     id: "construction-waste-plan-report", name: "건설폐기물 처리계획 신고", description: "신축·증축·해체공사에서 건설폐기물이 총 5톤 이상 발생할 것으로 예상되면 분리배출·운반·처리계획을 착공 전 신고합니다.", outcome: "건설폐기물 처리계획 신고증명",
@@ -437,42 +465,42 @@ const permitSeeds: PermitSeed[] = [
     stage: "PRE_CONSTRUCTION", actionType: "NOTICE", domain: "환경·토양", lane: "CITY_COUNTY_DISTRICT", applicant: "대상시설 설치자", authority: "관할 시·군·구",
     consultations: ["토양관련전문기관", "위험물·화학물질 관계부서"], submissions: ["시설내역·도면", "저장물질명·용량·농도", "오염방지시설 계획", "주변 현황도"], followUp: ["최초·정기 토양오염검사", "누출검사·변경신고"],
     sourceId: "src-soil-environment-act-current", article: "제12조·제13조", citationSummary: "특정토양오염관리대상시설 설치자는 신고하고 토양오염도검사·누출검사 등 의무를 이행해야 한다.",
-    condition: { any: [{ eq: { path: "safety.hazardousMaterials", value: true } }, CHEMICALS] }, requiredInputs: ["industry.coreProcesses"], explanation: "위험물·화학물질 저장시설이 있을 수 있어 대상시설 종류와 총 저장용량을 확인합니다.", reviewNote: "물질분류, 저장용량, 지상·지하 탱크 여부를 확인해야 합니다.", days: [7, 7, 14], statutoryPeriod: "공식 지자체 민원안내에서 설치신고 7일 사례 확인; 관할기관 기준 재확인", durationEvidence: "OFFICIAL_AGENCY_MATERIAL", variability: ["시설 종류", "저장용량", "검사기관 일정"],
+    condition: { any: [{ eq: { path: "safety.hazardousMaterials", value: true } }, CHEMICALS] }, requiredInputs: [], explanation: "위험물·화학물질 저장시설이 있을 수 있어 대상시설 종류와 총 저장용량을 확인합니다.", reviewNote: "물질분류, 저장용량, 지상·지하 탱크 여부를 확인해야 합니다.", days: [7, 7, 14], statutoryPeriod: "공식 지자체 민원안내에서 설치신고 7일 사례 확인; 관할기관 기준 재확인", durationEvidence: "OFFICIAL_AGENCY_MATERIAL", variability: ["시설 종류", "저장용량", "검사기관 일정"],
   },
   {
     id: "chemical-substance-confirmation", name: "화학물질 확인명세서 제출", description: "화학물질 또는 혼합물을 직접 제조·수입하는 자가 성분과 함량을 확인하여 유독·제한·금지·허가·사고대비물질 여부를 신고하는 선행 절차입니다.", outcome: "화학물질 확인명세 접수 또는 확인증명",
     stage: "PLAN_AND_OCCUPANCY", actionType: "NOTICE", domain: "화학물질", lane: "CENTRAL_OR_REGIONAL_OFFICE", applicant: "화학물질·혼합물 제조자 또는 수입자", authority: "기후에너지환경부장관 권한 위탁기관",
     consultations: ["한국화학물질관리협회", "성분확인서 발급기관"], submissions: ["성분·함량 자료", "MSDS", "성분확인서·분석자료", "제조·수입 품목 정보"], followUp: ["물질분류에 따른 허가·신고 분기", "성분 변경 시 재확인"],
     sourceId: "src-chemicals-control-act-current", article: "제9조", citationSummary: "화학물질을 제조하거나 수입하려는 자는 해당 물질의 법정 분류 해당 여부를 확인해 명세서를 제출해야 한다.",
-    condition: CHEMICAL_MANUFACTURE_OR_IMPORT, requiredInputs: ["industry.products", "industry.coreProcesses"], explanation: "화학물질 또는 혼합물을 직접 제조·수입하는 것으로 입력되어 성분확인 선행절차를 포함합니다.", reviewNote: "제조·수입 품목별 성분과 함량을 확인해 법정 분류 해당 여부를 판정해야 합니다.", variability: ["성분정보 비공개", "분석 필요", "혼합물 함량"],
+    condition: CHEMICAL_MANUFACTURE_OR_IMPORT, requiredInputs: [], explanation: "화학물질 또는 혼합물을 직접 제조·수입하는 것으로 입력되어 성분확인 선행절차를 포함합니다.", reviewNote: "제조·수입 품목별 성분과 함량을 확인해 법정 분류 해당 여부를 판정해야 합니다.", variability: ["성분정보 비공개", "분석 필요", "혼합물 함량"],
   },
   {
     id: "chemical-accident-prevention-plan", name: "화학사고예방관리계획서 제출·검토", description: "유해화학물질 취급시설이 물질별 규정수량 이상을 취급할 때 사고영향범위, 예방·비상대응·주민소산 정보를 작성해 적합통보를 받는 절차입니다.", outcome: "화학사고예방관리계획서 적합통보",
     stage: "PRE_CONSTRUCTION", actionType: "REVIEW", domain: "화학물질·안전", lane: "CENTRAL_OR_REGIONAL_OFFICE", applicant: "유해화학물질 취급시설 설치·운영자", authority: "화학물질안전원",
     consultations: ["관할 지방환경관서", "소방·지자체 비상대응기관"], submissions: ["물질명·CAS·최대보유량·연간취급량", "시설·공정도", "사고영향범위 평가", "예방·비상대응·주민소산 계획"], followUp: ["적합내용대로 시설 설치", "취급량·시설 변경 시 변경제출"],
     sourceId: "src-chemicals-control-act-current", article: "제23조", citationSummary: "규정수량 이상의 유해화학물질 취급시설 설치·운영자는 화학사고예방관리계획서를 제출해 적합통보를 받아야 한다.",
-    condition: { eq: { path: "environment.hazardousChemicalBusiness", value: true } }, requiredInputs: ["industry.coreProcesses"], explanation: "유해화학물질 영업허가 대상으로 입력했습니다. 화학사고예방관리계획서를 먼저 확인해야 합니다.", reviewNote: "CAS별 최대보유량·연간취급량에 따른 1·2군 또는 면제 판정을 확인해야 합니다.", verified: true, variability: ["물질별 규정수량", "사고영향범위", "보완"],
+    condition: { eq: { path: "environment.hazardousChemicalBusiness", value: true } }, requiredInputs: [], explanation: "유해화학물질 영업허가 대상으로 입력했습니다. 화학사고예방관리계획서를 먼저 확인해야 합니다.", reviewNote: "CAS별 최대보유량·연간취급량에 따른 1·2군 또는 면제 판정을 확인해야 합니다.", verified: true, variability: ["물질별 규정수량", "사고영향범위", "보완"],
   },
   {
     id: "hazardous-chemical-facility-inspection", name: "유해화학물질 취급시설 설치검사", description: "유해화학물질 취급시설 설치를 마친 뒤 가동·영업허가 전에 법정 검사기관의 설치검사를 받아 적합판정을 확보하는 절차입니다.", outcome: "유해화학물질 취급시설 설치검사 적합 결과서",
     stage: "PRE_OPERATION", actionType: "INSPECTION", domain: "화학물질·안전", lane: "ENVIRONMENT_SAFETY_FIRE_UTILITY", applicant: "유해화학물질 취급시설 설치자", authority: "법정 검사기관",
     consultations: ["관할 지방환경관서", "화학물질안전원"], submissions: ["시설·배치·설계자료", "물질·용량 명세", "설치기준 적합자료", "화학사고예방관리계획서"], followUp: ["검사결과를 관할기관에 제출", "정기·수시검사"],
     sourceId: "src-chemicals-control-act-current", article: "제24조", citationSummary: "유해화학물질 취급시설 설치를 마친 자는 검사기관의 설치검사를 받아야 하며 검사기관은 결과를 장관에게 제출한다.",
-    condition: { eq: { path: "environment.hazardousChemicalBusiness", value: true } }, requiredInputs: ["industry.coreProcesses"], explanation: "유해화학물질 영업허가 대상 시설의 가동 전 설치검사를 포함합니다.", reviewNote: "시설 종류·물질·용량에 따른 세부 설치기준과 검사기관 일정을 확인해야 합니다.", verified: true, variability: ["시설 복잡도", "현장검사 일정", "보완공사"],
+    condition: { eq: { path: "environment.hazardousChemicalBusiness", value: true } }, requiredInputs: [], explanation: "유해화학물질 영업허가 대상 시설의 가동 전 설치검사를 포함합니다.", reviewNote: "시설 종류·물질·용량에 따른 세부 설치기준과 검사기관 일정을 확인해야 합니다.", verified: true, variability: ["시설 복잡도", "현장검사 일정", "보완공사"],
   },
   {
     id: "hazardous-chemical-business-permit", name: "유해화학물질 영업허가", description: "유해화학물질 제조·판매·보관·저장·운반·사용업 중 허가대상이 계획서 적합, 설치검사 적합, 시설·장비·기술인력을 갖춘 뒤 받는 영업허가입니다.", outcome: "유해화학물질 영업허가증",
     stage: "PRE_OPERATION", domain: "화학물질", lane: "CENTRAL_OR_REGIONAL_OFFICE", applicant: "유해화학물질 영업자", authority: "관할 유역·지방환경청",
     consultations: ["화학물질안전원", "법정 검사기관"], submissions: ["화학사고예방관리계획서 적합통보", "설치검사 적합결과", "시설·장비·기술인력 자료", "영업구분별 사업계획"], followUp: ["유해화학물질관리자 선임·교육", "변경허가·변경신고와 기록보존"],
     sourceId: "src-chemicals-control-act-current", article: "제27조·제28조", citationSummary: "유해화학물질 영업자는 사업장별로 법정 시설·장비·기술인력을 갖추고 장관의 허가를 받아야 한다.",
-    condition: { eq: { path: "environment.hazardousChemicalBusiness", value: true } }, requiredInputs: ["industry.coreProcesses"], explanation: "유해화학물질 영업허가 대상으로 입력되어 적합 계획서·설치검사 뒤 영업허가를 포함합니다.", reviewNote: "영업구분·면제량·면제업종과 취급시설 유무를 확인한 입력값을 전제로 합니다.", verified: true, variability: ["영업구분", "기술인력", "선행 적합자료"],
+    condition: { eq: { path: "environment.hazardousChemicalBusiness", value: true } }, requiredInputs: [], explanation: "유해화학물질 영업허가 대상으로 입력되어 적합 계획서·설치검사 뒤 영업허가를 포함합니다.", reviewNote: "영업구분·면제량·면제업종과 취급시설 유무를 확인한 입력값을 전제로 합니다.", verified: true, variability: ["영업구분", "기술인력", "선행 적합자료"],
   },
   {
     id: "hazard-prevention-plan", name: "제조업 등 유해위험방지계획서 제출·심사", description: "시행령상 대상 업종·규모 또는 지정 기계·설비를 설치·이전·주요 구조변경하는 경우 작업 전 안전계획을 제출해 심사·확인받는 절차입니다.", outcome: "유해위험방지계획서 심사결과 및 이행확인",
     stage: "PRE_CONSTRUCTION", actionType: "REVIEW", domain: "산업안전", lane: "CENTRAL_OR_REGIONAL_OFFICE", applicant: "사업주", authority: "고용노동부장관(한국산업안전보건공단 수행)",
     consultations: ["한국산업안전보건공단", "설계·시공·안전 담당자"], submissions: ["층별 평면도", "기계·설비 개요와 배치", "원재료·제품·작업방법", "위험방지계획"], followUp: ["계획서대로 시공", "공사·가동 전 이행확인"],
     sourceId: "src-osh-act-20260601", article: "제42조·제43조", citationSummary: "대통령령상 업종·규모 또는 기계·설비를 설치·이전·변경하는 사업주는 유해위험방지계획서를 제출하고 확인받아야 한다.",
-    condition: { any: [BUILDING_WORK, { in: { path: "investmentType", values: ["PROCESS_CHANGE", "EXPANSION"] } }] }, requiredInputs: ["industry.ksic", "industry.coreProcesses"], explanation: "설비 설치·이전·변경이 있어 유해위험방지계획서 대상 업종·기계를 확인합니다.", reviewNote: "KSIC, 상시근로자, 설비 종류·용량과 PSM 동일설비 의제범위를 확인해야 합니다.", days: [15, 15, 30], statutoryPeriod: "해당 작업 15일 전까지 제출; 제조업 계획서 심사결과 15일 경로 확인", durationEvidence: "OFFICIAL_AGENCY_MATERIAL", variability: ["대상업종", "설비 종류", "현장확인"], deemedBy: ["process-safety-report"],
+    condition: { any: [BUILDING_WORK, { in: { path: "investmentType", values: ["PROCESS_CHANGE", "EXPANSION"] } }] }, requiredInputs: ["industry.category"], explanation: "설비 설치·이전·변경이 있어 유해위험방지계획서 대상 업종·기계를 확인합니다.", reviewNote: "법정 대상 업종, 상시근로자, 설비 종류·용량과 PSM 동일설비 의제범위를 확인해야 합니다.", days: [15, 15, 30], statutoryPeriod: "해당 작업 15일 전까지 제출; 제조업 계획서 심사결과 15일 경로 확인", durationEvidence: "OFFICIAL_AGENCY_MATERIAL", variability: ["대상업종", "설비 종류", "현장확인"], deemedBy: ["process-safety-report"],
   },
   {
     id: "fire-building-permit-consent", name: "건축허가 등의 소방동의", description: "소방동의 대상 건축물의 건축허가·용도변경·사용승인 전에 허가권자가 관할 소방기관의 설계·시설 적합 동의를 받는 내부 협의입니다.", outcome: "소방동의 회신",
@@ -517,14 +545,14 @@ const permitSeeds: PermitSeed[] = [
     stage: "PRE_CONSTRUCTION", domain: "위험물·소방", lane: "ENVIRONMENT_SAFETY_FIRE_UTILITY", applicant: "위험물 제조소등 설치자", authority: "시·도지사(위임 시 관할 소방기관)",
     consultations: ["관할 소방서", "탱크안전성 검사기관"], submissions: ["위치·구조·설비도", "위험물 품명·수량·지정수량 배수", "공사계획", "탱크·안전설비 자료"], followUp: ["허가도서대로 시공", "사용 전 완공검사"],
     sourceId: "src-hazardous-materials-act-current", article: "제6조", citationSummary: "위험물 제조소·저장소·취급소를 설치하거나 법정 중요사항을 변경하려는 자는 시·도지사의 허가를 받아야 한다.",
-    condition: { eq: { path: "safety.hazardousMaterials", value: true } }, requiredInputs: ["industry.coreProcesses"], explanation: "지정수량 이상 위험물 취급으로 입력되어 제조소등 설치허가를 포함합니다.", reviewNote: "상품명이 아닌 성분별 위험물 품명·농도와 지정수량 배수 계산을 전제로 합니다.", verified: true, days: [5, 5, 10], statutoryPeriod: "정부24 위험물 제조소등 설치허가 안내 기준 5일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["제조소등 유형", "탱크검사", "설계보완"],
+    condition: { eq: { path: "safety.hazardousMaterials", value: true } }, requiredInputs: [], explanation: "지정수량 이상 위험물 취급으로 입력되어 제조소등 설치허가를 포함합니다.", reviewNote: "상품명이 아닌 성분별 위험물 품명·농도와 지정수량 배수 계산을 전제로 합니다.", verified: true, days: [5, 5, 10], statutoryPeriod: "정부24 위험물 제조소등 설치허가 안내 기준 5일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["제조소등 유형", "탱크검사", "설계보완"],
   },
   {
     id: "hazardous-materials-facility-completion-inspection", name: "위험물 제조소등 완공검사", description: "허가받은 위험물 제조소등의 설치·변경공사를 마친 뒤 위험물 저장·취급 전에 허가도서와 시설기준 적합 여부를 검사받습니다.", outcome: "위험물 제조소등 완공검사필증",
     stage: "PRE_OPERATION", actionType: "INSPECTION", domain: "위험물·소방", lane: "ENVIRONMENT_SAFETY_FIRE_UTILITY", applicant: "위험물 제조소등 설치자", authority: "시·도 또는 관할 소방기관",
     consultations: ["탱크안전성 검사기관", "관할 소방서"], submissions: ["설치허가 내역", "준공도면·변경사항", "탱크안전성 검사결과", "시설시험 자료"], followUp: ["위험물안전관리자 선임", "정기점검·변경허가"],
     sourceId: "src-hazardous-materials-act-current", article: "제9조", citationSummary: "제조소등 설치·변경 공사를 마친 자는 사용 전에 시·도지사가 실시하는 완공검사를 받아 기술기준 적합을 확인해야 한다.",
-    condition: { eq: { path: "safety.hazardousMaterials", value: true } }, requiredInputs: ["industry.coreProcesses"], explanation: "위험물 제조소등 설치허가 대상이므로 시설 사용 전 완공검사를 포함합니다.", reviewNote: "부분완공검사와 탱크안전성능검사 선행 여부를 시설별로 확인해야 합니다.", verified: true, days: [5, 5, 10], statutoryPeriod: "정부24 위험물 제조소등 완공검사 안내 기준 5일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["탱크검사", "현장보완"],
+    condition: { eq: { path: "safety.hazardousMaterials", value: true } }, requiredInputs: [], explanation: "위험물 제조소등 설치허가 대상이므로 시설 사용 전 완공검사를 포함합니다.", reviewNote: "부분완공검사와 탱크안전성능검사 선행 여부를 시설별로 확인해야 합니다.", verified: true, days: [5, 5, 10], statutoryPeriod: "정부24 위험물 제조소등 완공검사 안내 기준 5일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["탱크검사", "현장보완"],
   },
   {
     id: "private-electrical-facility-construction-plan", name: "자가용전기설비 공사계획 인가·신고", description: "자가용전기설비 신설·변경공사 중 시행규칙 대상 공사를 착수하기 전에 전압·용량·공사종류에 따라 공사계획 인가 또는 신고를 거칩니다.", outcome: "공사계획 인가서 또는 신고수리",
@@ -552,14 +580,14 @@ const permitSeeds: PermitSeed[] = [
     stage: "PRE_CONSTRUCTION", domain: "고압가스", lane: "ENVIRONMENT_SAFETY_FIRE_UTILITY", applicant: "고압가스 제조·저장 사업자", authority: "관할 시·군·구 허가·신고관청",
     consultations: ["한국가스안전공사 기술검토", "소방·산업안전 관계기관"], submissions: ["사업·시설계획", "배치·설비도", "가스 종류·압력·용량", "안전거리·안전설비", "KGS 기술검토서"], followUp: ["허가·신고 도서대로 시공", "중간·완성검사"],
     sourceId: "src-high-pressure-gas-act-current", article: "제4조", citationSummary: "고압가스를 제조하거나 법정 규모의 저장소를 설치하려는 자는 가스 종류·능력에 따라 허가를 받거나 신고해야 한다.",
-    condition: { eq: { path: "safety.highPressureGas", value: true } }, requiredInputs: ["industry.coreProcesses"], explanation: "허가·신고 대상 고압가스로 입력되어 제조·저장 시설 절차를 포함합니다.", reviewNote: "가스 종류, 상용압력, 냉동능력·저장량과 제조·사용방식 판정을 전제로 합니다.", verified: true, days: [2, 5, 10], statutoryPeriod: "정부24 제조·저장 허가 5일, 제조신고 2일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["KGS 기술검토", "가스 종류", "시설능력"],
+    condition: { eq: { path: "safety.highPressureGas", value: true } }, requiredInputs: [], explanation: "허가·신고 대상 고압가스로 입력되어 제조·저장 시설 절차를 포함합니다.", reviewNote: "가스 종류, 상용압력, 냉동능력·저장량과 제조·사용방식 판정을 전제로 합니다.", verified: true, days: [2, 5, 10], statutoryPeriod: "정부24 제조·저장 허가 5일, 제조신고 2일", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["KGS 기술검토", "가스 종류", "시설능력"],
   },
   {
     id: "high-pressure-gas-facility-inspection", name: "고압가스시설 중간·완성검사", description: "허가·신고된 고압가스 제조·저장시설의 설치·변경공사 중 법정 공정과 사용 전에 한국가스안전공사의 중간·완성검사를 받습니다.", outcome: "고압가스시설 중간·완성검사 합격증명",
     stage: "PRE_OPERATION", actionType: "INSPECTION", domain: "고압가스", lane: "ENVIRONMENT_SAFETY_FIRE_UTILITY", applicant: "고압가스 시설 사업자", authority: "허가·신고관청 및 한국가스안전공사",
     consultations: ["한국가스안전공사", "시공·안전관리 담당자"], submissions: ["허가·신고 도서", "공정검사 자료", "준공도면·시험성적", "안전설비 확인자료"], followUp: ["합격 후 시설 사용", "정기검사·안전관리"],
     sourceId: "src-high-pressure-gas-act-current", article: "제16조", citationSummary: "허가·신고 대상 고압가스시설의 설치·변경공사는 중간검사와 완성검사를 받고 합격한 뒤 사용해야 한다.",
-    condition: { eq: { path: "safety.highPressureGas", value: true } }, requiredInputs: ["industry.coreProcesses"], explanation: "고압가스 시설 허가·신고 대상이므로 사용 전 중간·완성검사를 포함합니다.", reviewNote: "시설 종류별 중간검사 공정과 완성검사 범위를 확인해야 합니다.", verified: true, days: [7, 7, 14], statutoryPeriod: "정부24 중간검사 안내 기준 7일; 완성검사는 검사일정에 따라 달라짐", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["검사공정", "현장보완", "검사기관 일정"],
+    condition: { eq: { path: "safety.highPressureGas", value: true } }, requiredInputs: [], explanation: "고압가스 시설 허가·신고 대상이므로 사용 전 중간·완성검사를 포함합니다.", reviewNote: "시설 종류별 중간검사 공정과 완성검사 범위를 확인해야 합니다.", verified: true, days: [7, 7, 14], statutoryPeriod: "정부24 중간검사 안내 기준 7일; 완성검사는 검사일정에 따라 달라짐", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["검사공정", "현장보완", "검사기관 일정"],
   },
   {
     id: "high-pressure-gas-business-start-report", name: "고압가스 사업·저장소 사용 개시신고", description: "고압가스 제조·판매사업 또는 저장소 사용을 실제로 시작하기 전에 허가·신고·등록 관청에 개시 사실을 신고하는 절차입니다.", outcome: "고압가스 사업·저장소 사용 개시신고 처리",
@@ -573,7 +601,7 @@ const permitSeeds: PermitSeed[] = [
     stage: "PRE_OPERATION", actionType: "NOTICE", domain: "고압가스", lane: "CITY_COUNTY_DISTRICT", applicant: "특정고압가스 사용자", authority: "관할 시·군·구",
     consultations: ["한국가스안전공사"], submissions: ["사용시설 배치·계통도", "가스 종류·저장량", "안전설비 자료", "완성검사 자료"], followUp: ["시설 완성·정기검사", "사용시설 변경신고"],
     sourceId: "src-high-pressure-gas-act-current", article: "제20조", citationSummary: "대통령령상 특정고압가스를 일정 규모 이상 사용하려는 자는 사용 전에 신고하고 시설검사를 받아야 한다.",
-    condition: SPECIFIC_HIGH_PRESSURE_GAS_USE, requiredInputs: ["safety.specificHighPressureGasUse", "industry.coreProcesses"], explanation: "법정 종류·규모의 특정고압가스 사용 대상으로 입력되어 사용신고를 포함합니다.", reviewNote: "가스별 법정 목록과 저장능력 임계값을 확인한 판정값을 전제로 합니다.", days: [0, 0, 1], statutoryPeriod: "정부24 즉시 처리(근무시간 내 3시간) 안내", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["가스 종류", "저장량", "완성검사"],
+    condition: SPECIFIC_HIGH_PRESSURE_GAS_USE, requiredInputs: ["safety.specificHighPressureGasUse"], explanation: "법정 종류·규모의 특정고압가스 사용 대상으로 입력되어 사용신고를 포함합니다.", reviewNote: "가스별 법정 목록과 저장능력 임계값을 확인한 판정값을 전제로 합니다.", days: [0, 0, 1], statutoryPeriod: "정부24 즉시 처리(근무시간 내 3시간) 안내", durationEvidence: "OFFICIAL_SERVICE_STANDARD", variability: ["가스 종류", "저장량", "완성검사"],
   },
   {
     id: "disaster-impact-assessment-consultation", name: "재해영향평가등 협의", description: "자연재해에 영향을 미치는 개발계획·사업의 승인 전에 재해영향성검토 또는 재해영향평가 자료를 작성해 관계기관 협의를 거치는 절차입니다.", outcome: "재해영향평가등 협의의견",
@@ -926,27 +954,27 @@ export const expandedRules: ApplicabilityRule[] = permitSeeds.map((seed) => ({
   citationIds: [`cit-exp-${seed.id}`],
   explanationTemplate: seed.explanation,
   priority: 100,
-  status: "DRAFT",
-  reviewActor: "AI-assisted official-source review",
+  status: internallyReviewedExpandedProcedureIds.has(seed.id) ? "INTERNAL_REVIEWED" : "DRAFT",
+  reviewActor: internallyReviewedExpandedProcedureIds.has(seed.id) ? "Internal official-source review" : "AI-assisted official-source review",
   note: seed.reviewNote,
 }));
 
 expandedRules.push(
   {
     id: "rule-exp-air-integrated-exclusion", version: VERSION, procedureId: "air-emission-installation-permit", effect: "EXCLUDE", effectiveFrom: "2026-01-01", effectiveTo: null,
-    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-permit"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 대기 설치허가·신고는 통합허가 의제범위로 접습니다.", priority: 300, status: "DRAFT", reviewActor: "AI-assisted official-source review", note: "통합허가서의 실제 의제범위와 제출서류를 확인해야 합니다.",
+    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-permit"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 대기 설치허가·신고는 통합허가 의제범위로 접습니다.", priority: 300, status: "INTERNAL_REVIEWED", reviewActor: "Internal official-source review", note: "통합허가서의 실제 의제범위와 제출서류를 확인해야 합니다.",
   },
   {
     id: "rule-exp-water-integrated-exclusion", version: VERSION, procedureId: "water-discharge-installation-permit", effect: "EXCLUDE", effectiveFrom: "2026-01-01", effectiveTo: null,
-    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-permit"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 폐수 설치허가·신고는 통합허가 의제범위로 접습니다.", priority: 300, status: "DRAFT", reviewActor: "AI-assisted official-source review", note: "통합허가서의 실제 의제범위와 제출서류를 확인해야 합니다.",
+    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-permit"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 폐수 설치허가·신고는 통합허가 의제범위로 접습니다.", priority: 300, status: "INTERNAL_REVIEWED", reviewActor: "Internal official-source review", note: "통합허가서의 실제 의제범위와 제출서류를 확인해야 합니다.",
   },
   {
     id: "rule-exp-air-operation-integrated-exclusion", version: VERSION, procedureId: "air-facility-operation-start-report", effect: "EXCLUDE", effectiveFrom: "2026-01-01", effectiveTo: null,
-    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-operation-start-report"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 대기 가동개시 신고를 통합법상 가동개시 신고·수리 경로로 대체합니다.", priority: 300, status: "DRAFT", reviewActor: "AI-assisted official-source review", note: "통합법 제12조 가동개시 신고·수리 절차를 적용합니다.",
+    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-operation-start-report"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 대기 가동개시 신고를 통합법상 가동개시 신고·수리 경로로 대체합니다.", priority: 300, status: "INTERNAL_REVIEWED", reviewActor: "Internal official-source review", note: "통합법 제12조 가동개시 신고·수리 절차를 적용합니다.",
   },
   {
     id: "rule-exp-water-operation-integrated-exclusion", version: VERSION, procedureId: "water-facility-operation-start-report", effect: "EXCLUDE", effectiveFrom: "2026-01-01", effectiveTo: null,
-    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-operation-start-report"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 수질 가동시작 신고를 통합법상 가동개시 신고·수리 경로로 대체합니다.", priority: 300, status: "DRAFT", reviewActor: "AI-assisted official-source review", note: "통합법 제12조 가동개시 신고·수리 절차를 적용합니다.",
+    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-operation-start-report"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 수질 가동시작 신고를 통합법상 가동개시 신고·수리 경로로 대체합니다.", priority: 300, status: "INTERNAL_REVIEWED", reviewActor: "Internal official-source review", note: "통합법 제12조 가동개시 신고·수리 절차를 적용합니다.",
   },
   {
     id: "rule-exp-hazard-prevention-psm-exclusion", version: VERSION, procedureId: "hazard-prevention-plan", effect: "EXCLUDE", effectiveFrom: "2026-01-01", effectiveTo: null,
@@ -954,11 +982,18 @@ expandedRules.push(
   },
   {
     id: "rule-exp-noise-complex-exclusion", version: VERSION, procedureId: "noise-vibration-facility-report", effect: "EXCLUDE", effectiveFrom: "2026-01-01", effectiveTo: null,
-    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "industrialComplex.inside", value: true } }, requiredInputs: ["industrialComplex.inside"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-noise-vibration-facility-report"], explanationTemplate: "산업단지 안의 공장은 법정 제외규정을 우선 적용해 소음·진동 설치허가·신고를 비적용으로 표시합니다.", priority: 250, status: "DRAFT", reviewActor: "AI-assisted official-source review", note: "개별 시설의 배출허용기준 준수의무는 별도로 유지됩니다.",
+    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] },
+    condition: {
+      all: [
+        { eq: { path: "industrialComplex.inside", value: true } },
+        { in: { path: "industry.category", values: [...manufacturingIndustryCategories] } },
+      ],
+    },
+    requiredInputs: ["industrialComplex.inside", "industry.category"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-noise-vibration-facility-report"], explanationTemplate: "산업단지 안의 제조업 공장은 법정 제외규정을 우선 적용해 소음·진동 설치허가·신고를 비적용으로 표시합니다.", priority: 250, status: "INTERNAL_REVIEWED", reviewActor: "Internal official-source review", note: "AI 데이터센터는 제조업 공장 제외조건을 자동 적용하지 않으며, 개별 시설의 배출허용기준 준수의무는 별도로 유지됩니다.",
   },
   {
     id: "rule-exp-noise-integrated-exclusion", version: VERSION, procedureId: "noise-vibration-facility-report", effect: "EXCLUDE", effectiveFrom: "2026-01-01", effectiveTo: null,
-    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-permit"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 소음·진동 설치허가·신고는 통합허가 의제범위로 접습니다.", priority: 300, status: "DRAFT", reviewActor: "AI-assisted official-source review", note: "통합허가서의 실제 의제범위와 제출서류를 확인해야 합니다.",
+    jurisdiction: { nationwide: true, provinces: [], cities: [], industrialComplexIds: [] }, condition: { eq: { path: "environment.integratedPermitTarget", value: true } }, requiredInputs: ["environment.integratedPermitTarget"], missingPolicy: "INDETERMINATE", citationIds: ["cit-exp-integrated-environmental-permit"], explanationTemplate: "통합환경허가 대상 입력이므로 개별 소음·진동 설치허가·신고는 통합허가 의제범위로 접습니다.", priority: 300, status: "INTERNAL_REVIEWED", reviewActor: "Internal official-source review", note: "통합허가서의 실제 의제범위와 제출서류를 확인해야 합니다.",
   },
 );
 
@@ -995,7 +1030,9 @@ export const expandedProcedures: Procedure[] = permitSeeds.map((seed) => ({
       : []),
   ],
   durationId: `duration-exp-${seed.id}`,
-  verificationStatus: seed.verified ? "AI_ASSISTED_DRAFT" : "TODO_LEGAL_REVIEW",
+  verificationStatus: internallyReviewedExpandedProcedureIds.has(seed.id)
+    ? "INTERNAL_REVIEWED"
+    : seed.verified ? "AI_ASSISTED_DRAFT" : "TODO_LEGAL_REVIEW",
   reviewedAt: REVIEW_DATE,
   reviewNote: seed.reviewNote,
   deemedByProcedureIds: seed.deemedBy ?? [],

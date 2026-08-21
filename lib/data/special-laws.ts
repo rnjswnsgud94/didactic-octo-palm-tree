@@ -1556,12 +1556,7 @@ export const specialLawRules: ApplicabilityRule[] = [
     effectiveTo: null,
     jurisdiction: nationwide,
     condition: { eq: { path: "industrialComplex.inside", value: true } },
-    requiredInputs: [
-      "industrialComplex.name",
-      "industrialComplex.identifier",
-      "industrialComplex.managingAuthority",
-      "industrialComplex.occupancyContractStatus",
-    ],
+    requiredInputs: ["industrialComplex.occupancyContractStatus"],
     missingPolicy: "INDETERMINATE",
     citationIds: [
       "cit-indcluster-38-occupancy-contract",
@@ -1571,7 +1566,7 @@ export const specialLawRules: ApplicabilityRule[] = [
     priority: 200,
     status: "INTERNAL_REVIEWED",
     reviewActor: "법제처 현행 법률 제38조·제13조제2항 대조",
-    note: "산업단지 명칭·식별자·관리기관과 실제 계약 진행상태를 입력해야 하며, 법정 예외 여부는 관리기관에 확인합니다.",
+    note: "실제 입주계약·변경계약 진행상태를 입력해야 하며, 법정 예외 여부와 접수 관리기관은 해당 산업단지 관리기관에 확인합니다.",
   },
 ];
 
