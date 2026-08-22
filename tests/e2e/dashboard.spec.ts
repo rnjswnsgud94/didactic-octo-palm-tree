@@ -76,6 +76,29 @@ test("a card user estimate updates the scenario and survives reload", async ({ p
 
   await page.reload();
   await expect(page.locator(".procedure-card").first()).toContainText("30일 · 수정");
+  await expect(page.getByRole("button", { name: "내 예상 1" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
+test("secondary permit questions start collapsed without discarding answers", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "입력 단계" }).getByRole(
+    "button",
+    { name: /^2 시설 규모/ },
+  ).click();
+
+  const siteDetails = page.locator("details", {
+    hasText: "부지·건축 추가 확인",
+  }).first();
+  await expect(siteDetails).toBeVisible();
+  await expect(siteDetails).not.toHaveAttribute("open", "");
+  await siteDetails.getByText("부지·건축 추가 확인").click();
+  await siteDetails.getByRole("button", { name: "필요" }).first().click();
+  await expect(siteDetails).toContainText("1개 입력됨");
+  await siteDetails.getByText("부지·건축 추가 확인").click();
+  await expect(page).toHaveURL(/road=1/);
 });
 
 test("wizard changes the route and detail links are official", async ({ page }) => {

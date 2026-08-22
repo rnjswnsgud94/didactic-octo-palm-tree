@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { catalog } from "@/lib/data/catalog";
+import { formatOfficialDurationSummary } from "@/lib/format-duration";
 
 describe("catalog integrity", () => {
   it("loads a cross-referenced acyclic catalog", () => {
@@ -146,6 +147,71 @@ describe("catalog integrity", () => {
     }
   });
 
+  it("links every duration record to an official duration citation, including no-deadline findings", () => {
+    const citations = new Map(catalog.citations.map((item) => [item.id, item]));
+    for (const duration of catalog.durations) {
+      const citationIds = [
+        ...duration.citationIds,
+        ...(duration.referencePeriods ?? []).flatMap((period) => period.citationIds),
+      ];
+      expect(
+        citationIds.some((citationId) => citations.get(citationId)?.role === "DURATION"),
+        duration.procedureId,
+      ).toBe(true);
+      expect(duration.statutoryPeriod?.trim().length, duration.procedureId).toBeGreaterThan(0);
+      expect(new Set(duration.citationIds).size, duration.procedureId).toBe(
+        duration.citationIds.length,
+      );
+    }
+  });
+
+  it("gives every procedure a visible quantified period or an explicit no-total finding", () => {
+    for (const duration of catalog.durations) {
+      const summary = formatOfficialDurationSummary(duration);
+      expect(summary, duration.procedureId).toMatch(/\d|미규정/);
+      expect(summary, duration.procedureId).not.toMatch(/확인 필요|상세 기준 참조/);
+    }
+  });
+
+  it("keeps the reverified air permit service period tied to the current official guide", () => {
+    const duration = catalog.durations.find(
+      (item) => item.procedureId === "air-emission-installation-permit",
+    );
+    const source = catalog.legalSources.find(
+      (item) => item.id === "src-gov24-air-permit",
+    );
+
+    expect(duration).toMatchObject({
+      authorityProcessing: { min: 10, base: 10, max: 10, unit: "BUSINESS_DAY" },
+      elapsed: { min: 10, base: 10, max: 10, unit: "BUSINESS_DAY" },
+      legalConfidence: "HIGH",
+      verifiedAt: "2026-08-22",
+    });
+    expect(duration?.statutoryPeriod).toContain("법정 최소기간 아님");
+    expect(source).toMatchObject({
+      internallyVerifiedAt: "2026-08-22",
+      status: "AUTHORITATIVE",
+    });
+    expect(source?.officialUrl).toContain("CappBizCD=14800000067");
+  });
+
+  it("labels the public-water permit guide separately from its follow-up plan service", () => {
+    const duration = catalog.durations.find(
+      (item) => item.procedureId === "public-water-occupation-use-permit",
+    );
+    const durationCitation = catalog.citations.find(
+      (item) => item.id === "cit-exp-public-water-occupation-use-permit-official-duration",
+    );
+    const source = catalog.legalSources.find(
+      (item) => item.id === durationCitation?.sourceId,
+    );
+
+    expect(duration?.statutoryPeriod).toContain("점용·사용허가 공식 분기");
+    expect(duration?.assumptions.join(" ")).toContain("별도 실시계획 처리기간과 합산하지 않음");
+    expect(source?.title).toBe("정부24 공유수면 점용·사용허가 민원안내");
+    expect(source?.officialUrl).toContain("CappBizCD=15200000020");
+  });
+
   it("uses HTTPS official links and keeps leading-zero identifiers as strings", () => {
     for (const source of catalog.legalSources) {
       expect(source.officialUrl.startsWith("https://")).toBe(true);
@@ -159,6 +225,39 @@ describe("catalog integrity", () => {
       expect(duration.elapsed).toBeNull();
       expect(duration.authorityProcessing).toBeNull();
     }
+  });
+
+  it("does not encode an immediate service standard as a zero-day procedure", () => {
+    for (const duration of catalog.durations) {
+      for (const range of [
+        duration.applicantPreparation,
+        duration.authorityProcessing,
+        duration.interagencyConsultation,
+        duration.elapsed,
+        ...(duration.referencePeriods ?? []).map((period) => period.range),
+      ]) {
+        expect(
+          range && range.min === 0 && range.base === 0 && range.max === 0,
+          duration.procedureId,
+        ).toBeFalsy();
+      }
+    }
+
+    const immediate = catalog.durations.find(
+      (duration) => duration.procedureId === "air-facility-operation-start-report",
+    );
+    expect(immediate).toMatchObject({
+      authorityProcessing: null,
+      elapsed: null,
+      planningBasis: "MILESTONE_ONLY",
+      statutoryPeriod: expect.stringContaining("3근무시간 이내"),
+    });
+    expect(immediate?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        range: null,
+        note: expect.stringContaining("0일 완료를 뜻하지 않으며"),
+      }),
+    ]));
   });
 
   it("keeps official caps, local standards, and practical benchmarks auditable", () => {
@@ -189,11 +288,20 @@ describe("catalog integrity", () => {
       expect.arrayContaining([3, 150]),
     );
 
-    const landscapePlanning = catalog.durations
+    const landscape = catalog.durations
       .find((item) => item.procedureId === "landscape-review")
-      ?.referencePeriods?.find((period) => period.kind === "PLANNING_REFERENCE");
-    expect(landscapePlanning?.range).toMatchObject({ min: 14, base: null, max: 30 });
-    expect(landscapePlanning?.note).toContain("평균·중앙값이 아니라");
+      ?.referencePeriods;
+    expect(landscape?.some((period) => period.kind === "PLANNING_REFERENCE")).toBe(false);
+    expect(landscape).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ref-landscape-national-meeting-guideline",
+        range: expect.objectContaining({ max: 30 }),
+      }),
+      expect.objectContaining({
+        id: "ref-landscape-geoje-local-standard",
+        jurisdiction: "거제시",
+      }),
+    ]));
 
     const electricalInspection = catalog.durations.find(
       (item) => item.procedureId === "electrical-pre-use-inspection",
@@ -201,13 +309,19 @@ describe("catalog integrity", () => {
     expect(electricalInspection).toMatchObject({
       elapsed: null,
       authorityProcessing: null,
-      evidenceType: "OFFICIAL_AGENCY_MATERIAL",
+      evidenceType: "STATUTE",
       planningBasis: "MILESTONE_ONLY",
     });
-    expect(electricalInspection?.referencePeriods?.[0]).toMatchObject({
-      kind: "PROCESS_MILESTONE",
-      range: null,
-    });
+    expect(electricalInspection?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ref-electrical-pre-use-application-lead-time",
+        range: { min: 7, base: null, max: null, unit: "CALENDAR_DAY" },
+      }),
+      expect.objectContaining({
+        id: "ref-electrical-pre-use-certificate-deadline",
+        range: { min: null, base: null, max: 5, unit: "CALENDAR_DAY" },
+      }),
+    ]));
   });
 
   it("uses corrected official service branches without padding them as practical averages", () => {
@@ -257,9 +371,124 @@ describe("catalog integrity", () => {
     expect(duration("heat-use-equipment-installation-inspection")?.elapsed).toBeNull();
     expect(duration("heat-use-equipment-installation-inspection")?.referencePeriods).toHaveLength(2);
     expect(duration("heat-use-equipment-installation-inspection")?.referencePeriods?.every((period) => period.range?.max === 7)).toBe(true);
+    expect(duration("heat-use-equipment-installation-inspection")?.referencePeriods?.every((period) => period.range?.unit === "CALENDAR_DAY")).toBe(true);
+
+    expect(duration("hazardous-chemical-facility-inspection")?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({ range: expect.objectContaining({ max: 15, unit: "CALENDAR_DAY" }) }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 30, unit: "CALENDAR_DAY" }) }),
+    ]));
+    expect(duration("hazardous-chemical-regular-inspection")?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({ range: { min: 36, base: 36, max: 36, unit: "MONTH" } }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 15, unit: "CALENDAR_DAY" }) }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 30, unit: "CALENDAR_DAY" }) }),
+      expect.objectContaining({
+        id: "ref-hazardous-chemical-regular-cycle-conditional-longest",
+        range: expect.objectContaining({ max: 60, unit: "MONTH" }),
+      }),
+      expect.objectContaining({
+        id: "ref-hazardous-chemical-regular-extension-result-deadline",
+        range: expect.objectContaining({ max: 14, unit: "CALENDAR_DAY" }),
+      }),
+      expect.objectContaining({
+        id: "ref-hazardous-chemical-spot-inspection-deadline",
+        range: expect.objectContaining({ max: 7, unit: "CALENDAR_DAY" }),
+      }),
+    ]));
+
+    expect(duration("chemical-accident-prevention-plan")?.elapsed).toMatchObject({
+      min: 30,
+      base: 30,
+      max: 30,
+      unit: "BUSINESS_DAY",
+    });
+    expect(duration("chemical-accident-prevention-plan")?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ref-chemical-accident-plan-initial-submission-lead-time",
+        range: { min: 60, base: 60, max: 60, unit: "CALENDAR_DAY" },
+      }),
+      expect.objectContaining({
+        id: "ref-chemical-accident-plan-supplement-deadlines",
+        range: { min: 30, base: 60, max: 90, unit: "CALENDAR_DAY" },
+      }),
+      expect.objectContaining({
+        id: "ref-chemical-accident-plan-unsuitable-resubmission-deadline",
+        range: expect.objectContaining({ max: 3, unit: "MONTH" }),
+      }),
+    ]));
+
+    expect(duration("hazardous-chemical-manager-appointment-report")?.elapsed).toMatchObject({
+      min: 3,
+      base: 3,
+      max: 3,
+      unit: "BUSINESS_DAY",
+    });
+    expect(duration("hazardous-chemical-manager-appointment-report")?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ref-hazardous-chemical-manager-replacement-deadline",
+        range: expect.objectContaining({ max: 30, unit: "CALENDAR_DAY" }),
+      }),
+      expect.objectContaining({
+        id: "ref-hazardous-chemical-manager-replacement-extended-deadline",
+        range: expect.objectContaining({ max: 60, unit: "CALENDAR_DAY" }),
+      }),
+    ]));
+
+    expect(duration("fire-safety-manager-appointment-report")?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({ range: expect.objectContaining({ max: 14, unit: "CALENDAR_DAY" }) }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 30, unit: "CALENDAR_DAY" }) }),
+    ]));
+    expect(duration("electrical-safety-manager-appointment-report")?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({ range: { min: 3, base: 3, max: 3, unit: "BUSINESS_DAY" } }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 30, unit: "CALENDAR_DAY" }) }),
+    ]));
+
+    expect(duration("national-heritage-impact-diagnosis")?.referencePeriods?.every(
+      (period) => period.range?.unit === "BUSINESS_DAY",
+    )).toBe(true);
 
     expect(duration("groundwater-development-use-permit-report")?.elapsed).toMatchObject({ min: 7, base: 20, max: 30, unit: "BUSINESS_DAY" });
     expect(duration("water-discharge-installation-permit")?.elapsed).toMatchObject({ min: 10, base: 10, max: 60, unit: "BUSINESS_DAY" });
+  });
+
+  it("places special-law form processing caps only on the correct procedure", () => {
+    const duration = (procedureId: string) =>
+      catalog.durations.find((item) => item.procedureId === procedureId);
+
+    expect(duration("advanced-strategic-industry-fast-track-request")).toMatchObject({
+      elapsed: { min: null, base: null, max: 21, unit: "BUSINESS_DAY" },
+      planningBasis: "OFFICIAL_CAP_ONLY",
+    });
+    expect(duration("semiconductor-cluster-fast-track-request")).toMatchObject({
+      elapsed: { min: null, base: null, max: 15, unit: "BUSINESS_DAY" },
+      planningBasis: "OFFICIAL_CAP_ONLY",
+    });
+    expect(duration("semiconductor-cluster-plan-application")?.elapsed).toBeNull();
+    expect(duration("semiconductor-cluster-plan-consultation")?.elapsed).toBeNull();
+    expect(duration("semiconductor-cluster-plan-approval")).toMatchObject({
+      elapsed: { min: null, base: null, max: 90, unit: "BUSINESS_DAY" },
+      planningBasis: "OFFICIAL_CAP_ONLY",
+    });
+    expect(duration("semiconductor-cluster-plan-approval")?.assumptions.join(" ")).toContain(
+      "민원인인 사업시행자",
+    );
+  });
+
+  it("preserves every mutually exclusive official service branch", () => {
+    const values = (procedureId: string) => [...new Set(
+      catalog.durations
+        .find((item) => item.procedureId === procedureId)
+        ?.referencePeriods
+        ?.flatMap((period) => period.range
+          ? [period.range.min, period.range.base, period.range.max]
+          : [])
+        .filter((value): value is number => value !== null) ?? [],
+    )].sort((left, right) => left - right);
+
+    expect(values("factory-establishment-approval")).toEqual([7, 14, 20, 30]);
+    expect(values("building-permit")).toEqual([2, 7, 10, 14, 15, 25, 40, 45, 70]);
+    expect(values("road-occupation-permit")).toEqual([2, 4, 5, 7, 8, 10]);
+    expect(values("high-pressure-gas-technical-review")).toEqual([7, 10, 15, 20]);
+    expect(values("river-occupation-permit")).toEqual([5, 10, 12, 14, 20, 60]);
   });
 
   it("keeps the expanded construction and operation paths ordered and auditable", () => {

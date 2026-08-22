@@ -39,15 +39,27 @@ describe("automatic planning durations", () => {
       endToEndMissingComponents: ["신청인 준비", "관계기관 협의"],
     });
     expect(durationFor("energy-use-plan-consultation")).toMatchObject({
-      minimum: 30,
-      typical: 30,
+      minimum: null,
+      typical: null,
+      upperBound: 50,
       unit: "CALENDAR_DAY",
+      planningBasis: "OFFICIAL_CAP_ONLY",
     });
     expect(durationFor("traffic-impact-assessment")).toMatchObject({
-      minimum: 3,
-      typical: 3,
-      unit: "MONTH",
+      minimum: null,
+      typical: null,
+      upperBound: null,
+      unit: null,
+      planningBasis: "OFFICIAL_CAP_ONLY",
     });
+    expect(durationFor("traffic-impact-assessment")?.referencePeriods).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "ref-traffic-impact-assessment-statutory-cap",
+          range: expect.objectContaining({ max: 3, unit: "MONTH" }),
+        }),
+      ]),
+    );
   });
 
   it("uses the Government24 nationwide standard for development completion inspection", () => {
@@ -130,8 +142,8 @@ describe("automatic planning durations", () => {
     expect(durationFor("power-grid-impact-assessment")).toMatchObject({
       minimum: null,
       typical: null,
-      upperBound: 3,
-      unit: "MONTH",
+      upperBound: null,
+      unit: null,
       planningBasis: "OFFICIAL_CAP_ONLY",
     });
     expect(
@@ -184,15 +196,33 @@ describe("automatic planning durations", () => {
     });
   });
 
-  it("treats an evidenced zero-day component as known rather than missing", () => {
+  it("keeps an immediate service standard as a three-working-hour milestone, not zero days", () => {
+    const immediate = durationFor("air-facility-operation-start-report");
     expect(
       durationFor("air-facility-operation-start-report")
         ?.endToEndMissingComponents,
-    ).not.toContain("기관 처리");
+    ).toContain("기관 처리");
     expect(
       durationFor("air-facility-operation-start-report")
         ?.endToEndMissingComponents,
-    ).not.toContain("전체 경과");
+    ).toContain("전체 경과");
+    expect(
+      immediate?.referencePeriods,
+    ).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ref-air-facility-operation-start-report-immediate-processing-standard",
+        range: null,
+        note: expect.stringContaining("3근무시간 이내"),
+      }),
+    ]));
+    expect(formatTimelineProcessingDuration({
+      processingDuration: immediate?.typical ?? null,
+      processingUpperBound: immediate?.upperBound ?? null,
+      processingUnit: immediate?.unit ?? null,
+      completedCheckpoint: null,
+      durationReferencePeriods: immediate?.referencePeriods ?? [],
+      durationSourceLabel: immediate?.sourceLabel ?? null,
+    })).toBe("법정·공식 즉시 · 3근무시간 이내 (0일 아님)");
   });
 
   it.each([
@@ -238,17 +268,28 @@ describe("automatic planning durations", () => {
     ["DISASTER_IMPACT", 45],
     ["DISASTER_IMPACT_REVIEW", 30],
   ] as const)(
-    "resolves the disaster consultation period for %s",
+    "shows the disaster consultation statutory cap for %s without using it as an exact schedule",
     (disasterImpactAssessmentType, expectedDays) => {
       expect(
         durationFor("disaster-impact-assessment-consultation", {
           disasterImpactAssessmentType,
         }),
       ).toMatchObject({
-        minimum: expectedDays,
-        typical: expectedDays,
-        unit: "BUSINESS_DAY",
+        minimum: null,
+        typical: null,
+        upperBound: null,
+        unit: null,
+        planningBasis: "UNRESOLVED_OFFICIAL_BRANCH",
       });
+      expect(
+        durationFor("disaster-impact-assessment-consultation", {
+          disasterImpactAssessmentType,
+        })?.referencePeriods,
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          range: expect.objectContaining({ max: expectedDays }),
+        }),
+      ]));
     },
   );
 
@@ -260,8 +301,8 @@ describe("automatic planning durations", () => {
     ).toMatchObject({
       minimum: null,
       typical: null,
-      upperBound: 45,
-      unit: "BUSINESS_DAY",
+      upperBound: null,
+      unit: null,
       planningBasis: "UNRESOLVED_OFFICIAL_BRANCH",
     });
   });
@@ -347,7 +388,14 @@ describe("automatic planning durations", () => {
         advancedStrategicIndustryMinisterRequestDate: "2023-06-30",
         advancedStrategicIndustryFastTrackPermitIds: ["building-permit"],
       }),
-    ).toMatchObject({ minimum: null, typical: null, unit: null });
+    ).toMatchObject({
+      minimum: null,
+      typical: null,
+      upperBound: 21,
+      unit: "BUSINESS_DAY",
+      planningBasis: "OFFICIAL_CAP_ONLY",
+      completedCheckpoint: null,
+    });
 
     expect(
       durationFor("industrial-complex-plan-approval", {
@@ -432,11 +480,13 @@ describe("automatic planning durations", () => {
         industrialComplexOccupancyContractStatus: "IN_PROGRESS",
       }),
     ).toMatchObject({
-      minimum: 5,
-      typical: 5,
+      minimum: null,
+      typical: null,
+      upperBound: 10,
       unit: "BUSINESS_DAY",
       evidenceType: "STATUTE",
-      confidence: "MEDIUM",
+      confidence: "LOW",
+      planningBasis: "OFFICIAL_CAP_ONLY",
     });
   });
 
@@ -447,18 +497,22 @@ describe("automatic planning durations", () => {
         industrialComplexOccupancyContractStatus: "PLANNED",
       }),
     ).toMatchObject({
-      minimum: 5,
-      typical: 5,
+      minimum: null,
+      typical: null,
+      upperBound: 10,
       unit: "BUSINESS_DAY",
       evidenceType: "STATUTE",
       sourceLabel: expect.stringContaining("5일 이내"),
+      planningBasis: "OFFICIAL_CAP_ONLY",
     });
     expect(durationFor("port-hinterland-entry-contract")).toMatchObject({
-      minimum: 7,
-      typical: 7,
+      minimum: null,
+      typical: null,
+      upperBound: 7,
       unit: "BUSINESS_DAY",
       evidenceType: "STATUTE",
       sourceLabel: expect.stringContaining("7일 이내"),
+      planningBasis: "OFFICIAL_CAP_ONLY",
     });
   });
 
@@ -486,7 +540,7 @@ describe("automatic planning durations", () => {
         completedCheckpoint: null,
         durationReferencePeriods: power?.referencePeriods ?? [],
       }),
-    ).toContain("정식 평가서 접수 후 법정 통보 상한 3개월");
+    ).toContain("개선필요사항등 조건부 통보 상한 3개월");
     expect(
       formatTimelineProcessingDuration({
         processingDuration: power?.typical ?? null,
@@ -530,7 +584,7 @@ describe("automatic planning durations", () => {
       durationReferencePeriods: fastTrack?.referencePeriods ?? [],
       durationSourceLabel: fastTrack?.sourceLabel ?? null,
     });
-    expect(label).toContain("총기간 미확인");
+    expect(label).toContain("법정·공식 총기간 미확인");
     expect(label).toContain("조건부 처리완료 시점 60일");
     expect(label).not.toMatch(/^60일$/);
   });
@@ -546,10 +600,34 @@ describe("automatic planning durations", () => {
         durationReferencePeriods: simplified?.referencePeriods ?? [],
         durationSourceLabel: simplified?.sourceLabel ?? null,
       }),
-    ).toContain("총기간 미확인 · 법 제18조는 약식영향진단 결정·통보를 요구");
+    ).toContain("법정·공식 총기간 미규정 · 법 제18조는 약식영향진단 결정·통보를 요구");
   });
 
   it("keeps industrial-complex plan consultation milestones inside the plan cap", () => {
+    const application = durationFor("industrial-complex-plan-application");
+    expect(application).toMatchObject({
+      minimum: null,
+      typical: null,
+      upperBound: null,
+      unit: null,
+      evidenceType: "STATUTE",
+      planningBasis: "MILESTONE_ONLY",
+    });
+    expect(application?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ref-industrial-complex-plan-public-notice-deadline",
+        range: expect.objectContaining({ max: 3, unit: "BUSINESS_DAY" }),
+      }),
+      expect.objectContaining({
+        id: "ref-industrial-complex-plan-public-inspection-window",
+        range: expect.objectContaining({ min: 20, max: null }),
+      }),
+      expect.objectContaining({
+        id: "ref-industrial-complex-plan-eia-request-deadline",
+        range: expect.objectContaining({ max: 4, unit: "MONTH" }),
+      }),
+    ]));
+
     const consultation = durationFor("industrial-complex-plan-consultation");
     expect(consultation).toMatchObject({
       minimum: null,
@@ -576,6 +654,18 @@ describe("automatic planning durations", () => {
             unit: "BUSINESS_DAY",
           }),
         }),
+        expect.objectContaining({
+          id: "ref-industrial-complex-plan-public-water-consultation-deadline",
+          range: expect.objectContaining({ max: 20, unit: "BUSINESS_DAY" }),
+        }),
+        expect.objectContaining({
+          id: "ref-industrial-complex-plan-strategic-eia-consultation-deadline",
+          range: expect.objectContaining({ max: 30, unit: "CALENDAR_DAY" }),
+        }),
+        expect.objectContaining({
+          id: "ref-industrial-complex-plan-eia-consultation-deadline",
+          range: expect.objectContaining({ max: 45, unit: "CALENDAR_DAY" }),
+        }),
       ]),
     );
 
@@ -583,8 +673,8 @@ describe("automatic planning durations", () => {
     expect(approval).toMatchObject({
       minimum: null,
       typical: null,
-      upperBound: 6,
-      unit: "MONTH",
+      upperBound: null,
+      unit: null,
       planningBasis: "OFFICIAL_CAP_ONLY",
     });
     expect(approval?.referencePeriods?.[0]).toMatchObject({
@@ -609,8 +699,8 @@ describe("automatic planning durations", () => {
     expect(approval).toMatchObject({
       minimum: null,
       typical: null,
-      upperBound: 135,
-      unit: "CALENDAR_DAY",
+      upperBound: null,
+      unit: null,
       evidenceType: "STATUTE",
       planningBasis: "OFFICIAL_CAP_ONLY",
     });
@@ -626,6 +716,66 @@ describe("automatic planning durations", () => {
         }),
       ]),
     );
+
+    const application = durationFor("regional-special-zone-plan-application");
+    expect(application).toMatchObject({
+      minimum: null,
+      typical: null,
+      upperBound: null,
+      planningBasis: "MILESTONE_ONLY",
+    });
+    expect(application?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ref-regional-special-zone-private-proposal-review",
+        range: expect.objectContaining({ max: 60 }),
+      }),
+      expect.objectContaining({
+        id: "ref-regional-special-zone-plan-public-notice",
+        range: expect.objectContaining({ min: 20, max: null }),
+      }),
+      expect.objectContaining({
+        id: "ref-regional-special-zone-governor-opinion",
+        range: expect.objectContaining({ max: 30 }),
+      }),
+    ]));
+
+    const consultation = durationFor("regional-special-zone-plan-consultation");
+    expect(consultation).toMatchObject({
+      minimum: null,
+      typical: null,
+      upperBound: null,
+      planningBasis: "MILESTONE_ONLY",
+    });
+    expect(consultation?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ref-regional-special-zone-consultation-basic-cap",
+        range: expect.objectContaining({ max: 20 }),
+      }),
+      expect.objectContaining({
+        id: "ref-regional-special-zone-consultation-extended-cap",
+        range: expect.objectContaining({ max: 30 }),
+      }),
+    ]));
+  });
+
+  it("keeps all AI data-center one-stop branches visible without inventing a total", () => {
+    const application = durationFor("ai-data-center-one-stop-application");
+    expect(application).toMatchObject({
+      minimum: null,
+      typical: null,
+      upperBound: null,
+      unit: null,
+      evidenceType: "STATUTE",
+      planningBasis: "MILESTONE_ONLY",
+    });
+    expect(application?.referencePeriods).toEqual(expect.arrayContaining([
+      expect.objectContaining({ range: expect.objectContaining({ max: 150 }) }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 90 }) }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 40 }) }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 180 }) }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 120 }) }),
+      expect.objectContaining({ range: expect.objectContaining({ max: 70 }) }),
+    ]));
   });
 
   it("uses an AI one-stop completion checkpoint only after the Act and exact qualification", () => {
@@ -680,8 +830,8 @@ describe("automatic planning durations", () => {
     ).toMatchObject({
       minimum: null,
       typical: null,
-      upperBound: 6,
-      unit: "MONTH",
+      upperBound: null,
+      unit: null,
       planningBasis: "OFFICIAL_CAP_ONLY",
     });
     expect(
@@ -692,8 +842,8 @@ describe("automatic planning durations", () => {
     ).toMatchObject({
       minimum: null,
       typical: null,
-      upperBound: 6,
-      unit: "MONTH",
+      upperBound: null,
+      unit: null,
       planningBasis: "OFFICIAL_CAP_ONLY",
     });
   });

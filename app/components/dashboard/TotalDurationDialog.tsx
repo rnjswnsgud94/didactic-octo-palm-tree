@@ -8,7 +8,9 @@ import type { ScheduleResult } from "@/lib/engine/schedule";
 import {
   formatCalendarPeriod,
   formatCompletedCheckpoint,
+  formatResolvedOfficialDurationSummary,
   formatTimelineProcessingDuration,
+  hasQuantifiedOfficialPeriod,
 } from "@/lib/format-duration";
 
 const procedureNames = new Map(
@@ -16,6 +18,9 @@ const procedureNames = new Map(
 );
 const procedureStages = new Map(
   catalog.procedures.map((procedure) => [procedure.id, procedure.stage]),
+);
+const durationByProcedure = new Map(
+  catalog.durations.map((duration) => [duration.procedureId, duration]),
 );
 
 export function TotalDurationDialog({
@@ -63,6 +68,21 @@ export function TotalDurationDialog({
         (id) => !timeline.postOperationProcedureIds.includes(id),
       ).length
     : 0;
+  const statutoryMilestoneOnlyCount = timeline
+    ? timeline.nodes.filter(
+        (node) =>
+          !node.excludedFromOperationReady &&
+          node.processingDuration === null &&
+          hasQuantifiedOfficialPeriod(durationByProcedure.get(node.procedureId)),
+      ).length
+    : 0;
+  const nationwideTotalUnregulatedCount = Math.max(
+    0,
+    unknownActiveCount - statutoryMilestoneOnlyCount,
+  );
+  const planningDurationByProcedure = new Map(
+    schedule.planningDurations.map((duration) => [duration.procedureId, duration]),
+  );
   const incompleteActiveCount = timeline
     ? timeline.incompleteDurationComponentProcedureIds.filter(
         (id) => !timeline.postOperationProcedureIds.includes(id),
@@ -96,7 +116,7 @@ export function TotalDurationDialog({
             </h2>
             <p id="total-duration-dialog-description">
               {isMinimumOnly
-                ? "처리기간 근거가 있는 절차와 공사기간만 6단계로 묶었습니다. 기간 미확인 절차가 남아 총 소요기간으로 볼 수 없습니다."
+                ? "총경과를 계산할 수 있는 절차와 공사기간만 6단계로 묶었습니다. 카드의 법정 상한·중간기한은 별도로 확인할 수 있습니다."
                 : "착공 전 인허가, 공사와 병행하는 절차, 준공·가동 준비 절차를 6단계로 묶었습니다."}
             </p>
           </div>
@@ -130,7 +150,7 @@ export function TotalDurationDialog({
               <strong>{formatCalendarPeriod(timeline.projectStartDate, completionDate!)}</strong>
               <span>
                 {timeline.durationStatus === "MINIMUM_ONLY"
-                  ? `총 소요기간이 아닙니다. 현재 확인된 공식 처리기간${schedule.scenario === "USER" ? `과 사용자 예상 ${timeline.userDurationOverrideProcedureIds.length}건` : ""}, 공사기간만 합산했습니다. 처리기간 자체가 미확인인 절차 ${unknownActiveCount}개와 신청준비·심사·협의 기간 구성이 미확인인 절차 ${incompleteActiveCount}개가 남아 있습니다.`
+                  ? `총 소요기간이 아닙니다. 현재 확인된 공식 총경과${schedule.scenario === "USER" ? `와 사용자 예상 ${timeline.userDurationOverrideProcedureIds.length}건` : ""}, 공사기간만 합산했습니다. 법정 상한·단계기한만 확인된 절차 ${statutoryMilestoneOnlyCount}개, 전국 공통 총기간이 규정되지 않은 절차 ${nationwideTotalUnregulatedCount}개, 신청준비·심사·협의 기간 구성이 미확인인 절차 ${incompleteActiveCount}개가 남아 있습니다.`
                   : schedule.scenario === "MIN"
                     ? "각 절차의 확인된 최소 처리기간을 적용했습니다."
                     : schedule.scenario === "USER"
@@ -156,17 +176,25 @@ export function TotalDurationDialog({
                         ].filter(Boolean).join(" ")}
                       >
                         <b>{procedureNames.get(node.procedureId) ?? node.procedureId}</b>
-                        {node.completedCheckpoint
-                          ? <small>완료 이정표 · 잔여 처리기간 0일</small>
-                          : node.excludedFromOperationReady
-                          ? <small>가동 후 별도</small>
-                          : node.processingDuration === null
-                            ? <small>{formatTimelineProcessingDuration(node)}</small>
-                            : node.extendsOperationReady
-                              ? <small>총기간 연장</small>
-                              : node.overlapsConstruction
-                                ? <small>공사와 병행</small>
-                                : null}
+                        {node.completedCheckpoint ? (
+                          <small>완료 이정표 · 잔여 처리기간 0일</small>
+                        ) : (
+                          <small>
+                            {node.processingDuration === null
+                              ? formatResolvedOfficialDurationSummary(
+                                  durationByProcedure.get(node.procedureId),
+                                  planningDurationByProcedure.get(node.procedureId),
+                                )
+                              : formatTimelineProcessingDuration(node)}
+                            {node.excludedFromOperationReady
+                              ? " · 가동 후 별도"
+                              : node.extendsOperationReady
+                                ? " · 총기간 연장"
+                                : node.overlapsConstruction
+                                  ? " · 공사와 병행"
+                                  : ""}
+                          </small>
+                        )}
                       </span>
                     ))}
                     {!group.nodes.length ? <em>현재 포함된 절차 없음</em> : null}

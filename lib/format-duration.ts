@@ -1,4 +1,8 @@
 import type {
+  DurationEstimate,
+} from "@/lib/domain/schemas";
+import type {
+  PlanningDuration,
   ProjectTimelineNode,
   ScheduleCompletedCheckpoint,
 } from "@/lib/engine/schedule";
@@ -52,6 +56,203 @@ export function formatProcessingDuration(
   return `${value}개월`;
 }
 
+const quantifiedOfficialReferenceKinds = new Set([
+  "NATIONWIDE_STATUTORY",
+  "NATIONWIDE_OFFICIAL_STANDARD",
+  "OFFICIAL_OPERATION_CAP",
+  "LEGAL_DEADLINE",
+  "PROCESS_MILESTONE",
+]);
+
+function quantifiedOfficialReferences(
+  periods: DurationEstimate["referencePeriods"] | undefined,
+) {
+  return (periods ?? []).filter(
+    (period) =>
+      quantifiedOfficialReferenceKinds.has(period.kind) &&
+      period.range !== null &&
+      [period.range.min, period.range.base, period.range.max].some(
+        (value) => value !== null,
+      ),
+  );
+}
+
+function compactDurationValues(
+  periods: NonNullable<DurationEstimate["referencePeriods"]>,
+) {
+  const groups = new Map<NonNullable<DurationEstimate["elapsed"]>["unit"], Set<number>>();
+  for (const period of periods) {
+    if (!period.range) continue;
+    const values = groups.get(period.range.unit) ?? new Set<number>();
+    for (const value of [period.range.min, period.range.base, period.range.max]) {
+      if (value !== null) values.add(value);
+    }
+    groups.set(period.range.unit, values);
+  }
+  return [...groups.entries()].map(([unit, values]) => {
+    const ordered = [...values].sort((left, right) => left - right);
+    const suffix = unit === "BUSINESS_DAY" ? "업무일" : unit === "CALENDAR_DAY" ? "일" : "개월";
+    return `${ordered.join("·")}${suffix}`;
+  }).join(" / ");
+}
+
+function compactRange(range: NonNullable<DurationEstimate["elapsed"]>) {
+  const values = [range.min, range.base, range.max]
+    .filter((value): value is number => value !== null);
+  const unique = [...new Set(values)].sort((left, right) => left - right);
+  const suffix = range.unit === "BUSINESS_DAY" ? "업무일" : range.unit === "CALENDAR_DAY" ? "일" : "개월";
+  if (!unique.length) return "";
+  if (unique.length === 1) return `${unique[0]}${suffix}`;
+  return `${unique.join("·")}${suffix}`;
+}
+
+function detailedReferenceRange(
+  range: NonNullable<NonNullable<DurationEstimate["referencePeriods"]>[number]["range"]>,
+) {
+  const suffix = range.unit === "BUSINESS_DAY" ? "업무일" : range.unit === "CALENDAR_DAY" ? "일" : "개월";
+  if (range.min !== null && range.base === null && range.max === null) {
+    return `최소 ${range.min}${suffix}`;
+  }
+  if (range.min === null && range.base === null && range.max !== null) {
+    return `${range.max}${suffix}`;
+  }
+  return compactRange(range);
+}
+
+function hasImmediateOfficialStandard(
+  duration: Pick<DurationEstimate, "referencePeriods" | "statutoryPeriod">,
+) {
+  return /3근무시간 이내/.test(duration.statutoryPeriod ?? "") ||
+    (duration.referencePeriods ?? []).some((period) =>
+      /3근무시간 이내/.test(`${period.label} ${period.note}`),
+    );
+}
+
+function hasNoNationalTotalWording(value: string) {
+  return /없음|두지 않|미규정|정하지 않|정해져 있지 않|정해지지 않|희망일/.test(value);
+}
+
+export function hasQuantifiedOfficialPeriod(
+  duration: Pick<
+    DurationEstimate,
+    "authorityProcessing" | "elapsed" | "referencePeriods" | "statutoryPeriod"
+  > | null | undefined,
+) {
+  if (!duration) return false;
+  if (hasImmediateOfficialStandard(duration)) return true;
+  return [duration.elapsed, duration.authorityProcessing].some(
+    (range) => range && [range.min, range.base, range.max].some((value) => value !== null),
+  ) || quantifiedOfficialReferences(duration.referencePeriods).length > 0;
+}
+
+/**
+ * 일정 계산 가능 여부와 무관하게 카드에서 먼저 보여 줄 법정·공식 기간 요약입니다.
+ * 상한·단계기한은 실제 총 소요기간으로 오인되지 않도록 명시적으로 구분합니다.
+ */
+export function formatOfficialDurationSummary(
+  duration: Pick<
+    DurationEstimate,
+    | "authorityProcessing"
+    | "elapsed"
+    | "planningBasis"
+    | "referencePeriods"
+    | "statutoryPeriod"
+  > | null | undefined,
+) {
+  if (!duration) return "수록된 법정·공식 기간 없음";
+
+  const statutoryPeriod = duration.statutoryPeriod ?? "";
+  const isImmediate = hasImmediateOfficialStandard(duration);
+
+  const references = quantifiedOfficialReferences(duration.referencePeriods);
+  if (references.length) {
+    const values = compactDurationValues(references);
+    const onlyMilestones = references.every(
+      (period) => period.kind === "LEGAL_DEADLINE" || period.kind === "PROCESS_MILESTONE",
+    );
+    const hasTotalCap = references.some(
+      (period) =>
+        period.kind === "NATIONWIDE_STATUTORY" ||
+        period.kind === "NATIONWIDE_OFFICIAL_STANDARD" ||
+        period.kind === "OFFICIAL_OPERATION_CAP",
+    );
+    const prefix = isImmediate ? "즉시(3근무시간 이내) · " : "";
+    if (duration.planningBasis === "OFFICIAL_CAP_ONLY" || hasTotalCap) {
+      return `${prefix}법정·공식 상한·분기 ${values} · 실제 총 경과는 별도`;
+    }
+    if (onlyMilestones) {
+      return `${prefix}법정 단계기한 ${values} · 단계별 기산점 적용`;
+    }
+    return `${prefix}법정·공식 기간 ${values}`;
+  }
+
+  if (isImmediate) {
+    return "즉시 · 3근무시간 이내";
+  }
+
+  const primaryRange = duration.elapsed ?? duration.authorityProcessing;
+  if (primaryRange) {
+    const compact = compactRange(primaryRange);
+    if (duration.planningBasis === "OFFICIAL_CAP_ONLY") {
+      return `법정·공식 상한 ${compact} · 실제 평균 아님`;
+    }
+    if (duration.elapsed === null) {
+      return `기관 공식 처리 ${compact} · 전체 경과는 별도`;
+    }
+    const hasSeveralBranches = new Set(
+      [primaryRange.min, primaryRange.base, primaryRange.max].filter(
+        (value): value is number => value !== null,
+      ),
+    ).size > 1;
+    return hasSeveralBranches
+      ? `공식 처리분기 ${compact} · 세부요건별 선택`
+      : `법정·공식 처리 ${compact}`;
+  }
+
+  if (hasNoNationalTotalWording(statutoryPeriod)) {
+    return "전국 공통 법정 총기간 미규정";
+  }
+  return statutoryPeriod ? "법정 기간은 상세 기준 참조" : "법정·공식 기간 확인 필요";
+}
+
+/** 입력 조건이나 선택 관할로 하나의 공식 분기가 확정된 경우 그 값을 우선 표시합니다. */
+export function formatResolvedOfficialDurationSummary(
+  duration: Parameters<typeof formatOfficialDurationSummary>[0],
+  planning: Pick<
+    PlanningDuration,
+    | "minimum"
+    | "typical"
+    | "upperBound"
+    | "unit"
+    | "planningBasis"
+    | "completedCheckpoint"
+  > | null | undefined,
+) {
+  if (
+    !planning ||
+    planning.completedCheckpoint ||
+    !planning.unit ||
+    !["INPUT_RESOLVED_OFFICIAL", "LOCAL_OFFICIAL_REFERENCE"].includes(
+      planning.planningBasis ?? "",
+    )
+  ) {
+    return formatOfficialDurationSummary(duration);
+  }
+  const range = {
+    min: planning.minimum,
+    base: planning.typical,
+    max: planning.upperBound ?? null,
+    unit: planning.unit,
+  };
+  if (![range.min, range.base, range.max].some((value) => value !== null)) {
+    return formatOfficialDurationSummary(duration);
+  }
+  const label = planning.planningBasis === "LOCAL_OFFICIAL_REFERENCE"
+    ? "선택 관할 공식 처리"
+    : "입력조건 공식 처리";
+  return `${label} ${compactRange(range)}`;
+}
+
 export function formatTimelineProcessingDuration(
   node: Pick<
     ProjectTimelineNode,
@@ -59,7 +260,8 @@ export function formatTimelineProcessingDuration(
   > & Partial<Pick<
     ProjectTimelineNode,
     "processingUpperBound" | "durationReferencePeriods" | "durationSourceLabel" |
-    "durationSource" | "officialProcessingDuration" | "officialProcessingUnit"
+    "durationSource" | "durationPlanningBasis" | "officialProcessingDuration" |
+    "officialProcessingUnit"
   >>,
 ) {
   const checkpoint = node.completedCheckpoint;
@@ -70,45 +272,37 @@ export function formatTimelineProcessingDuration(
         ? `${expected} · 공식 기준 ${formatProcessingDuration(node.officialProcessingDuration, node.officialProcessingUnit ?? null)}`
         : `${expected} · 공식 총기간 미확인`;
     }
-    const referencePriority = {
-      OFFICIAL_OPERATION_CAP: 0,
-      NATIONWIDE_STATUTORY: 1,
-      NATIONWIDE_OFFICIAL_STANDARD: 1,
-      LEGAL_DEADLINE: 2,
-      PROCESS_MILESTONE: 3,
-    } as const;
-    const quantifiedReferences = (node.durationReferencePeriods ?? [])
-      .filter((period) =>
-        period.kind in referencePriority &&
-        period.range !== null &&
-        period.range.max !== null
-      )
-      .sort((left, right) =>
-        referencePriority[left.kind as keyof typeof referencePriority] -
-        referencePriority[right.kind as keyof typeof referencePriority]
+    if (node.processingDuration === null) {
+      const sourceLabel = node.durationSourceLabel ?? "";
+      const references = quantifiedOfficialReferences(
+        node.durationReferencePeriods ?? [],
       );
-    if (node.processingDuration === null && quantifiedReferences.length) {
-      const visibleReferences = quantifiedReferences.slice(0, 3);
-      const hiddenCount = quantifiedReferences.length - visibleReferences.length;
-      return `총기간 미확인 · ${visibleReferences.map((period) =>
-        `${period.label} ${formatProcessingDuration(period.range!.max!, period.range!.unit)}`
-      ).join(" · ")}${hiddenCount ? ` · 외 ${hiddenCount}개 법정·공식 기준` : ""}`;
+      const immediate = /3근무시간 이내/.test(sourceLabel) ||
+        (node.durationReferencePeriods ?? []).some((period) =>
+          /3근무시간 이내/.test(`${period.label} ${period.note}`),
+        );
+      const referenceDetails = references.map((period) =>
+        `${period.label} ${detailedReferenceRange(period.range!)}`,
+      );
+      if (immediate && !referenceDetails.length) {
+        return "법정·공식 즉시 · 3근무시간 이내 (0일 아님)";
+      }
+      if (referenceDetails.length) {
+        return [
+          immediate ? "법정·공식 즉시 · 3근무시간 이내 (0일 아님)" : "법정·공식 총기간 미확인",
+          ...referenceDetails,
+        ].join(" · ");
+      }
+      if (sourceLabel) {
+        const noNationalTotal = hasNoNationalTotalWording(sourceLabel);
+        return `법정·공식 총기간 ${noNationalTotal ? "미규정" : "미확인"} · ${sourceLabel}`;
+      }
+      return "법정·공식 기간 확인 필요";
     }
-    if (
-      node.processingDuration === null &&
-      node.processingUpperBound !== null &&
-      node.processingUpperBound !== undefined &&
-      node.processingUnit !== null
-    ) {
-      return `총기간 미확인 · 공식 상한 ${formatProcessingDuration(node.processingUpperBound, node.processingUnit)}`;
-    }
-    if (node.processingDuration === null && node.durationSourceLabel) {
-      return `총기간 미확인 · ${node.durationSourceLabel}`;
-    }
-    return formatProcessingDuration(
+    return `법정·공식 ${formatProcessingDuration(
       node.processingDuration,
       node.processingUnit,
-    );
+    )}`;
   }
   return formatCompletedCheckpoint(checkpoint);
 }

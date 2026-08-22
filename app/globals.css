@@ -110,6 +110,7 @@ a { color: inherit; }
 .wizard-panel { position: sticky; top: 90px; border-radius: var(--radius); overflow: hidden; }
 .wizard-heading { display: flex; justify-content: space-between; gap: 12px; padding: 20px 20px 17px; border-bottom: 1px solid var(--soft-line); }
 .wizard-heading h2 { margin: 3px 0 0; font-size: 18px; letter-spacing: -.03em; }
+.wizard-heading p { max-width: 220px; margin: 6px 0 0; color: var(--muted); font-size: 10.5px; line-height: 1.55; }
 .step-count { align-self: center; padding: 5px 8px; border-radius: 5px; color: var(--navy); background: #edf3f8; font-size: 11px; font-weight: 800; }
 .wizard-steps { display: grid; grid-template-columns: 1fr 1fr; padding: 13px 14px; border-bottom: 1px solid var(--soft-line); background: #fafbfc; }
 .wizard-steps button { position: relative; display: grid; grid-template-columns: 24px 1fr; grid-template-rows: auto auto; column-gap: 7px; padding: 9px 6px; border: 0; background: transparent; color: var(--muted); text-align: left; }
@@ -131,6 +132,11 @@ a { color: inherit; }
 .wizard-optional-section[open] > summary::after { content: "−"; }
 .wizard-optional-body, .special-law-candidates-details > .special-law-candidate-list { padding: 13px; }
 .wizard-optional-body > .wizard-question:last-child { margin-bottom: 0; }
+.wizard-progressive-section { border-color: #cbd8e3; background: #f6f9fb; }
+.wizard-progressive-section > summary { min-height: 50px; }
+.wizard-progressive-section.has-values > summary { background: #f0faf8; }
+.wizard-progressive-section.has-values > summary span { color: #087e78; }
+.progressive-section-intro { margin: 0 0 16px; padding: 9px 10px; border-left: 3px solid #9cb5c8; background: #f7f9fb; color: var(--muted); font-size: 10.5px; line-height: 1.55; }
 .special-law-candidates-details > .inline-notice { margin: 0 13px 13px; }
 .wizard-question > .wizard-optional-section { margin: 12px 0 0; }
 .question-hint { margin: -5px 0 9px; color: var(--muted); font-size: 10.5px; }
@@ -305,6 +311,9 @@ a { color: inherit; }
 .procedure-card-topline, .procedure-meta { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 7px; }
 .procedure-card-topline > span:last-child { overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .procedure-card-main > strong { position: relative; z-index: 1; font-size: 10.5px; line-height: 1.45; }
+.procedure-official-duration { position: relative; z-index: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 5px; padding: 6px 7px; border: 1px solid #d8e5ee; border-radius: 5px; background: #f4f8fb; color: #40566b; font-size: 8.5px; line-height: 1.45; }
+.procedure-official-duration b { color: var(--navy); white-space: nowrap; }
+.procedure-official-duration span { min-width: 0; overflow-wrap: anywhere; }
 .procedure-meta { color: var(--muted); font-size: 8.5px; }.procedure-meta em { padding: 1px 4px; border-radius: 3px; background: var(--red-soft); color: var(--red); font-size: 7px; font-style: normal; font-weight: 800; }
 .procedure-card.is-overlap .procedure-meta em { background: var(--teal-soft); color: var(--teal); }
 .procedure-route { position: relative; z-index: 1; display: block; padding-top: 6px; border-top: 1px dashed var(--line); color: var(--muted); font-size: 7.5px; line-height: 1.4; }
@@ -353,7 +362,7 @@ a { color: inherit; }
 .procedure-table { width: 100%; min-width: 760px; border-collapse: collapse; }
 .procedure-table th { padding: 10px 12px; border-bottom: 1px solid var(--line); background: #f7f9fa; color: var(--muted); font-size: 9px; text-align: left; }
 .procedure-table td { padding: 12px; border-bottom: 1px solid var(--soft-line); color: #465568; font-size: 10.5px; vertical-align: middle; }.procedure-table tr:last-child td { border-bottom: 0; }
-.procedure-table td:nth-child(2) strong, .procedure-table td:nth-child(2) small { display: block; }.procedure-table td:nth-child(2) strong { color: var(--ink); font-size: 11px; }.procedure-table td:nth-child(2) small { color: var(--muted); font-size: 9px; }
+.procedure-table td:nth-child(2) strong, .procedure-table td:nth-child(2) small, .procedure-table td:nth-child(5) strong, .procedure-table td:nth-child(5) small { display: block; }.procedure-table td:nth-child(2) strong { color: var(--ink); font-size: 11px; }.procedure-table td:nth-child(2) small, .procedure-table td:nth-child(5) small { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.45; }.procedure-table td:nth-child(5) strong { color: var(--navy); font-size: 10px; line-height: 1.45; }
 .text-button { border: 0; background: transparent; color: var(--teal); font-size: 10px; font-weight: 800; }.critical-text { color: var(--red); font-size: 8px; font-style: normal; font-weight: 800; }.empty-state { padding: 60px 20px; color: var(--muted); text-align: center; }
 
 .schedule-layout { display: grid; gap: 14px; }
@@ -403,6 +412,10 @@ a { color: inherit; }
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; margin: 15px 0; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }.detail-grid div { min-height: 64px; padding: 9px 11px; border-right: 1px solid var(--soft-line); border-bottom: 1px solid var(--soft-line); }.detail-grid div:nth-child(even) { border-right: 0; }.detail-grid div:nth-last-child(-n+2) { border-bottom: 0; }.detail-grid dt { color: var(--muted); font-size: 8px; }.detail-grid dd { margin: 3px 0 0; color: #34465a; font-size: 10px; font-weight: 700; }
 .drawer-section { padding: 15px 0; border-top: 1px solid var(--soft-line); }.drawer-section h3 { margin: 0 0 8px; font-size: 12px; }.drawer-section p, .drawer-section li { color: #526174; font-size: 10px; }.drawer-section ul { display: grid; gap: 5px; margin: 0; padding-left: 17px; }.deeming-section { padding: 13px; border: 1px solid #dfe9f2; border-left: 3px solid var(--navy); background: #f6f9fc; }.deeming-section p { margin: 4px 0; }.deeming-section small { display: block; margin-top: 8px; color: var(--muted); font-size: 8px; }
 .duration-breakdown { display: grid; grid-template-columns: 1fr 1fr; margin: 0 0 10px; border: 1px solid var(--soft-line); border-radius: 6px; overflow: hidden; }.duration-breakdown div { padding: 8px; border-right: 1px solid var(--soft-line); border-bottom: 1px solid var(--soft-line); }.duration-breakdown div:nth-child(even) { border-right: 0; }.duration-breakdown div:nth-last-child(-n+2) { border-bottom: 0; }.duration-breakdown dt { color: var(--muted); font-size: 8px; }.duration-breakdown dd { margin: 2px 0 0; color: #405167; font-size: 9px; font-weight: 700; }.duration-section > p { margin: 5px 0; }.duration-section > small { display: block; margin-top: 9px; color: var(--muted); font-size: 8px; }
+.official-duration-highlight { display: grid; gap: 4px; margin-bottom: 10px; padding: 12px 13px; border: 1px solid #cbdde9; border-left: 4px solid var(--navy); border-radius: 7px; background: #f4f8fb; }
+.official-duration-highlight span { color: #597085; font-size: 11px; font-weight: 800; }
+.official-duration-highlight strong { color: var(--navy); font-size: 16px; line-height: 1.45; }
+.official-duration-highlight small { color: var(--muted); font-size: 11px; line-height: 1.5; }
 .practical-duration-note { margin: 10px 0 !important; padding: 10px 11px; border-left: 3px solid var(--amber); border-radius: 0 6px 6px 0; background: var(--amber-soft); line-height: 1.65; }.practical-duration-note.has-observation { border-left-color: var(--teal); background: var(--teal-soft); }
 .duration-reference-list { display: grid; gap: 8px; margin: 11px 0; }.duration-reference-card { padding: 11px 12px; border: 1px solid var(--line); border-radius: 7px; background: #fbfcfd; }.duration-reference-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }.duration-reference-card > header span { padding: 3px 7px; border-radius: 999px; background: #e8f0f6; color: var(--navy); font-size: 10px; font-weight: 800; }.duration-reference-card.kind-planning_reference > header span { background: var(--amber-soft); color: #83510e; }.duration-reference-card.kind-observed_practice > header span { background: var(--teal-soft); color: var(--teal); }.duration-reference-card > header strong { color: var(--navy); font-size: 11px; text-align: right; }.duration-reference-card h4 { margin: 9px 0 6px; font-size: 12px; }.duration-reference-card p { margin: 4px 0; line-height: 1.55; }.duration-reference-card p b { color: #34465a; }.duration-reference-card footer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--soft-line); }.duration-reference-card footer span { margin-right: auto; color: var(--muted); font-size: 10px; }.duration-reference-card footer a { color: var(--teal); font-size: 10px; font-weight: 800; text-decoration: none; }
 .section-heading-row { display: flex; justify-content: space-between; align-items: center; }.section-heading-row span { color: var(--muted); font-size: 8px; }
@@ -584,7 +597,7 @@ body { font-size: 16px; }
 .procedure-card-main > strong, .lane-header { font-size: 12px; }
 .swimlane-legend, .phase-route strong, .flow-instruction,
 .swimlane-corner, .stage-header span, .flow-header small { font-size: 11px; }
-.procedure-card-topline > span:last-child, .procedure-meta, .procedure-route { font-size: 11px; }
+.procedure-card-topline > span:last-child, .procedure-meta, .procedure-route, .procedure-official-duration { font-size: 11px; }
 .user-duration-toggle > span, .user-duration-toggle > strong, .user-duration-fields input, .user-duration-fields select, .user-duration-save, .user-duration-compact { font-size: 11px; }
 .user-duration-fields > p, .user-duration-clear, .user-duration-error { font-size: 10px; }
 .procedure-meta em, .route-chip em, .route-more { font-size: 11px; }
@@ -727,6 +740,7 @@ body { font-size: 16px; }
   .swimlane-corner, .stage-header span, .flow-header small { font-size: 12px; }
   .procedure-card-main > strong, .lane-header { font-size: 13px; }
   .procedure-card-topline > span:last-child, .procedure-meta, .procedure-route,
+  .procedure-official-duration,
   .status-badge, .special-law-chip, .unscheduled-procedures p,
   .unscheduled-procedures button { font-size: 12px; }
   .procedure-meta em, .route-chip em, .route-more,
@@ -1137,7 +1151,7 @@ body { font-size: 16px; }
 .action-plan-status span { color: #77591f; font-size: 11px; line-height: 1.6; }
 .action-plan-evidence {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1px;
   border: 1px solid var(--line);
   border-radius: 9px;

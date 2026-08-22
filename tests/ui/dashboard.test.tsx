@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { DashboardClient } from "@/app/components/dashboard/DashboardClient";
 import { InputCodeDialog } from "@/app/components/dashboard/InputCodeDialog";
 import { catalog } from "@/lib/data/catalog";
-import { encodeInputCode, INPUT_CODE_PREFIX, MAX_INPUT_CODE_LENGTH } from "@/lib/share-state";
+import { encodeInputCode, encodeShareState, INPUT_CODE_PREFIX, MAX_INPUT_CODE_LENGTH } from "@/lib/share-state";
 
 const originalShowModal = Object.getOwnPropertyDescriptor(
   HTMLDialogElement.prototype,
@@ -98,15 +98,54 @@ describe("dashboard UI", () => {
     expect(textarea).toHaveAttribute("aria-errormessage", "input-code-error");
     expect(screen.getByLabelText("시·도")).toHaveValue("");
 
+    const importedAnswers = {
+      ...catalog.scenarios[1].answers,
+      userDurationOverrides: {
+        "building-permit": { value: 2, unit: "MONTH" as const },
+      },
+    };
     fireEvent.change(textarea, {
-      target: { value: encodeInputCode(catalog.scenarios[1].answers) },
+      target: { value: encodeInputCode(importedAnswers) },
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "입력값 불러오기" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "입력 코드 가져오기·내보내기" })).not.toBeInTheDocument());
     expect(screen.getByLabelText("시·도")).toHaveValue("충청남도");
     expect(screen.getByLabelText("시·군·구")).toHaveValue("천안시");
-    expect(screen.getByRole("status")).toHaveTextContent("입력값을 코드에서 복원");
+    expect(screen.getByRole("status")).toHaveTextContent("실무 예상기간 1건");
+    expect(within(screen.getByLabelText("소요기간 기준")).getByRole(
+      "button",
+      { name: "내 예상 1" },
+    )).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("2개월 · 수정")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(new URLSearchParams(window.location.search).get("ud")).toContain(
+        "building-permit~2~m",
+      );
+    });
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("restores shared card durations as the active user-expected schedule", async () => {
+    const sharedAnswers = {
+      ...catalog.scenarios[0].answers,
+      userDurationOverrides: {
+        "building-permit": { value: 45, unit: "CALENDAR_DAY" as const },
+      },
+    };
+    window.history.replaceState(
+      null,
+      "",
+      `/?${encodeShareState(sharedAnswers, "SWIMLANE")}`,
+    );
+
+    render(<DashboardClient />);
+
+    const scenarioSwitch = screen.getByLabelText("소요기간 기준");
+    await waitFor(() => expect(within(scenarioSwitch).getByRole(
+      "button",
+      { name: "내 예상 1" },
+    )).toHaveAttribute("aria-pressed", "true"));
+    expect(await screen.findByText("45일 · 수정")).toBeInTheDocument();
   });
 
   it("keeps the current project unchanged when an input-code import fails", async () => {
@@ -341,6 +380,8 @@ describe("dashboard UI", () => {
     expect(screen.queryByText("기존", { selector: "span" })).not.toBeInTheDocument();
     expect(screen.queryByText("증가분", { selector: "span" })).not.toBeInTheDocument();
     expect(screen.getByText("건축 전문검토 항목")).toBeInTheDocument();
+    const siteDetails = screen.getByText("부지·건축 추가 확인").closest("details");
+    expect(siteDetails).not.toHaveAttribute("open");
 
     fireEvent.click(within(screen.getByRole("navigation", { name: "입력 단계" })).getByRole("button", { name: /^3 환경·안전/ }));
     expect(screen.queryByText("화학물질·혼합물 직접 제조·수입 여부", { selector: "legend" })).not.toBeInTheDocument();
@@ -355,6 +396,9 @@ describe("dashboard UI", () => {
     expect(screen.getByText("위험물 탱크 설치 여부", { selector: "legend" })).toBeInTheDocument();
     expect(screen.getByText("가스·산업안전 추가 확인")).toBeInTheDocument();
 
+    const environmentalDetails = screen.getByText("환경평가·기타 신고").closest("details");
+    expect(environmentalDetails).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("환경평가·기타 신고"));
     fireEvent.click(screen.getByText("공사·환경 법정 임계값 정밀검토"));
     const reviewGroup = screen.getByRole("group", {
       name: "공사·환경 법정 임계값 검토 결과",
@@ -392,6 +436,7 @@ describe("dashboard UI", () => {
       }),
     ).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByText("환경평가·기타 신고"));
     fireEvent.click(screen.getByText("공사·환경 법정 임계값 정밀검토"));
     const reviewGroup = screen.getByRole("group", {
       name: "공사·환경 법정 임계값 검토 결과",
@@ -559,6 +604,19 @@ describe("dashboard UI", () => {
     await waitFor(() => {
       expect(screen.getByText(/사용자 예상 1건 반영/)).toBeInTheDocument();
     });
+
+    fireEvent.click(within(card).getByRole("button", { name: /내 예상.*수정/ }));
+    fireEvent.click(within(card).getByRole("button", { name: "공식 기준으로 되돌리기" }));
+    expect(within(screen.getByLabelText("소요기간 기준")).getByRole(
+      "button",
+      { name: "공식 기준" },
+    )).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(editorToggle);
+    fireEvent.change(within(card).getByRole("spinbutton"), {
+      target: { value: "30" },
+    });
+    fireEvent.click(within(card).getByRole("button", { name: "반영" }));
 
     fireEvent.click(screen.getByRole("button", { name: "예상값 전체 삭제" }));
     expect(within(screen.getByLabelText("소요기간 기준")).getByRole(
@@ -898,15 +956,15 @@ describe("dashboard UI", () => {
     expect(screen.getByText(/검증 저장본 먼저 표시/)).toBeInTheDocument();
   });
 
-  it("applies an editable industry profile and excludes hidden chemical follow-ups when handling is disabled", async () => {
+  it("uses the industry profile only as a review guide and excludes chemical follow-ups when handling is disabled", async () => {
     render(<DashboardClient />);
     fireEvent.change(screen.getByLabelText("업종·주요 공정"), {
       target: { value: "CHEMICAL_PRODUCTS" },
     });
 
     expect(document.querySelector('[data-input-key="industryCategory"]')).toHaveTextContent("화학물질·화학제품");
-    expect(document.querySelector('[data-input-key="chemicalsHandled"]')).toHaveTextContent("예");
-    expect(screen.getByText(/법적 대상 확정이 아니므로/)).toBeInTheDocument();
+    expect(document.querySelector('[data-input-key="chemicalsHandled"]')).toHaveTextContent("미확인");
+    expect(screen.getByText(/업종만으로 환경·안전 인허가를 자동 확정하지 않습니다/)).toBeInTheDocument();
 
     fireEvent.click(within(screen.getByRole("navigation", { name: "입력 단계" })).getByRole("button", { name: /^3 환경·안전/ }));
     const chemicalQuestion = screen.getByText("화학물질 취급 여부", { selector: "legend" }).closest("fieldset");

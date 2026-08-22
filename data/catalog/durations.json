@@ -15,7 +15,37 @@
     "assumptions": ["기준 시나리오는 관계기관 협의가 있는 20일 경로", "정부24 처리기간 계산기준상 업무일"],
     "verifiedAt": "2026-08-20",
     "legalConfidence": "HIGH",
-    "estimateConfidence": "HIGH"
+    "estimateConfidence": "HIGH",
+    "referencePeriods": [
+      {
+        "id": "ref-factory-approval-no-or-same-authority-deemed-branch",
+        "kind": "NATIONWIDE_OFFICIAL_STANDARD",
+        "label": "공장설립승인 · 의제 없음 7일 / 동일 행정청 권한 의제 14일",
+        "range": { "min": 7, "base": 7, "max": 14, "unit": "BUSINESS_DAY" },
+        "jurisdiction": null,
+        "startsWhen": "해당 공식 분기의 완비된 공장설립승인 신청을 접수한 날",
+        "includes": ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+        "citationIds": ["cit-gov24-factory-duration"],
+        "sampleSize": null,
+        "observedFrom": null,
+        "observedTo": null,
+        "note": "의제대상 인허가가 없으면 7업무일, 의제대상이 모두 동일 행정청 권한이면 14업무일인 상호배타적 분기입니다."
+      },
+      {
+        "id": "ref-factory-approval-other-authority-deemed-branch",
+        "kind": "NATIONWIDE_OFFICIAL_STANDARD",
+        "label": "공장설립승인 · 타 기관 인허가 의제 20일 / 30일",
+        "range": { "min": 20, "base": 20, "max": 30, "unit": "BUSINESS_DAY" },
+        "jurisdiction": null,
+        "startsWhen": "타 기관 권한의 의제대상 인허가를 포함한 완비된 신청을 접수한 날",
+        "includes": ["AUTHORITY_PROCESSING", "INTERAGENCY_CONSULTATION", "RESULT_NOTICE"],
+        "citationIds": ["cit-gov24-factory-duration"],
+        "sampleSize": null,
+        "observedFrom": null,
+        "observedTo": null,
+        "note": "의제대상 개별 처리기간이 20일 미만이면 20업무일, 20일 이상이면 30업무일인 상호배타적 분기입니다."
+      }
+    ]
   },
   {
     "id": "duration-building-permit",
@@ -33,7 +63,79 @@
     "assumptions": ["최소는 정부24 전체 분기 중 최단값", "통상은 1천㎡ 이상 3만㎡ 미만 일반 건축물의 공식 14일 경로", "층수·건축사 업무대행·위원회 심의 여부에 따라 실제 분기를 다시 확인"],
     "verifiedAt": "2026-08-20",
     "legalConfidence": "HIGH",
-    "estimateConfidence": "MEDIUM"
+    "estimateConfidence": "MEDIUM",
+    "referencePeriods": [
+      {
+        "id": "ref-building-permit-standard-design-branch",
+        "kind": "NATIONWIDE_OFFICIAL_STANDARD",
+        "label": "표준설계도서 건축허가",
+        "range": { "min": 2, "base": 2, "max": 2, "unit": "BUSINESS_DAY" },
+        "jurisdiction": null,
+        "startsWhen": "표준설계도서를 사용한 완비된 허가신청을 접수한 날",
+        "includes": ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+        "citationIds": ["cit-gov24-building-permit-duration"],
+        "sampleSize": null,
+        "observedFrom": null,
+        "observedTo": null,
+        "note": "표준설계도서 이용 요건을 충족한 경우에만 적용하는 2업무일 공식 분기입니다."
+      },
+      {
+        "id": "ref-building-permit-general-factory-branches",
+        "kind": "NATIONWIDE_OFFICIAL_STANDARD",
+        "label": "일반 공장 규모별 건축허가",
+        "range": { "min": 7, "base": 14, "max": 25, "unit": "BUSINESS_DAY" },
+        "jurisdiction": null,
+        "startsWhen": "규모구간이 확정된 일반 공장 건축허가 신청을 접수한 날",
+        "includes": ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+        "citationIds": ["cit-gov24-building-permit-duration"],
+        "sampleSize": null,
+        "observedFrom": null,
+        "observedTo": null,
+        "note": "7·14·25업무일은 연면적 등 규모구간별 상호배타적 공식 분기입니다."
+      },
+      {
+        "id": "ref-building-permit-architect-delegation-branches",
+        "kind": "NATIONWIDE_OFFICIAL_STANDARD",
+        "label": "건축사 업무대행 건축허가",
+        "range": { "min": 7, "base": 10, "max": 15, "unit": "BUSINESS_DAY" },
+        "jurisdiction": null,
+        "startsWhen": "건축사 업무대행 대상의 완비된 허가신청을 접수한 날",
+        "includes": ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+        "citationIds": ["cit-gov24-building-permit-duration"],
+        "sampleSize": null,
+        "observedFrom": null,
+        "observedTo": null,
+        "note": "7·10·15업무일은 건축사 업무대행 대상의 세부 규모·유형별 상호배타적 공식 분기입니다."
+      },
+      {
+        "id": "ref-building-permit-provincial-authority-branch",
+        "kind": "NATIONWIDE_OFFICIAL_STANDARD",
+        "label": "광역단체장 허가대상",
+        "range": { "min": 40, "base": 40, "max": 40, "unit": "BUSINESS_DAY" },
+        "jurisdiction": null,
+        "startsWhen": "광역단체장 허가대상의 완비된 신청을 접수한 날",
+        "includes": ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+        "citationIds": ["cit-gov24-building-permit-duration"],
+        "sampleSize": null,
+        "observedFrom": null,
+        "observedTo": null,
+        "note": "광역단체장 허가대상에 적용하는 40업무일 공식 분기입니다."
+      },
+      {
+        "id": "ref-building-permit-committee-prior-approval-branches",
+        "kind": "NATIONWIDE_OFFICIAL_STANDARD",
+        "label": "지방건축위원회·도 사전승인 대상",
+        "range": { "min": 45, "base": 45, "max": 70, "unit": "BUSINESS_DAY" },
+        "jurisdiction": null,
+        "startsWhen": "지방건축위원회 또는 도 사전승인 대상의 완비된 신청을 접수한 날",
+        "includes": ["AUTHORITY_PROCESSING", "COMMITTEE_WAIT", "INTERAGENCY_CONSULTATION", "RESULT_NOTICE"],
+        "citationIds": ["cit-gov24-building-permit-duration"],
+        "sampleSize": null,
+        "observedFrom": null,
+        "observedTo": null,
+        "note": "45·70업무일은 위원회 심의·도 사전승인 여부 등에 따른 상호배타적 공식 분기입니다."
+      }
+    ]
   },
   {
     "id": "duration-air-permit",
@@ -42,15 +144,15 @@
     "authorityProcessing": { "min": 10, "base": 10, "max": 10, "unit": "BUSINESS_DAY" },
     "interagencyConsultation": null,
     "elapsed": { "min": 10, "base": 10, "max": 10, "unit": "BUSINESS_DAY" },
-    "statutoryPeriod": "정부24 대기배출시설 설치허가·신고 총 10일",
-    "stopClockRules": [],
+    "statutoryPeriod": "정부24 대기배출시설 설치허가·신고 공식 처리기간 총 10일(법정 최소기간 아님)",
+    "stopClockRules": ["서류 보완 등 민원처리법령상 처리기간 정지는 실제 일정에서 별도 확인"],
     "variabilityFactors": ["허가·신고 구분", "배출시설 종류·규모", "특정대기유해물질", "지역별 위임"],
     "evidenceType": "OFFICIAL_SERVICE_STANDARD",
     "citationIds": ["cit-air-23-1-scheduled", "cit-gov24-air-permit-duration"],
     "sampleSize": null,
-    "assumptions": ["정부24 처리기간 계산기준의 원 단위를 그대로 사용"],
-    "verifiedAt": "2026-08-20",
-    "legalConfidence": "LOW",
+    "assumptions": ["정부24 처리기간 계산기준의 원 단위를 그대로 사용", "10일은 완비된 허가·신고 접수 뒤의 공식 민원 처리기간이며 신청자료 작성과 보완기간은 별도"],
+    "verifiedAt": "2026-08-22",
+    "legalConfidence": "HIGH",
     "estimateConfidence": "HIGH"
   },
   {
@@ -93,19 +195,36 @@
     "id": "duration-construction-start",
     "procedureId": "construction-start-report",
     "applicantPreparation": null,
-    "authorityProcessing": { "min": 3, "base": 3, "max": 3, "unit": "BUSINESS_DAY" },
+    "authorityProcessing": null,
     "interagencyConsultation": null,
-    "elapsed": { "min": 3, "base": 3, "max": 3, "unit": "BUSINESS_DAY" },
-    "statutoryPeriod": "신고를 받은 날부터 3일 이내 수리 여부 또는 처리기간 연장 여부 통지",
+    "elapsed": null,
+    "statutoryPeriod": "신고를 받은 때부터 3일 이내 수리 여부 또는 처리기간 연장 여부 통지; 무통지 시 기간 만료 다음 날 수리 간주",
     "stopClockRules": ["민원처리법상 처리기간 연장·보완은 별도"],
     "variabilityFactors": ["신고서와 계약서류 완결성"],
     "evidenceType": "STATUTE",
     "citationIds": ["cit-building-21-3"],
     "sampleSize": null,
-    "assumptions": ["법정 일수의 업무일·달력일 적용은 관할기관 민원처리기준과 함께 확인"],
-    "verifiedAt": "2026-08-20",
+    "assumptions": ["3일은 연장 분기의 최종 처리기간이 아니라 수리 또는 연장 여부를 알리는 법정 중간기한", "5일 이하 민원 처리기간은 접수시각부터 근무시간 단위로 계산"],
+    "verifiedAt": "2026-08-22",
     "legalConfidence": "HIGH",
-    "estimateConfidence": "HIGH"
+    "estimateConfidence": "LOW",
+    "planningBasis": "MILESTONE_ONLY",
+    "referencePeriods": [
+      {
+        "id": "ref-construction-start-notice-deadline",
+        "kind": "PROCESS_MILESTONE",
+        "label": "수리 여부·처리기간 연장 여부 통지기한",
+        "range": { "min": null, "base": null, "max": 3, "unit": "BUSINESS_DAY" },
+        "jurisdiction": null,
+        "startsWhen": "허가권자가 착공신고를 받은 때",
+        "includes": ["AUTHORITY_PROCESSING", "RESULT_NOTICE"],
+        "citationIds": ["cit-building-21-3"],
+        "sampleSize": null,
+        "observedFrom": null,
+        "observedTo": null,
+        "note": "3일은 최종 처리기간이 아니라 수리 또는 연장 여부의 통지기한입니다. 아무 통지도 없으면 기간 만료 다음 날 수리된 것으로 봅니다."
+      }
+    ]
   },
   {
     "id": "duration-building-use-approval",

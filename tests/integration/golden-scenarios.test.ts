@@ -143,7 +143,7 @@ describe("golden manufacturing scenarios", () => {
     expect(result.decisions.filter((decision) => decision.provisionalEffect === "INCLUDE").length).toBeGreaterThan(50);
     expect(result.schedules.TYPICAL.topologicalOrder.length).toBeGreaterThan(70);
     expect(typical?.nodes).toHaveLength(result.schedules.TYPICAL.topologicalOrder.length);
-    expect(typical?.nodes.filter((node) => node.processingDuration !== null).length).toBeGreaterThan(55);
+    expect(typical?.nodes.filter((node) => node.processingDuration !== null).length).toBeGreaterThan(40);
     expect(typical?.minimumKnownCalendarDays).toBeGreaterThanOrEqual(minimum?.minimumKnownCalendarDays ?? 0);
     expect(typical?.minimumKnownCalendarDays).toBeGreaterThan(731);
     expect(typical?.warnings.join(" ")).not.toContain("역행");
@@ -155,7 +155,16 @@ describe("golden manufacturing scenarios", () => {
       processingUpperBound: 70,
       durationPlanningBasis: "UNRESOLVED_OFFICIAL_BRANCH",
     });
-    expect(typicalNode("disaster-impact-assessment-consultation")?.processingDuration).toBe(45);
+    expect(typicalNode("disaster-impact-assessment-consultation")).toMatchObject({
+      processingDuration: null,
+      processingUpperBound: null,
+      durationPlanningBasis: "UNRESOLVED_OFFICIAL_BRANCH",
+      durationReferencePeriods: expect.arrayContaining([
+        expect.objectContaining({
+          range: expect.objectContaining({ max: 45 }),
+        }),
+      ]),
+    });
   });
 
   it("calculates stable schedules across ten diverse factory-investment inputs", () => {

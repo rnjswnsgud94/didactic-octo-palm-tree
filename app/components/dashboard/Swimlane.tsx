@@ -32,6 +32,7 @@ import type {
 } from "@/lib/engine/schedule";
 import {
   formatCompletedCheckpoint,
+  formatResolvedOfficialDurationSummary,
   formatTimelineProcessingDuration,
 } from "@/lib/format-duration";
 
@@ -59,19 +60,26 @@ const emptyConnectorLayout: ConnectorLayout = {
   paths: [],
 };
 
+const durationById = new Map(
+  catalog.durations.map((duration) => [duration.id, duration]),
+);
+
 
 function planningLabel(
   node: ProjectTimelineNode | undefined,
   checkpoint: ScheduleCompletedCheckpoint | undefined,
 ) {
   if (checkpoint) return formatCompletedCheckpoint(checkpoint);
-  if (!node) return "일정 제외";
+  if (!node) return "예상 일정 · 공사일 입력 시 계산";
   const duration = formatTimelineProcessingDuration(node);
   if (node.excludedFromOperationReady) return `가동 후 별도 · ${duration}`;
-  if (node.overlapsConstruction) {
-    return `${duration} · 공사와 ${node.overlapWithConstructionDays}일 병행`;
+  if (node.processingDuration === null) {
+    return "예상 총경과 미규정 · 사용자 예상값 입력 가능";
   }
-  return duration;
+  if (node.overlapsConstruction) {
+    return `일정 반영 ${duration} · 공사와 ${node.overlapWithConstructionDays}일 병행`;
+  }
+  return `일정 반영 ${duration}`;
 }
 
 function dateText(value: string | undefined) {
@@ -135,6 +143,12 @@ export function Swimlane({
     ),
     [schedule.projectTimeline],
   );
+  const planningDurationByProcedure = useMemo(
+    () => new Map(
+      schedule.planningDurations.map((duration) => [duration.procedureId, duration]),
+    ),
+    [schedule.planningDurations],
+  );
   const completedCheckpointByProcedure = useMemo(
     () => new Map(
       schedule.completedCheckpoints.map((checkpoint) => [
@@ -157,23 +171,29 @@ export function Swimlane({
     () => decisions.filter((decision) => !scheduleNodes.has(decision.procedure.id)),
     [decisions, scheduleNodes],
   );
-  const usedLanes = lanes.filter((lane) =>
-    scheduledDecisions.some((decision) => decision.procedure.lane === lane),
+  const usedLanes = useMemo(
+    () => lanes.filter((lane) =>
+      scheduledDecisions.some((decision) => decision.procedure.lane === lane),
+    ),
+    [scheduledDecisions],
   );
-  const offsets = useDateOffsets
-    ? [...new Set(
-        scheduledDecisions.map(
-          (decision) => timelineNodes.get(decision.procedure.id)?.startOffsetDays ?? 0,
-        ),
-      )].sort((a, b) => a - b)
-    : [...new Set(
-        scheduledDecisions.map(
-          (decision) =>
-            completedCheckpointByProcedure.has(decision.procedure.id)
-              ? 0
-              : scheduleNodes.get(decision.procedure.id)?.wave ?? 0,
-        ),
-      )].sort((a, b) => a - b);
+  const offsets = useMemo(
+    () => useDateOffsets
+      ? [...new Set(
+          scheduledDecisions.map(
+            (decision) => timelineNodes.get(decision.procedure.id)?.startOffsetDays ?? 0,
+          ),
+        )].sort((a, b) => a - b)
+      : [...new Set(
+          scheduledDecisions.map(
+            (decision) =>
+              completedCheckpointByProcedure.has(decision.procedure.id)
+                ? 0
+                : scheduleNodes.get(decision.procedure.id)?.wave ?? 0,
+          ),
+        )].sort((a, b) => a - b),
+    [completedCheckpointByProcedure, scheduleNodes, scheduledDecisions, timelineNodes, useDateOffsets],
+  );
   const activeEdges = useMemo(
     () => {
       const activeEdgeIds = new Set(schedule.activeEdgeIds);
@@ -185,8 +205,11 @@ export function Swimlane({
     },
     [completedCheckpointByProcedure, schedule.activeEdgeIds],
   );
-  const decisionNames = new Map(
-    decisions.map((decision) => [decision.procedure.id, decision.procedure.name]),
+  const decisionNames = useMemo(
+    () => new Map(
+      decisions.map((decision) => [decision.procedure.id, decision.procedure.name]),
+    ),
+    [decisions],
   );
 
   function toggleLane(lane: string) {
@@ -195,27 +218,36 @@ export function Swimlane({
       : [...current, lane]);
   }
 
-  function offsetOf(decision: ProcedureDecision) {
-    return useDateOffsets
-      ? timelineNodes.get(decision.procedure.id)?.startOffsetDays ?? 0
-      : completedCheckpointByProcedure.has(decision.procedure.id)
-        ? 0
-        : scheduleNodes.get(decision.procedure.id)?.wave ?? 0;
-  }
-
-  const decisionsByOffset = new Map(
-    offsets.map((offset) => [
-      offset,
-      scheduledDecisions.filter((decision) => offsetOf(decision) === offset),
-    ]),
+  const decisionsByOffset = useMemo(
+    () => {
+      const grouped = new Map<number, ProcedureDecision[]>(
+        offsets.map((offset) => [offset, []]),
+      );
+      for (const decision of scheduledDecisions) {
+        const offset = useDateOffsets
+          ? timelineNodes.get(decision.procedure.id)?.startOffsetDays ?? 0
+          : completedCheckpointByProcedure.has(decision.procedure.id)
+            ? 0
+            : scheduleNodes.get(decision.procedure.id)?.wave ?? 0;
+        grouped.get(offset)?.push(decision);
+      }
+      return grouped;
+    },
+    [completedCheckpointByProcedure, offsets, scheduleNodes, scheduledDecisions, timelineNodes, useDateOffsets],
   );
-  const columnItemCounts = new Map(
-    offsets.map((offset) => [offset, decisionsByOffset.get(offset)?.length ?? 0]),
-  );
-  const denseOffsets = new Set(
-    offsets.filter((offset) =>
-      (columnItemCounts.get(offset) ?? 0) >= denseProcedureColumnThreshold,
+  const columnItemCounts = useMemo(
+    () => new Map(
+      offsets.map((offset) => [offset, decisionsByOffset.get(offset)?.length ?? 0]),
     ),
+    [decisionsByOffset, offsets],
+  );
+  const denseOffsets = useMemo(
+    () => new Set(
+      offsets.filter((offset) =>
+        (columnItemCounts.get(offset) ?? 0) >= denseProcedureColumnThreshold,
+      ),
+    ),
+    [columnItemCounts, offsets],
   );
   const flowColumnTemplate = offsets.length
     ? offsets
@@ -260,6 +292,36 @@ export function Swimlane({
           verifiedSequence || (selected && edge.strength !== "ADVISORY"),
       ),
     [activeEdges, scheduledProcedureIds, selectedId, sequenceCitationIds],
+  );
+  const predecessorsByProcedure = useMemo(() => {
+    const grouped = new Map<string, Array<{
+      name: string;
+      strength: ProcedureEdge["strength"];
+    }>>();
+    for (const edge of activeEdges) {
+      const incoming = grouped.get(edge.to) ?? [];
+      incoming.push({
+        name: decisionNames.get(edge.from) ?? edge.from,
+        strength: edge.strength,
+      });
+      grouped.set(edge.to, incoming);
+    }
+    return grouped;
+  }, [activeEdges, decisionNames]);
+  const officialDurationSummaryByProcedure = useMemo(
+    () => new Map(decisions.map((decision) => {
+      const officialDuration = decision.procedure.durationId
+        ? durationById.get(decision.procedure.durationId)
+        : undefined;
+      return [
+        decision.procedure.id,
+        formatResolvedOfficialDurationSummary(
+          officialDuration,
+          planningDurationByProcedure.get(decision.procedure.id),
+        ),
+      ];
+    })),
+    [decisions, planningDurationByProcedure],
   );
   const collapsedKey = collapsedLanes.slice().sort().join("|");
 
@@ -314,15 +376,6 @@ export function Swimlane({
       window.removeEventListener("resize", measureConnectors);
     };
   }, [collapsedKey, flowColumnTemplate, measureConnectors]);
-
-  function predecessors(id: string) {
-    return activeEdges
-      .filter((edge) => edge.to === id)
-      .map((edge) => ({
-        name: decisionNames.get(edge.from) ?? edge.from,
-        strength: edge.strength,
-      }));
-  }
 
   function strengthLabel(strength: "LEGAL_HARD" | "PRACTICAL" | "ADVISORY") {
     if (strength === "LEGAL_HARD") return "법정";
@@ -435,7 +488,7 @@ export function Swimlane({
                       const completedCheckpoint = completedCheckpointByProcedure.get(
                         decision.procedure.id,
                       );
-                      const incoming = predecessors(decision.procedure.id);
+                      const incoming = predecessorsByProcedure.get(decision.procedure.id) ?? [];
                       return (
                         <article
                           ref={(node) => {
@@ -455,6 +508,7 @@ export function Swimlane({
                             <span className="procedure-card-topline"><StatusBadge status={decision.status} isDeemed={decision.isDeemed} provisionalEffect={decision.provisionalEffect} missingInputs={decision.missingInputs} conflictRuleIds={decision.conflictRuleIds} needsLegalReview={decision.needsLegalReview} compact /><span>{stageLabels[decision.procedure.stage]}</span></span>
                             <strong>{decision.procedure.name}</strong>
                             {decision.specialLawImpacts?.length ? <span className="special-law-chip">{decision.specialLawImpacts[0].effectLabel} · {decision.specialLawImpacts[0].statusLabel}</span> : null}
+                            <span className="procedure-official-duration"><b>법정·공식 기간</b><span>{officialDurationSummaryByProcedure.get(decision.procedure.id)}</span></span>
                             <span className="procedure-meta">{planningLabel(timelineNode, completedCheckpoint)}{!completedCheckpoint && parallelCount > 1 ? <em>병렬</em> : null}</span>
                             {completedCheckpoint ? (
                               <span className="procedure-route route-start"><b>완료 확인</b> 잔여 일정 계산에서 제외</span>

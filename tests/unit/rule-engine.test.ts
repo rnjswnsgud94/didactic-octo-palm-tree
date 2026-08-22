@@ -401,6 +401,29 @@ describe("deterministic four-state rules", () => {
     },
   );
 
+  it("confirms hazardous-material child procedures as excluded when no hazardous materials are handled", () => {
+    const excluded = decide({
+      ...catalog.scenarios[1].answers,
+      hazardousMaterials: false,
+      hazardousMaterialsTank: null,
+      hazardousMaterialsPreventionRulesRequired: null,
+    });
+
+    for (const procedureId of [
+      "hazardous-materials-tank-safety-performance-inspection",
+      "hazardous-materials-prevention-rules-submission",
+    ]) {
+      expect(decision(excluded, procedureId), procedureId).toMatchObject({
+        status: "DOES_NOT_APPLY",
+        missingInputs: [],
+      });
+      expect(
+        procedureCategoryForDecision(decision(excluded, procedureId)!),
+        procedureId,
+      ).toBe("NOT_REQUIRED");
+    }
+  });
+
   it("registers expanded exclusion rules on their procedures", () => {
     expect(decision(decide(), "air-facility-operation-start-report")?.procedure.ruleIds).toContain("rule-exp-air-operation-integrated-exclusion");
     expect(decision(decide(), "water-facility-operation-start-report")?.procedure.ruleIds).toContain("rule-exp-water-operation-integrated-exclusion");

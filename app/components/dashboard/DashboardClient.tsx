@@ -203,6 +203,11 @@ export function DashboardClient() {
     const timeout = window.setTimeout(() => {
       const restored = decodeShareState(initialSearch, defaultAnswers);
       setAnswers(restored.answers);
+      setDurationScenario(
+        Object.keys(restored.answers.userDurationOverrides).length
+          ? "USER"
+          : "TYPICAL",
+      );
       if (restored.tab && validTabs.has(restored.tab)) setActiveTab(restored.tab as DashboardTab);
       if (restored.warning) setShareMessage(restored.warning);
     }, 0);
@@ -324,13 +329,20 @@ export function DashboardClient() {
     procedureId: string,
     value: ScenarioAnswers["userDurationOverrides"][string] | null,
   ) {
+    const hadOverride = Object.hasOwn(
+      answers.userDurationOverrides,
+      procedureId,
+    );
+    const nextOverrideCount = value === null
+      ? userDurationOverrideCount - (hadOverride ? 1 : 0)
+      : userDurationOverrideCount + (hadOverride ? 0 : 1);
     setAnswers((current) => {
       const next = { ...current.userDurationOverrides };
       if (value === null) delete next[procedureId];
       else next[procedureId] = value;
       return { ...current, userDurationOverrides: next };
     });
-    setDurationScenario("USER");
+    setDurationScenario(nextOverrideCount > 0 ? "USER" : "TYPICAL");
   }
 
   async function copyShareLink() {
@@ -345,7 +357,11 @@ export function DashboardClient() {
     }
     try {
       await navigator.clipboard.writeText(link);
-      setShareMessage("현재 조건의 공유 링크를 복사했습니다.");
+      setShareMessage(
+        userDurationOverrideCount
+          ? `카드별 실무 예상기간 ${userDurationOverrideCount}건을 포함한 공유 링크를 복사했습니다.`
+          : "현재 조건의 공유 링크를 복사했습니다.",
+      );
     } catch {
       setShareMessage("주소창의 링크를 복사해 공유해 주세요.");
     }
@@ -375,12 +391,24 @@ export function DashboardClient() {
     try {
       const restoredAnswers = decodeInputCode(code, defaultAnswers);
       setAnswers(restoredAnswers);
+      setDurationScenario(
+        Object.keys(restoredAnswers.userDurationOverrides).length
+          ? "USER"
+          : "TYPICAL",
+      );
       setActiveStep(0);
       setIsDurationDialogOpen(false);
       setSelectedSummaryCategory(null);
       setSelectedId(null);
       closeInputCodeDialog();
-      setShareMessage("입력값을 코드에서 복원했습니다.");
+      const restoredDurationCount = Object.keys(
+        restoredAnswers.userDurationOverrides,
+      ).length;
+      setShareMessage(
+        restoredDurationCount
+          ? `입력값과 카드별 실무 예상기간 ${restoredDurationCount}건을 코드에서 복원했습니다.`
+          : "입력값을 코드에서 복원했습니다.",
+      );
       window.setTimeout(() => setShareMessage(""), 3000);
       return null;
     } catch (error) {
@@ -431,7 +459,7 @@ export function DashboardClient() {
         </a>
         <div className="topbar-meta">
           <span className="data-health"><i /> 법령 검토 기준 · {catalog.coverage.lastLegalReviewAt}</span>
-          <button id="input-code-trigger" type="button" className="input-code-button" aria-label="입력 코드 저장·불러오기" aria-haspopup="dialog" aria-controls="input-code-dialog" aria-expanded={inputCode !== null} onClick={openInputCodeDialog}>입력 코드</button>
+          <button id="input-code-trigger" type="button" className="input-code-button" aria-label="입력 코드 저장·불러오기" aria-haspopup="dialog" aria-controls="input-code-dialog" aria-expanded={inputCode !== null} onClick={openInputCodeDialog}>저장·불러오기</button>
           <button type="button" className="share-button" onClick={copyShareLink}>공유 링크 복사</button>
         </div>
       </header>
@@ -554,7 +582,7 @@ export function DashboardClient() {
         />
       ) : null}
       {isDurationDialogOpen ? <TotalDurationDialog schedule={schedule} onClose={closeDurationDialog} /> : null}
-      {inputCode !== null ? <InputCodeDialog initialCode={inputCode} initialError={inputCodeError} onClose={closeInputCodeDialog} onImport={importInputCode} /> : null}
+      {inputCode !== null ? <InputCodeDialog initialCode={inputCode} initialError={inputCodeError} includedUserDurationCount={userDurationOverrideCount} onClose={closeInputCodeDialog} onImport={importInputCode} /> : null}
       <ProcedureDrawer decision={selectedDecision} schedule={schedule} onClose={() => setSelectedId(null)} />
       {shareMessage ? <div className="toast" role="status">{shareMessage}</div> : null}
     </main>

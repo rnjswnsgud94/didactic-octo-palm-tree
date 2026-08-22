@@ -390,15 +390,6 @@ function resolveOfficialRoute(
     return { ...fallback, minimum: 15, typical: 25, upperBound: 25, planningBasis: "INPUT_RESOLVED_OFFICIAL" };
   }
 
-  if (procedureId === "disaster-impact-assessment-consultation") {
-    if (answers.disasterImpactAssessmentType === "DISASTER_IMPACT") {
-      return { ...fallback, minimum: 45, typical: 45, upperBound: 45, planningBasis: "INPUT_RESOLVED_OFFICIAL" };
-    }
-    if (answers.disasterImpactAssessmentType === "DISASTER_IMPACT_REVIEW") {
-      return { ...fallback, minimum: 30, typical: 30, upperBound: 30, planningBasis: "INPUT_RESOLVED_OFFICIAL" };
-    }
-  }
-
   return fallback;
 }
 

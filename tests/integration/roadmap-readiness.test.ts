@@ -96,14 +96,16 @@ describe("roadmap readiness scenarios", () => {
     expect(
       evaluation.schedules.TYPICAL.projectTimeline
         ?.unknownPlanningDurationProcedureIds,
-    ).not.toContain("industrial-complex-occupancy-contract");
+    ).toContain("industrial-complex-occupancy-contract");
     expect(
       evaluation.schedules.TYPICAL.projectTimeline?.nodes.find(
         (node) => node.procedureId === "industrial-complex-occupancy-contract",
       ),
     ).toMatchObject({
-      processingDuration: 5,
+      processingDuration: null,
+      processingUpperBound: 10,
       processingUnit: "BUSINESS_DAY",
+      durationPlanningBasis: "OFFICIAL_CAP_ONLY",
     });
   });
 

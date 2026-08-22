@@ -6,6 +6,7 @@ import type { ProcedureDecision } from "@/lib/engine/rule-engine";
 import type { ScheduleResult } from "@/lib/engine/schedule";
 import {
   formatCompletedCheckpoint,
+  formatResolvedOfficialDurationSummary,
   formatTimelineProcessingDuration,
 } from "@/lib/format-duration";
 
@@ -28,14 +29,58 @@ function durationRangeLabel(range: (typeof catalog.durations)[number]["elapsed"]
   return `최단 ${range.min ?? "미정"} · 공식 기준 ${range.base ?? "미정"} · 확인 상한 ${range.max ?? "미정"} ${unit}`;
 }
 
+function officialTotalDurationLabel(
+  duration: (typeof catalog.durations)[number],
+  range: (typeof catalog.durations)[number]["elapsed"],
+  scope: "AUTHORITY" | "ELAPSED",
+) {
+  const statutoryPeriod = duration.statutoryPeriod ?? "";
+  const immediate = /3근무시간 이내/.test(statutoryPeriod) ||
+    (duration.referencePeriods ?? []).some((period) =>
+      /3근무시간 이내/.test(`${period.label} ${period.note}`),
+    );
+  if (scope === "AUTHORITY" && immediate) {
+    return "즉시 · 3근무시간 이내 (0일 아님)";
+  }
+  if (range) {
+    if (duration.planningBasis === "OFFICIAL_CAP_ONLY" && range.max !== null) {
+      const unit = range.unit === "BUSINESS_DAY" ? "업무일" : range.unit === "CALENDAR_DAY" ? "달력일" : "개월";
+      return `법정·공식 상한 ${range.max} ${unit} · 실제 평균 아님`;
+    }
+    return durationRangeLabel(range);
+  }
+  if (
+    !/확인되지 않|미확인/.test(statutoryPeriod) &&
+    /없음|두지 않|정해져 있지 않/.test(statutoryPeriod)
+  ) {
+    return "법령상 전국 공통 총기간 미규정";
+  }
+  if (duration.referencePeriods?.some((period) => period.range !== null)) {
+    return "전국 공통 총기간 없음 · 아래 단계별 기준 참조";
+  }
+  return /확인되지 않|미확인/.test(statutoryPeriod)
+    ? "전국 공통 총기간 미확인"
+    : "공식 근거자료 미확인";
+}
+
 function durationReferenceRangeLabel(
   period: NonNullable<(typeof catalog.durations)[number]["referencePeriods"]>[number],
 ) {
   const range = period.range;
-  if (!range) return "기간 수치 없음";
+  if (!range) {
+    return /3근무시간 이내/.test(period.note)
+      ? "즉시 · 3근무시간 이내"
+      : "전국 고정 수치 미규정";
+  }
   const unit = range.unit === "BUSINESS_DAY" ? "업무일" : range.unit === "CALENDAR_DAY" ? "달력일" : "개월";
   if (range.min !== null && range.min === range.base && range.base === range.max) {
     return `${range.min} ${unit}`;
+  }
+  if (range.min !== null && range.base === null && range.max === null) {
+    return `법정 최소 ${range.min} ${unit}`;
+  }
+  if (range.min === null && range.base === null && range.max !== null) {
+    return `법정 상한 ${range.max} ${unit}`;
   }
   if (period.kind === "OFFICIAL_OPERATION_CAP") {
     return range.max === null ? "공식 상한 확인 필요" : `공식 상한 ${range.max} ${unit}`;
@@ -131,6 +176,9 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
     ) ??
     null;
   const duration = catalog.durations.find((item) => item.id === procedure.durationId);
+  const planningDuration = schedule.planningDurations.find(
+    (item) => item.procedureId === procedure.id,
+  );
   const relatedEdges = catalog.edges.filter((edge) => edge.from === procedure.id || edge.to === procedure.id);
   const decisionCitationIds = [...new Set([
     ...procedure.citationIds,
@@ -184,7 +232,7 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
           <div><dt>신청·수행 주체</dt><dd>{procedure.applicant}</dd></div>
           <div><dt>협의 주체</dt><dd>{procedure.consultationAuthorities.length ? procedure.consultationAuthorities.join(", ") : "별도 협의 주체 없음"}</dd></div>
           <div><dt>결과물</dt><dd>{procedure.outcome}</dd></div>
-          <div><dt>총 일정상 위치</dt><dd>{completedCheckpoint ? formatCompletedCheckpoint(completedCheckpoint) : timelineNode ? `${timelineNode.startDate} ~ ${timelineNode.finishDate} · ${formatTimelineProcessingDuration(timelineNode)}${timelineNode.overlapsConstruction ? ` · 공사와 ${timelineNode.overlapWithConstructionDays}일 병행` : timelineNode.excludedFromOperationReady ? " · 가동 후 별도" : ""}` : "공사 일정 입력 필요"}</dd></div>
+          <div><dt>총 일정상 위치</dt><dd>{completedCheckpoint ? formatCompletedCheckpoint(completedCheckpoint) : timelineNode ? `${timelineNode.startDate} ~ ${timelineNode.finishDate} · ${timelineNode.processingDuration === null ? formatResolvedOfficialDurationSummary(duration, planningDuration) : formatTimelineProcessingDuration(timelineNode)}${timelineNode.overlapsConstruction ? ` · 공사와 ${timelineNode.overlapWithConstructionDays}일 병행` : timelineNode.excludedFromOperationReady ? " · 가동 후 별도" : ""}` : "공사 일정 입력 필요"}</dd></div>
         </dl>
         <section className="drawer-section"><h3>절차 설명</h3><p>{procedure.description}</p></section>
         <section className="drawer-section"><h3>주요 제출자료</h3><ul>{procedure.submissions.map((item) => <li key={item}>{item}</li>)}</ul></section>
@@ -208,11 +256,16 @@ export function ProcedureDrawer({ decision, schedule, onClose }: {
         <section className="drawer-section duration-section">
           <h3>법정·공식 기간과 실무 참고값</h3>
           {duration ? <>
+            <div className="official-duration-highlight">
+              <span>카드 표시 법정·공식 기간</span>
+              <strong>{formatResolvedOfficialDurationSummary(duration, planningDuration)}</strong>
+              <small>상한·분기·중간기한은 실제 총 소요기간과 구분합니다.</small>
+            </div>
             <dl className="duration-breakdown">
-              <div><dt>신청인 준비 · 접수 전</dt><dd>{durationRangeLabel(duration.applicantPreparation)}</dd></div>
-              <div><dt>기관 공식 처리</dt><dd>{durationRangeLabel(duration.authorityProcessing)}</dd></div>
-              <div><dt>관계기관 협의</dt><dd>{durationRangeLabel(duration.interagencyConsultation)}</dd></div>
-              <div><dt>접수 후 확인 경과</dt><dd>{durationRangeLabel(duration.elapsed)}</dd></div>
+              {duration.applicantPreparation ? <div><dt>신청인 준비 · 접수 전</dt><dd>{durationRangeLabel(duration.applicantPreparation)}</dd></div> : null}
+              <div><dt>기관 공식 처리</dt><dd>{officialTotalDurationLabel(duration, duration.authorityProcessing, "AUTHORITY")}</dd></div>
+              {duration.interagencyConsultation ? <div><dt>관계기관 협의</dt><dd>{durationRangeLabel(duration.interagencyConsultation)}</dd></div> : null}
+              <div><dt>접수 후 확인 경과</dt><dd>{officialTotalDurationLabel(duration, duration.elapsed, "ELAPSED")}</dd></div>
             </dl>
             <p><strong>법정·공식 처리기준:</strong> {duration.statutoryPeriod ?? "확인된 공통 처리기간 없음"}</p>
             <p className={`practical-duration-note${hasObservedPractice ? " has-observation" : ""}`}>

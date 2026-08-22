@@ -24,4 +24,27 @@ describe("project input normalization", () => {
     expect(input.building.action).toEqual({ status: "UNKNOWN" });
     expect(input.existingApprovalIds).toEqual({ status: "UNKNOWN" });
   });
+
+  it("marks hazardous-material follow-ups not applicable when the parent answer is no", () => {
+    const input = scenarioAnswersToProjectInput(
+      {
+        ...catalog.scenarios[0].answers,
+        hazardousMaterials: false,
+        hazardousMaterialsTank: null,
+        hazardousMaterialsPreventionRulesRequired: null,
+      },
+      catalog.procedures,
+    );
+
+    expect(input.safety.hazardousMaterials).toMatchObject({
+      status: "KNOWN",
+      value: false,
+    });
+    expect(input.safety.hazardousMaterialsTank).toEqual({
+      status: "NOT_APPLICABLE",
+    });
+    expect(input.safety.hazardousMaterialsPreventionRulesRequired).toEqual({
+      status: "NOT_APPLICABLE",
+    });
+  });
 });

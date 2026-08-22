@@ -181,6 +181,8 @@ export type ScheduleResult = {
   unknownDurationProcedureIds: string[];
   /** Validated past events that stay visible even when no dated construction plan exists. */
   completedCheckpoints: ScheduleCompletedCheckpoint[];
+  /** 입력 조건과 선택 관할까지 반영한 공식 기간 분기. UI에서도 같은 값을 사용합니다. */
+  planningDurations: PlanningDuration[];
   warnings: string[];
   /** 공사 일정과 공식 처리기간을 날짜 단위로 결합한 결과. */
   projectTimeline: ProjectTimelineResult | null;
@@ -1233,6 +1235,7 @@ export function calculateSchedule({
     criticalProcedureIds: nodes.filter((node) => node.critical).map((node) => node.procedureId),
     unknownDurationProcedureIds,
     completedCheckpoints,
+    planningDurations,
     warnings,
     projectTimeline,
   };

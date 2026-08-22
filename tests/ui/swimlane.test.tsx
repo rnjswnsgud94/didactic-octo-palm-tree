@@ -50,6 +50,7 @@ function denseFixture(count: number): {
       criticalProcedureIds: [],
       unknownDurationProcedureIds: [],
       completedCheckpoints: [],
+      planningDurations: [],
       warnings: [],
       projectTimeline: null,
     },
@@ -114,6 +115,8 @@ describe("swimlane dense procedure columns", () => {
     const card = view.container.querySelector(".procedure-card") as HTMLElement;
 
     expect(card.querySelector("button button")).toBeNull();
+    expect(card).toHaveTextContent("법정·공식 기간");
+    expect(card).not.toHaveTextContent("일정 제외");
     fireEvent.click(within(card).getByRole("button", { name: /내 예상.*기간 입력/ }));
     fireEvent.change(
       within(card).getByLabelText(`${procedure.name} 사용자 예상 처리기간`),

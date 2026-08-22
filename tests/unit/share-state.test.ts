@@ -337,6 +337,7 @@ describe("versioned share state", () => {
       userDurationOverrides: {
         "landscape-review": { value: 0, unit: "BUSINESS_DAY" },
         "building-permit": { value: 45, unit: "CALENDAR_DAY" },
+        "factory-establishment-approval": { value: 3_650, unit: "MONTH" },
       },
     };
     const encoded = encodeShareState(answers, "SCHEDULE");
@@ -344,7 +345,7 @@ describe("versioned share state", () => {
 
     expect(params.get("v")).toBe("13");
     expect(params.get("ud")).toBe(
-      "building-permit~45~c.landscape-review~0~b",
+      "building-permit~45~c.factory-establishment-approval~3650~m.landscape-review~0~b",
     );
     expect(decodeShareState(encoded, fallback)).toEqual({
       answers,

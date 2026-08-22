@@ -184,9 +184,9 @@
     "effectiveDate": null,
     "repealDate": null,
     "apiRetrievedAt": null,
-    "internallyVerifiedAt": "2026-08-20",
-    "contentHash": "web-verified-20260820-air-permit",
-    "officialUrl": "https://www.gov.kr/mw/AA020InfoCappView.do?CappBizCD=14800000067&HighCtgCD=A02003",
+    "internallyVerifiedAt": "2026-08-22",
+    "contentHash": "web-verified-20260822-air-permit-total-10-days",
+    "officialUrl": "https://www.gov.kr/mw/AA020InfoCappView.do?CappBizCD=14800000067&HighCtgCD=A09006",
     "status": "AUTHORITATIVE"
   },
   {

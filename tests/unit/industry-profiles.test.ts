@@ -53,13 +53,13 @@ describe("industry profiles", () => {
     }
   });
 
-  it("fills only unanswered common characteristics for a chemical plant", () => {
+  it("does not infer permit facts from a chemical industry label", () => {
     const current = answers({ airEmissionFacility: null });
     const applied = applyIndustryProfile(current, "CHEMICAL_PRODUCTS");
 
     expect(applied.industryCategory).toBe("CHEMICAL_PRODUCTS");
-    expect(applied.chemicalsHandled).toBe(true);
-    expect(applied.chemicalManufactureOrImport).toBe(true);
+    expect(applied.chemicalsHandled).toBeNull();
+    expect(applied.chemicalManufactureOrImport).toBeNull();
     expect(applied.airEmissionFacility).toBeNull();
     expect(applied.hazardousMaterials).toBeNull();
   });
@@ -80,7 +80,6 @@ describe("industry profiles", () => {
 
     expect(getIndustryProfilePatch(current, "SEMICONDUCTOR_ELECTRONICS")).toEqual({
       industryCategory: "SEMICONDUCTOR_ELECTRONICS",
-      chemicalsHandled: true,
     });
     expect(getIndustryProfile("SEMICONDUCTOR_ELECTRONICS")?.reviewKeys).toContain(
       "waterDischargeFacility",

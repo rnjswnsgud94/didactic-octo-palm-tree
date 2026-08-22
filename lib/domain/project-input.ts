@@ -210,6 +210,10 @@ export function scenarioAnswersToProjectInput(
     answers.chemicalsHandled === false
       ? notApplicable()
       : nullableFact(value);
+  const hazardousMaterialDetailFact = (value: boolean | null) =>
+    answers.hazardousMaterials === false
+      ? notApplicable()
+      : nullableFact(value);
   return {
     assessmentDate: answers.assessmentDate,
     ...(answers.plannedConstructionStartDate
@@ -335,8 +339,8 @@ export function scenarioAnswersToProjectInput(
         answers.psmCoversSameHazardPreventionScope,
       ),
       fireSafetyManagerRequired: nullableFact(answers.fireSafetyManagerRequired),
-      hazardousMaterialsTank: nullableFact(answers.hazardousMaterialsTank),
-      hazardousMaterialsPreventionRulesRequired: nullableFact(answers.hazardousMaterialsPreventionRulesRequired),
+      hazardousMaterialsTank: hazardousMaterialDetailFact(answers.hazardousMaterialsTank),
+      hazardousMaterialsPreventionRulesRequired: hazardousMaterialDetailFact(answers.hazardousMaterialsPreventionRulesRequired),
       heatUseEquipment: nullableFact(answers.heatUseEquipment),
       hazardousMachineryInspectionRequired: nullableFact(answers.hazardousMachineryInspectionRequired),
     },

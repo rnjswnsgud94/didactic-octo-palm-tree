@@ -5,9 +5,8 @@ import type { ScenarioAnswers } from "@/lib/data/catalog";
  * 인프라 업종을 투자 검토자가 고르기 쉬운 묶음으로 재구성했습니다.
  *
  * 업종만으로 개별 인허가의 법적 적용 여부를 확정할 수 없으므로,
- * `reviewKeys`는 우선 확인할 입력 항목을 뜻합니다. `initialValues`도
- * 업종상 매우 흔한 공정 특성만 비어 있는 입력에 채우는 초기값이며
- * 사용자가 실제 설비·물질·규모에 맞게 수정해야 합니다.
+ * `reviewKeys`는 우선 확인할 입력 항목을 뜻합니다. 업종명만으로
+ * 환경·안전 인허가 입력값을 자동 확정하지 않습니다.
  */
 
 export const INDUSTRY_TAXONOMY_SOURCE = {
@@ -292,25 +291,14 @@ export function getIndustryProfileLabel(id: string) {
 }
 
 /**
- * 업종 프로필을 적용하되 사용자가 이미 답한 값은 덮어쓰지 않습니다.
- * 따라서 최초 선택 시 흔한 공정 특성이 채워지고, 이후 모든 항목을
- * 사용자가 자유롭게 수정할 수 있습니다.
+ * 업종 프로필은 질문의 우선순위만 안내합니다. 업종명만으로 시설·물질
+ * 사실을 추정하지 않도록 실제 답변은 그대로 보존합니다.
  */
 export function applyIndustryProfile(
   answers: ScenarioAnswers,
   industryCategory: string,
 ): ScenarioAnswers {
-  const profile = getIndustryProfile(industryCategory);
-  const next: ScenarioAnswers = { ...answers, industryCategory };
-  if (!profile) return next;
-
-  for (const [key, value] of Object.entries(profile.initialValues)) {
-    const typedKey = key as IndustryInitialValueField;
-    if (answers[typedKey] === null) {
-      (next as unknown as Record<string, unknown>)[typedKey] = value;
-    }
-  }
-  return next;
+  return { ...answers, industryCategory };
 }
 
 export function getIndustryProfilePatch(
@@ -319,7 +307,7 @@ export function getIndustryProfilePatch(
 ): Partial<ScenarioAnswers> {
   const applied = applyIndustryProfile(answers, industryCategory);
   const patch: Partial<ScenarioAnswers> = {};
-  for (const key of ["industryCategory", ...industryProfilePresetKeys] as const) {
+  for (const key of ["industryCategory"] as const) {
     if (applied[key] !== answers[key]) {
       (patch as Record<string, unknown>)[key] = applied[key];
     }

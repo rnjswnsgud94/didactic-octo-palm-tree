@@ -109,8 +109,9 @@ describe("AI data-center special-law routing", () => {
         (item) => item.procedureId === "port-hinterland-entry-contract",
       ),
     ).toMatchObject({
-      elapsed: { min: 7, base: 7, max: 7, unit: "BUSINESS_DAY" },
+      elapsed: { min: null, base: null, max: 7, unit: "BUSINESS_DAY" },
       evidenceType: "STATUTE",
+      planningBasis: "OFFICIAL_CAP_ONLY",
       citationIds: expect.arrayContaining([
         "cit-port-act-decree-72-3-duration",
         "cit-civil-petitions-act-19-time-calculation",
@@ -222,9 +223,11 @@ describe("AI data-center special-law routing", () => {
     expect(procedure?.citationIds.some((id) => id.startsWith("cit-aidc-"))).toBe(false);
     expect(procedure?.consultationAuthorities).not.toContain("전기위원회");
     expect(duration).toMatchObject({
-      elapsed: { min: null, base: null, max: 3, unit: "MONTH" },
+      elapsed: null,
+      authorityProcessing: { min: null, base: null, max: 3, unit: "MONTH" },
       evidenceType: "STATUTE",
-      statutoryPeriod: expect.stringContaining("접수일부터 3개월 이내"),
+      statutoryPeriod: expect.stringContaining("평가서 접수일부터 3개월 이내"),
+      planningBasis: "OFFICIAL_CAP_ONLY",
     });
     expect(duration?.statutoryPeriod).not.toContain("150일");
     expect(duration?.citationIds.some((id) => id.startsWith("cit-aidc-"))).toBe(false);

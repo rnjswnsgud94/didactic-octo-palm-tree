@@ -6,7 +6,8 @@ Snapshot mode: `SNAPSHOT_ONLY`
 
 ## Covered common layer
 
-- more than 90 nationwide common-layer permits, reports and inspections across site, building, environment, chemicals, industrial safety, fire, electricity, gas and energy;
+- 124 nationwide common-layer permits, reports and inspections across site, building, environment, chemicals, industrial safety, fire, electricity, gas and energy;
+- a duration-status record and official duration citation for all 124 procedures: 118 have a quantified statutory/official period and 6 explicitly record that a nationwide fixed total deadline is not prescribed, without substituting an invented estimate;
 - industrial-complex occupancy and off-site factory-establishment branches, including reviewed deeming relationships;
 - development, farmland, forest, demolition, road, traffic, groundwater and building routes, including applicable start/completion reports and completion inspections;
 - impact assessment, integrated environmental permitting and individual air/water/noise/waste routes with duplicate suppression;
